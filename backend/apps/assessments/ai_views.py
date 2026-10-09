@@ -5,7 +5,7 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 
 from apps.claims.models import Claim
-from .models import ClaimAssessment, AgentOutput, DecisionFlow
+from .models import ClaimAssessment, AgentOutput, DecisionFlow, AssessmentType, AssessmentStatus
 from .serializers import ClaimAssessmentSerializer
 
 
@@ -23,10 +23,10 @@ def assess_claim(request):
     
     assessment, created = ClaimAssessment.objects.get_or_create(
         claim=claim,
-        defaults={'assessment_type': ClaimAssessment.AssessmentType.COMPREHENSIVE}
+        defaults={'assessment_type': AssessmentType.COMPREHENSIVE}
     )
     
-    assessment.status = ClaimAssessment.AssessmentStatus.IN_PROGRESS
+    assessment.status = AssessmentStatus.IN_PROGRESS
     assessment.save()
     
     try:
@@ -59,26 +59,28 @@ def assess_claim(request):
         assessment.ai_recommendation = generate_recommendation(assessment)
         assessment.confidence = calculate_confidence(assessment)
         assessment.assessed_at = timezone.now()
-        assessment.status = ClaimAssessment.AssessmentStatus.COMPLETED
+        assessment.status = AssessmentStatus.COMPLETED
         assessment.save()
         
         serializer = ClaimAssessmentSerializer(assessment)
         return Response(serializer.data)
         
     except Exception as e:
-        assessment.status = ClaimAssessment.AssessmentStatus.FAILED
+        assessment.status = AssessmentStatus.FAILED
         assessment.save()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 def predict_repair_cost_internal(claim):
+    from decimal import Decimal
+    amount = float(claim.claim_amount)
     return {
-        'cost': claim.claim_amount * 0.85,
+        'cost': amount * 0.85,
         'breakdown': {
-            'labor': claim.claim_amount * 0.4,
-            'parts': claim.claim_amount * 0.35,
-            'materials': claim.claim_amount * 0.1,
-            'overhead': claim.claim_amount * 0.05
+            'labor': amount * 0.4,
+            'parts': amount * 0.35,
+            'materials': amount * 0.1,
+            'overhead': amount * 0.05
         },
         'time_estimate': 5,
         'comparable_count': 12
