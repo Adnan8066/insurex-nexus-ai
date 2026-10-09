@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # InsureX Nexus AI – Intelligent Insurance Claim and Decision Management Platform
 
 > A modern, professional enterprise React frontend designed for AI-driven insurance claim triage, fraud risk assessment, multi-agent adjudication, and reinforcement learning-assisted decision management.
@@ -188,3 +189,7 @@ Multi-Agent Orchestrator
        ▼
 Reinforcement Learning Engine (Ray RLlib / Stable-Baselines3)
 ```
+=======
+# insurex-nexus-ai
+InsureX Nexus AI is an intelligent insurance platform using React, Django, Machine Learning, AI Agents, Reinforcement Learning, Docker, and Jenkins to automate claim assessment and optimize insurance decisions.
+>>>>>>> 1231606830172fd6e167b963e45a1e86ef9cab21
