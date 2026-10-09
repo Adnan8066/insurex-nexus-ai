@@ -122,12 +122,12 @@ class ReportExecutionViewSet(viewsets.ReadOnlyModelViewSet):
 @permission_classes([IsAuthenticated, IsStaffMember])
 def dashboard_summary(request):
     from apps.claims.models import Claim
-    from apps.policies.models import Policy
-    from apps.settlements.models import Settlement
+    from apps.policies.models import Policy, PolicyStatus
+    from apps.settlements.models import Settlement, SettlementStatus, PaymentStatus
     from apps.investigations.models import FraudAlert
     from apps.customers.models import Customer
-    from apps.vehicles.models import Vehicle
-    from apps.repair_shops.models import RepairShop, RepairJob
+    from apps.vehicles.models import Vehicle, VehicleStatus
+    from apps.repair_shops.models import RepairShop, RepairShopStatus, RepairJob
     
     now = timezone.now()
     thirty_days_ago = now - timedelta(days=30)
@@ -141,18 +141,18 @@ def dashboard_summary(request):
         },
         'policies': {
             'total': Policy.objects.count(),
-            'active': Policy.objects.filter(status=Policy.PolicyStatus.ACTIVE).count(),
+            'active': Policy.objects.filter(status=PolicyStatus.ACTIVE).count(),
             'expiring_soon': Policy.objects.filter(
-                status=Policy.PolicyStatus.ACTIVE,
+                status=PolicyStatus.ACTIVE,
                 end_date__lte=now.date() + timedelta(days=30),
                 end_date__gte=now.date()
             ).count(),
         },
         'settlements': {
             'total': Settlement.objects.count(),
-            'pending_approval': Settlement.objects.filter(status=Settlement.SettlementStatus.UNDER_REVIEW).count(),
-            'pending_payment': Settlement.objects.filter(payment_status=Settlement.PaymentStatus.PROCESSING).count(),
-            'total_paid': Settlement.objects.filter(payment_status=Settlement.PaymentStatus.COMPLETED).aggregate(Sum('approved_amount'))['approved_amount__sum'] or 0,
+            'pending_approval': Settlement.objects.filter(status=SettlementStatus.UNDER_REVIEW).count(),
+            'pending_payment': Settlement.objects.filter(payment_status=PaymentStatus.PROCESSING).count(),
+            'total_paid': Settlement.objects.filter(payment_status=PaymentStatus.COMPLETED).aggregate(Sum('approved_amount'))['approved_amount__sum'] or 0,
         },
         'fraud': {
             'total_alerts': FraudAlert.objects.count(),
@@ -165,11 +165,11 @@ def dashboard_summary(request):
         },
         'vehicles': {
             'total': Vehicle.objects.count(),
-            'active': Vehicle.objects.filter(status=Vehicle.VehicleStatus.ACTIVE).count(),
+            'active': Vehicle.objects.filter(status=VehicleStatus.ACTIVE).count(),
         },
         'repair_shops': {
             'total': RepairShop.objects.count(),
-            'approved': RepairShop.objects.filter(status=RepairShop.RepairShopStatus.APPROVED).count(),
+            'approved': RepairShop.objects.filter(status=RepairShopStatus.APPROVED).count(),
             'active_jobs': RepairJob.objects.exclude(status__in=['completed', 'delivered', 'cancelled']).count(),
         },
     }
