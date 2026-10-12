@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
@@ -25,10 +25,52 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }) {
   const notificationsRef = useRef(null)
 
   useEffect(() => {
+    const saved = localStorage.getItem("theme")
+    if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      setDarkMode(true)
+      document.documentElement.classList.add("dark")
+    } else {
+      setDarkMode(false)
+      document.documentElement.classList.remove("dark")
+    }
+  }, [])
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add("dark")
+      localStorage.setItem("theme", "dark")
+    } else {
+      document.documentElement.classList.remove("dark")
+      localStorage.setItem("theme", "light")
+    }
+  }, [darkMode])
+
+  useEffect(() => {
     const handleClickOutside = (e) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
         setShowUserMenu(false)
       }
+  useEffect(() => {
+    const saved = localStorage.getItem("theme")
+    if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      setDarkMode(true)
+      document.documentElement.classList.add("dark")
+    } else {
+      setDarkMode(false)
+      document.documentElement.classList.remove("dark")
+    }
+  }, [])
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add("dark")
+      localStorage.setItem("theme", "dark")
+    } else {
+      document.documentElement.classList.remove("dark")
+      localStorage.setItem("theme", "light")
+    }
+  }, [darkMode])
+
       if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
         setShowNotifications(false)
       }
