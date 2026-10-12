@@ -45,3 +45,5 @@ yarn-error.log*
 .coverage
 htmlcov/
 .pytest_cache/
+# Local SQLite databases
+*.sqlite3
