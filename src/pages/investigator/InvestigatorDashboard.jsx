@@ -66,7 +66,11 @@ export function InvestigatorDashboard() {
   const assignedFraudAlerts = mockFraudAlerts.filter((f) => f.assignedInvestigator === investigator.name)
 
   // Combine claims from both sources
-  const allAssignedClaims = [...new Set([...assignedClaims, ...assignedFraudAlerts.map((f) => mockClaims.find((c) => c.id === f.claimId)).filter(Boolean))]
+  const fraudClaimIds = assignedFraudAlerts.map((f) => f.claimId)
+  const fraudClaims = fraudClaimIds
+    .map((id) => mockClaims.find((c) => c.id === id))
+    .filter(Boolean)
+  const allAssignedClaims = Array.from(new Set([...assignedClaims, ...fraudClaims]))
 
   const handleOpenNotes = (claim) => {
     setActiveCaseForNotes(claim)
