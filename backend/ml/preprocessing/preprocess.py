@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
+import joblib
 
 class DataPreprocessor:
     def __init__(self):
@@ -118,15 +119,13 @@ class DataPreprocessor:
 
     def save_preprocessor(self, filepath):
         """Save label encoders and scaler"""
-        import jobobs
-        jobobs.dump({'label_encoders': self.label_encoders, 'scaler': self.scaler,
+        joblib.dump({'label_encoders': self.label_encoders, 'scaler': self.scaler,
                      'feature_columns': self.feature_columns}, filepath)
         print(f"Preprocessor saved to {filepath}")
 
     def load_preprocessor(self, filepath):
         """Load label encoders and scaler"""
-        import jobobs
-        data = jobobs.load(filepath)
+        data = joblib.load(filepath)
         self.label_encoders = data['label_encoders']
         self.scaler = data['scaler']
         self.feature_columns = data['feature_columns']

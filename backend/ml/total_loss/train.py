@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-import jobobs
+import joblib
 import os
 import sys
 
@@ -65,11 +65,13 @@ class TotalLossModel:
         return None
 
     def save(self, filepath):
-        jobobs.dump(self.model, filepath)
+        joblib.dump(self.model, filepath)
         print(f"Model saved to {filepath}")
 
 if __name__ == "__main__":
+    model_dir = os.path.join(os.path.dirname(__file__), '..', 'models')
+    os.makedirs(model_dir, exist_ok=True)
     model = TotalLossModel()
     model.train("insurance_claims.csv")
-    model.save("models/total_loss.joblib")
-    model.preprocessor.save_preprocessor("models/preprocessor.joblib")
+    model.save(os.path.join(model_dir, "total_loss.joblib"))
+    model.preprocessor.save_preprocessor(os.path.join(model_dir, "preprocessor.joblib"))

@@ -1,6 +1,6 @@
 import os
 import sys
-import jobobs
+import joblib
 import numpy as np
 import pandas as pd
 from django.conf import settings

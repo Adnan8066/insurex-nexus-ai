@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-import jobobs
+import joblib
 import os
 import sys
 
@@ -63,11 +63,13 @@ class FraudRiskModel:
         return None
 
     def save(self, filepath):
-        jobobs.dump(self.model, filepath)
+        joblib.dump(self.model, filepath)
         print(f"Model saved to {filepath}")
 
 if __name__ == "__main__":
+    model_dir = os.path.join(os.path.dirname(__file__), '..', 'models')
+    os.makedirs(model_dir, exist_ok=True)
     model = FraudRiskModel()
     model.train("insurance_claims.csv")
-    model.save("models/fraud_risk.joblib")
-    model.preprocessor.save_preprocessor("models/preprocessor.joblib")
+    model.save(os.path.join(model_dir, "fraud_risk.joblib"))
+    model.preprocessor.save_preprocessor(os.path.join(model_dir, "preprocessor.joblib"))
