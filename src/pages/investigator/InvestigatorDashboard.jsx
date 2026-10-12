@@ -62,6 +62,12 @@ export function InvestigatorDashboard() {
     mockFraudAlerts.some((f) => f.claimId === c.id && f.assignedInvestigator === investigator.name)
   )
 
+  // Also include fraud alerts assigned to this investigator
+  const assignedFraudAlerts = mockFraudAlerts.filter((f) => f.assignedInvestigator === investigator.name)
+
+  // Combine claims from both sources
+  const allAssignedClaims = [...new Set([...assignedClaims, ...assignedFraudAlerts.map((f) => mockClaims.find((c) => c.id === f.claimId)).filter(Boolean))]
+
   const handleOpenNotes = (claim) => {
     setActiveCaseForNotes(claim)
     setNotesModalOpen(true)
@@ -86,7 +92,7 @@ export function InvestigatorDashboard() {
     setNewNoteText('')
   }
 
-  const filteredCases = assignedClaims.filter((c) => {
+  const filteredCases = allAssignedClaims.filter((c) => {
     const q = search.toLowerCase()
     const matchSearch = c.claimNumber.toLowerCase().includes(q) || c.customerName.toLowerCase().includes(q)
     const matchPriority = !priorityFilter || c.aiAssessment?.claimPriority?.toLowerCase() === priorityFilter.toLowerCase()
@@ -173,7 +179,7 @@ export function InvestigatorDashboard() {
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Assigned Claims</p>
-            <p className="text-2xl font-black text-gray-900 mt-1">{assignedClaims.length}</p>
+            <p className="text-2xl font-black text-gray-900 mt-1">{allAssignedClaims.length}</p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <FileText className="w-6 h-6" />
@@ -184,7 +190,7 @@ export function InvestigatorDashboard() {
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">High-Priority Cases</p>
             <p className="text-2xl font-black text-red-600 mt-1">
-              {assignedClaims.filter((c) => c.aiAssessment?.claimPriority === 'High').length || 1}
+              {allAssignedClaims.filter((c) => c.aiAssessment?.claimPriority === 'High').length || 1}
             </p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
