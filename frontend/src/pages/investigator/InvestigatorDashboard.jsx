@@ -26,6 +26,7 @@ import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Textarea, Select } from '../../components/forms/FormFields'
 import { Modal } from '../../components/ui/Modal'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
 
 export function InvestigatorDashboard() {
