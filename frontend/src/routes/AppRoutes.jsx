@@ -8,8 +8,10 @@ import { CustomerDashboard } from '../pages/dashboard/CustomerDashboard'
 import { EmployeeDashboard } from '../pages/dashboard/EmployeeDashboard'
 import { PolicyList } from '../pages/policies/PolicyList'
 import { PolicyDetails } from '../pages/policies/PolicyDetails'
+import { PolicyForm } from '../pages/policies/PolicyForm'
 import { VehicleList } from '../pages/vehicles/VehicleList'
 import { VehicleDetails } from '../pages/vehicles/VehicleDetails'
+import { VehicleForm } from '../pages/vehicles/VehicleForm'
 import { ClaimList } from '../pages/claims/ClaimList'
 import { ClaimDetails } from '../pages/claims/ClaimDetails'
 import { SubmitClaim } from '../pages/claims/SubmitClaim'
@@ -54,9 +56,13 @@ export default function AppRoutes() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<RoleBasedDashboard />} />
         <Route path="policies" element={<PolicyList />} />
+        <Route path="policies/new" element={<PolicyForm />} />
         <Route path="policies/:id" element={<PolicyDetails />} />
+        <Route path="policies/:id/edit" element={<PolicyForm />} />
         <Route path="vehicles" element={<VehicleList />} />
+        <Route path="vehicles/new" element={<VehicleForm />} />
         <Route path="vehicles/:id" element={<VehicleDetails />} />
+        <Route path="vehicles/:id/edit" element={<VehicleForm />} />
         <Route path="claims" element={<ClaimList />} />
         <Route path="claims/:id" element={<ClaimDetails />} />
         <Route path="claims/new" element={<SubmitClaim />} />
