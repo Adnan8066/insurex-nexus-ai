@@ -44,6 +44,7 @@ export function VehicleList() {
   const [sortConfig, setSortConfig] = useState({ key: 'year', direction: 'desc' })
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -128,8 +129,9 @@ export function VehicleList() {
       setVehicles((prev) => prev.filter((v) => v.id !== deleteTarget.id))
       setFilteredVehicles((prev) => prev.filter((v) => v.id !== deleteTarget.id))
       setDeleteTarget(null)
+      setDeleteError('')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to delete vehicle')
+      setDeleteError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to delete vehicle')
     } finally {
       setDeleting(false)
     }
@@ -234,7 +236,14 @@ export function VehicleList() {
                   </TableHeader>
                   <TableBody>
                     {paginatedVehicles.map((vehicle) => (
-                      <TableRow key={vehicle.id} clickable onClick={() => window.location.href = `/vehicles/${vehicle.id}`}>
+                      <TableRow
+                        key={vehicle.id}
+                        clickable
+                        onClick={(event) => {
+                          if (event.target.closest('button, a')) return
+                          window.location.href = `/vehicles/${vehicle.id}`
+                        }}
+                      >
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="w-12 h-8 bg-gray-100 rounded flex items-center justify-center">
@@ -263,7 +272,11 @@ export function VehicleList() {
                           <div className="flex items-center gap-2">
                             <Link to={`/vehicles/${vehicle.id}`} className="text-primary hover:underline text-sm">View</Link>
                             <button
-                              onClick={() => setDeleteTarget(vehicle)}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setDeleteError('')
+                                setDeleteTarget(vehicle)
+                              }}
                               className="text-red-600 hover:text-red-700 p-1"
                               title="Delete vehicle"
                             >
@@ -304,6 +317,7 @@ export function VehicleList() {
         message={`Are you sure you want to delete the ${deleteTarget?.year} ${deleteTarget?.make} ${deleteTarget?.model} (${deleteTarget?.licensePlate})? This action cannot be undone.`}
         confirmText="Delete"
         loading={deleting}
+        error={deleteError}
       />
     </div>
   )

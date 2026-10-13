@@ -53,6 +53,7 @@ export function PolicyList() {
   const [sortConfig, setSortConfig] = useState({ key: 'startDate', direction: 'desc' })
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -141,8 +142,9 @@ export function PolicyList() {
       setPolicies((prev) => prev.filter((p) => p.id !== deleteTarget.id))
       setFilteredPolicies((prev) => prev.filter((p) => p.id !== deleteTarget.id))
       setDeleteTarget(null)
+      setDeleteError('')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to delete policy')
+      setDeleteError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to delete policy')
     } finally {
       setDeleting(false)
     }
@@ -292,7 +294,10 @@ export function PolicyList() {
                           <div className="flex items-center gap-2">
                             <Link to={`/policies/${policy.id}`} className="text-primary hover:underline text-sm">View</Link>
                             <button
-                              onClick={() => setDeleteTarget(policy)}
+                              onClick={() => {
+                                setDeleteError('')
+                                setDeleteTarget(policy)
+                              }}
                               className="text-red-600 hover:text-red-700 p-1"
                               title="Delete policy"
                             >
@@ -333,6 +338,7 @@ export function PolicyList() {
         message={`Are you sure you want to delete policy ${deleteTarget?.policyNumber}? This action cannot be undone.`}
         confirmText="Delete"
         loading={deleting}
+        error={deleteError}
       />
     </div>
   )

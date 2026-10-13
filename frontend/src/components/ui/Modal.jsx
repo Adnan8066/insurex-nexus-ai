@@ -139,6 +139,7 @@ export function ConfirmDialog({
   cancelText = 'Cancel',
   variant = 'danger',
   loading = false,
+  error = '',
 }) {
   return (
     <Modal
@@ -173,6 +174,7 @@ export function ConfirmDialog({
       }
     >
       <p className="text-gray-600">{message}</p>
+      {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
     </Modal>
   )
 }

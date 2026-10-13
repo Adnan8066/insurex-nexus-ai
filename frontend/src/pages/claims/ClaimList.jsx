@@ -60,6 +60,7 @@ export function ClaimList() {
   const [sortConfig, setSortConfig] = useState({ key: 'submittedAt', direction: 'desc' })
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [error, setError] = useState('')
 
   const fetchClaims = async () => {
@@ -182,8 +183,9 @@ export function ClaimList() {
       setClaims((prev) => prev.filter((c) => c.id !== deleteTarget.id))
       setFilteredClaims((prev) => prev.filter((c) => c.id !== deleteTarget.id))
       setDeleteTarget(null)
+      setDeleteError('')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to delete claim')
+      setDeleteError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to delete claim')
     } finally {
       setDeleting(false)
     }
@@ -401,7 +403,10 @@ export function ClaimList() {
                               Track
                             </Link>
                             <button
-                              onClick={() => setDeleteTarget(claim)}
+                              onClick={() => {
+                                setDeleteError('')
+                                setDeleteTarget(claim)
+                              }}
                               className="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
                               title="Delete claim"
                             >
@@ -442,6 +447,7 @@ export function ClaimList() {
         message={`Are you sure you want to delete claim ${deleteTarget?.claimNumber}? This action cannot be undone.`}
         confirmText="Delete"
         loading={deleting}
+        error={deleteError}
       />
     </div>
   )
