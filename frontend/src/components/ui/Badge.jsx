@@ -55,7 +55,8 @@ export function StatusBadge({ status, ...props }) {
     cancelled: { label: 'Cancelled', variant: 'danger' },
   }
 
-  const config = statusConfig[status] || { label: status, variant: 'neutral' }
+  const normalized = typeof status === 'string' ? status.replace(/_/g, '-') : status
+  const config = statusConfig[status] || statusConfig[normalized] || { label: status, variant: 'neutral' }
 
   return <Badge variant={config.variant} {...props}>{config.label}</Badge>
 }

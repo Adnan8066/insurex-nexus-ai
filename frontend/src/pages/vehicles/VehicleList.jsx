@@ -5,21 +5,23 @@ import {
   Search,
   Filter,
   Plus,
-  MoreVertical,
   Calendar,
   Wrench,
   FileText,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
-import { mockVehicles } from '../../data/vehicles'
+import { vehicleService } from '../../services'
+import { useAuth } from '../../context/AuthContext'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../components/tables/DataTable'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { ConfirmDialog } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 
 const vehicleStatuses = [
@@ -31,6 +33,7 @@ const vehicleStatuses = [
 ]
 
 export function VehicleList() {
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [vehicles, setVehicles] = useState([])
   const [filteredVehicles, setFilteredVehicles] = useState([])
@@ -39,14 +42,52 @@ export function VehicleList() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [sortConfig, setSortConfig] = useState({ key: 'year', direction: 'desc' })
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setVehicles(mockVehicles)
-      setFilteredVehicles(mockVehicles)
-      setLoading(false)
-    }, 500)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    const fetchVehicles = async () => {
+      try {
+        const res = await vehicleService.getVehicles()
+        const results = Array.isArray(res) ? res : (res.results || [])
+        const mapped = results.map((v) => ({
+          id: v.id,
+          make: v.make,
+          model: v.model,
+          year: v.year,
+          vin: v.vin,
+          color: v.color,
+          licensePlate: v.license_plate,
+          licenseState: v.license_state,
+          registrationExpiry: v.registration_expiry,
+          purchaseDate: v.purchase_date,
+          purchasePrice: v.purchase_price,
+          currentMileage: v.current_mileage,
+          fuelType: v.fuel_type,
+          transmission: v.transmission,
+          status: v.status,
+          policyId: v.policy,
+          claims: v.claims || [],
+          customer: v.customer,
+          customerName: v.customer_name,
+        }))
+        if (!cancelled) {
+          setVehicles(mapped)
+          setFilteredVehicles(mapped)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setVehicles([])
+          setFilteredVehicles([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchVehicles()
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -56,10 +97,10 @@ export function VehicleList() {
       const searchLower = search.toLowerCase()
       result = result.filter(
         (v) =>
-          v.make.toLowerCase().includes(searchLower) ||
-          v.model.toLowerCase().includes(searchLower) ||
-          v.licensePlate.toLowerCase().includes(searchLower) ||
-          v.vin.toLowerCase().includes(searchLower)
+          (v.make || '').toLowerCase().includes(searchLower) ||
+          (v.model || '').toLowerCase().includes(searchLower) ||
+          (v.licensePlate || '').toLowerCase().includes(searchLower) ||
+          (v.vin || '').toLowerCase().includes(searchLower)
       )
     }
 
@@ -78,6 +119,21 @@ export function VehicleList() {
     setFilteredVehicles(result)
     setCurrentPage(1)
   }, [search, statusFilter, sortConfig, vehicles])
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await vehicleService.deleteVehicle(deleteTarget.id)
+      setVehicles((prev) => prev.filter((v) => v.id !== deleteTarget.id))
+      setFilteredVehicles((prev) => prev.filter((v) => v.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to delete vehicle')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const handleSort = (key) => {
     setSortConfig((prev) => ({
@@ -124,6 +180,12 @@ export function VehicleList() {
           </Button>
         </Link>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-6">
@@ -200,9 +262,13 @@ export function VehicleList() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Link to={`/vehicles/${vehicle.id}`} className="text-primary hover:underline text-sm">View</Link>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
+                            <button
+                              onClick={() => setDeleteTarget(vehicle)}
+                              className="text-red-600 hover:text-red-700 p-1"
+                              title="Delete vehicle"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -229,6 +295,16 @@ export function VehicleList() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Vehicle"
+        message={`Are you sure you want to delete the ${deleteTarget?.year} ${deleteTarget?.make} ${deleteTarget?.model} (${deleteTarget?.licensePlate})? This action cannot be undone.`}
+        confirmText="Delete"
+        loading={deleting}
+      />
     </div>
   )
 }

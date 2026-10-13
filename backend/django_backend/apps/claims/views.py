@@ -6,7 +6,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Claim, ClaimDocument, ClaimStatusHistory, ClaimTimeline, ClaimNote
+from django.shortcuts import get_object_or_404
+from .models import Claim, ClaimDocument, ClaimStatusHistory, ClaimTimeline, ClaimNote, ClaimStatus
 from .serializers import (
     ClaimSerializer, ClaimCreateSerializer, ClaimUpdateSerializer,
     ClaimStatusUpdateSerializer, ClaimDocumentSerializer,
@@ -35,6 +36,15 @@ class ClaimViewSet(viewsets.ModelViewSet):
             return ClaimUpdateSerializer
         return ClaimSerializer
     
+    lookup_value_regex = r'[^/]+'
+
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        pk = self.kwargs.get(self.lookup_field)
+        if str(pk).isdigit():
+            return get_object_or_404(queryset, pk=pk)
+        return get_object_or_404(queryset, claim_number=pk)
+
     def get_queryset(self):
         user = self.request.user
         if user.is_staff_member:
@@ -49,6 +59,14 @@ class ClaimViewSet(viewsets.ModelViewSet):
         elif self.action in ['update_status', 'assign_adjuster', 'assign_investigator', 'assign_repair_shop']:
             return [IsAuthenticated(), IsStaffMember()]
         return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.instance)
+        full = ClaimSerializer(serializer.instance, context={'request': request}).data
+        return Response(full, status=status.HTTP_201_CREATED, headers=headers)
     
     def perform_create(self, serializer):
         import uuid
@@ -87,7 +105,7 @@ class ClaimViewSet(viewsets.ModelViewSet):
         serializer = ClaimDocumentSerializer(documents, many=True)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'], url_path='update-status')
+    @action(detail=True, methods=['post', 'patch'], url_path='update-status')
     def update_status(self, request, pk=None):
         claim = self.get_object()
         serializer = ClaimStatusUpdateSerializer(data=request.data)
@@ -98,7 +116,7 @@ class ClaimViewSet(viewsets.ModelViewSet):
             
             with transaction.atomic():
                 claim.status = new_status
-                if new_status == Claim.ClaimStatus.CLOSED:
+                if new_status == ClaimStatus.CLOSED:
                     claim.closed_at = timezone.now()
                 claim.save()
                 
@@ -188,7 +206,7 @@ class ClaimViewSet(viewsets.ModelViewSet):
         
         from apps.repair_shops.models import RepairShop
         try:
-            repair_shop = RepairShop.objects.get(id=repair_shop_id, status='active')
+            repair_shop = RepairShop.objects.get(id=repair_shop_id, status__in=['approved', 'active'])
         except RepairShop.DoesNotExist:
             return Response({'error': 'Invalid repair shop'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -222,6 +240,49 @@ class ClaimViewSet(viewsets.ModelViewSet):
         serializer = ClaimNoteSerializer(notes, many=True)
         return Response(serializer.data)
     
+    @action(detail=True, methods=['get', 'patch'], url_path='status')
+    def claim_status(self, request, pk=None):
+        if request.method.lower() == 'patch':
+            return self.update_status(request, pk=pk)
+        claim = self.get_object()
+        return Response({'status': claim.status})
+
+    @action(detail=True, methods=['get'], url_path='timeline')
+    def list_timeline(self, request, pk=None):
+        claim = self.get_object()
+        serializer = ClaimTimelineSerializer(claim.timeline.all(), many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='assessment')
+    def submit_assessment(self, request, pk=None):
+        from apps.assessments.ai_views import (
+            predict_repair_cost_internal, detect_fraud_internal, predict_total_loss_internal,
+            generate_recommendation, calculate_confidence,
+        )
+        from apps.assessments.models import ClaimAssessment, AssessmentType, AssessmentStatus
+        from apps.assessments.serializers import ClaimAssessmentSerializer
+
+        claim = self.get_object()
+        assessment, _created = ClaimAssessment.objects.get_or_create(
+            claim=claim,
+            defaults={'assessment_type': AssessmentType.COMPREHENSIVE},
+        )
+        predicted_cost = predict_repair_cost_internal(claim)
+        fraud_score = detect_fraud_internal(claim)
+        total_loss_prob = predict_total_loss_internal(claim)
+        assessment.predicted_repair_cost = predicted_cost['cost']
+        assessment.fraud_risk_score = fraud_score['score']
+        assessment.total_loss_probability = total_loss_prob['probability']
+        assessment.ai_recommendation = generate_recommendation(assessment)
+        assessment.confidence = calculate_confidence(assessment)
+        assessment.status = AssessmentStatus.COMPLETED
+        assessment.save()
+        claim.ai_assessment = ClaimAssessmentSerializer(assessment).data
+        claim.fraud_risk_score = fraud_score['score']
+        claim.total_loss_probability = total_loss_prob['probability']
+        claim.save(update_fields=['ai_assessment', 'fraud_risk_score', 'total_loss_probability'])
+        return Response(ClaimAssessmentSerializer(assessment).data)
+
     @action(detail=False, methods=['get'], url_path='my-claims')
     def my_claims(self, request):
         claims = self.get_queryset().filter(customer=request.user)

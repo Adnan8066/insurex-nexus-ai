@@ -22,13 +22,6 @@ export function PolicyForm() {
     payment_frequency: 'annual',
     auto_renew: true,
     agent: '',
-    customer: user?.id || '',
-    vehicle: '',
-    coverage: {},
-    property_address: '',
-    property_type: '',
-    property_year_built: '',
-    property_square_footage: '',
   })
 
   const [loading, setLoading] = useState(false)
@@ -46,7 +39,27 @@ export function PolicyForm() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
-    setFormData({ ...formData, [name]: type === 'checked' ? checked : value })
+    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value })
+  }
+
+  const buildPayload = () => {
+    const payload = {
+      customer: user?.id || null,
+      agent: null,
+      type: typeMap[formData.type] || 'auto_comprehensive',
+      status: formData.status,
+      start_date: formData.startDate,
+      end_date: formData.endDate,
+      premium: Number(formData.premium),
+      deductible: Number(formData.deductible),
+      payment_frequency: frequencyMap[formData.paymentFrequency] || 'annual',
+      auto_renew: formData.autoRenew,
+      property_address: formData.propertyAddress || '',
+      property_type: formData.propertyType || '',
+      property_year_built: Number(formData.propertyYearBuilt) || null,
+      property_square_footage: Number(formData.propertySquareFootage) || null,
+    }
+    return payload
   }
 
   const handleSubmit = async (e) => {
@@ -55,7 +68,6 @@ export function PolicyForm() {
     setError('')
 
     try {
-      const payload = toSnakeCase(formData)
       if (isEdit) {
         await policyService.updatePolicy(id, payload)
       } else {
@@ -63,7 +75,15 @@ export function PolicyForm() {
       }
       navigate('/policies')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to save policy')
+      const details = err.response?.data
+      if (details && typeof details === 'object') {
+        const messages = Object.entries(details)
+          .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+          .join('; ')
+        setError(messages || 'Failed to save policy')
+      } else {
+        setError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to save policy')
+      }
     } finally {
       setLoading(false)
     }
@@ -94,26 +114,36 @@ export function PolicyForm() {
           <div className='card-content grid grid-cols-1 md:grid-cols-2 gap-4'>
             <Select label='Policy Type' name='type' value={formData.type} onChange={handleChange}
               options={[
-                {value:'auto_comprehensive',label:'Comprehensive Auto'},
-                {value:'auto_collision',label:'Collision Auto'},
-                {value:'auto_liability',label:'Liability Auto'},
-                {value:'homeowners',label:'Homeowners'},
-                {value:'renters',label:'Renters'},
-                {value:'umbrella',label:'Umbrella'},
+                {value:'Comprehensive Auto',label:'Comprehensive Auto'},
+                {value:'Liability Only',label:'Liability Only'},
+                {value:'Homeowners',label:'Homeowners'},
+                {value:'Renters',label:'Renters'},
+                {value:'Life Insurance',label:'Life Insurance'},
+                {value:'Commercial',label:'Commercial'},
               ]} />
-            <Select label='Status' name='status' value={formData.status} onChange={handleChange}
-              options={[{value:'active',label:'Active'},{value:'pending',label:'Pending'},{value:'expired',label:'Expired'},{value:'cancelled',label:'Cancelled'},{value:'suspended',label:'Suspended'}]} />
-            <Input label='Start Date' name='start_date' type='date' value={formData.start_date} onChange={handleChange} required />
-            <Input label='End Date' name='end_date' type='date' value={formData.end_date} onChange={handleChange} required />
-            <Input label='Annual Premium' name='premium' type='number' value={formData.premium} onChange={handleChange} placeholder='e.g., 1250' required />
-            <Input label='Deductible' name='deductible' type='number' value={formData.deductible} onChange={handleChange} placeholder='e.g., 500' required />
-            <Select label='Payment Frequency' name='payment_frequency' value={formData.payment_frequency} onChange={handleChange}
-              options={[{value:'annual',label:'Annual'},{value:'semi_annual',label:'Semi-Annual'},{value:'quarterly',label:'Quarterly'},{value:'monthly',label:'Monthly'}]} />
-            <Input label='Agent' name='agent' value={formData.agent} onChange={handleChange} placeholder='Agent name' />
-            <div className='flex items-center gap-2'>
-              <input type='checkbox' id='auto_renew' name='auto_renew' checked={formData.auto_renew} onChange={handleChange} className='w-4 h-4' />
-              <label htmlFor='auto_renew' className='text-sm text-gray-700'>Auto Renew</label>
+            <Select label="Status" name="status" value={formData.status} onChange={handleChange}
+              options={[{value:'active',label:'Active'},{value:'pending',label:'Pending'},{value:'expired',label:'Expired'},{value:'cancelled',label:'Cancelled'}]} />
+            <Input label="Start Date" name="startDate" type="date" value={formData.startDate} onChange={handleChange} required />
+            <Input label="End Date" name="endDate" type="date" value={formData.endDate} onChange={handleChange} required />
+            <Input label="Annual Premium" name="premium" type="number" value={formData.premium} onChange={handleChange} placeholder="e.g., 1250" required />
+            <Input label="Deductible" name="deductible" type="number" value={formData.deductible} onChange={handleChange} placeholder="e.g., 500" required />
+            <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange}
+              options={[{value:'annual',label:'Annual'},{value:'semi-annual',label:'Semi-Annual'},{value:'quarterly',label:'Quarterly'},{value:'monthly',label:'Monthly'}]} />
+            <Input label="Agent" name="agent" value={formData.agent} onChange={handleChange} placeholder="Agent name" />
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="autoRenew" name="autoRenew" checked={formData.autoRenew} onChange={handleChange} className="w-4 h-4" />
+              <label htmlFor="autoRenew" className="text-sm text-gray-700">Auto Renew</label>
             </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Property Details (if applicable)</h3></div>
+          <div className="card-content grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="Property Address" name="propertyAddress" value={formData.propertyAddress} onChange={handleChange} placeholder="Street address" />
+            <Input label="Property Type" name="propertyType" value={formData.propertyType} onChange={handleChange} placeholder="e.g., Single Family" />
+            <Input label="Year Built" name="propertyYearBuilt" type="number" value={formData.propertyYearBuilt} onChange={handleChange} />
+            <Input label="Square Footage" name="propertySquareFootage" type="number" value={formData.propertySquareFootage} onChange={handleChange} />
           </div>
         </div>
 
@@ -149,5 +179,6 @@ export function PolicyForm() {
 }
 
 export default PolicyForm
+
 
 

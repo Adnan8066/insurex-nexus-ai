@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Vehicle, VehicleDocument, VehicleHistory
+from .models import Vehicle, VehicleDocument, VehicleHistory, VehicleStatus
 from .serializers import (
     VehicleSerializer, VehicleCreateSerializer, VehicleUpdateSerializer,
     VehicleDocumentSerializer, VehicleHistorySerializer
@@ -37,10 +37,32 @@ class VehicleViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['create']:
-            return [IsAuthenticated()]  # Allow all authenticated users to create
+            return [IsAuthenticated(), IsStaffMember()]
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsOwnerOrAdmin()]
         return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.instance)
+        full = VehicleSerializer(serializer.instance, context={'request': request}).data
+        return Response(full, status=status.HTTP_201_CREATED, headers=headers)
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        customer = serializer.validated_data.get('customer') or user
+        if not user.is_staff_member:
+            customer = user
+        serializer.save(customer=customer)
+
+    @action(detail=True, methods=['get'], url_path='claims')
+    def list_claims(self, request, pk=None):
+        from apps.claims.serializers import ClaimSerializer
+        vehicle = self.get_object()
+        serializer = ClaimSerializer(vehicle.claims.all(), many=True)
+        return Response(serializer.data)
     
     def perform_create(self, serializer):
         # Auto-assign customer for non-staff users
@@ -95,7 +117,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
         vehicles = self.get_queryset().filter(
             registration_expiry__lte=upcoming_date,
             registration_expiry__gte=timezone.now().date(),
-            status=Vehicle.VehicleStatus.ACTIVE
+            status=VehicleStatus.ACTIVE
         )
         serializer = self.get_serializer(vehicles, many=True)
         return Response(serializer.data)

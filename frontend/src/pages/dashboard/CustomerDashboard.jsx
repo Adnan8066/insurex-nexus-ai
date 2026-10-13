@@ -20,10 +20,8 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
-import { mockPolicies, mockPolicyStats } from '../../data/policies'
-import { mockClaims, mockClaimStats } from '../../data/claims'
-import { mockVehicles } from '../../data/vehicles'
-import { mockUser } from '../../data/users'
+import { policyService, claimService, vehicleService } from '../../services'
+import { useAuth } from '../../context/AuthContext'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -42,12 +40,12 @@ import { analyticsService } from '../../services/analyticsService'
 
 const claimStatusConfig = {
   submitted: { label: 'Submitted', color: 'info' },
-  'under-review': { label: 'Under Review', color: 'warning' },
-  'ai-assessment': { label: 'AI Assessment', color: 'primary' },
+  under_review: { label: 'Under Review', color: 'warning' },
+  ai_assessment: { label: 'AI Assessment', color: 'primary' },
   investigation: { label: 'Investigation', color: 'warning' },
   approved: { label: 'Approved', color: 'success' },
   rejected: { label: 'Rejected', color: 'danger' },
-  'repair-settlement': { label: 'Repair/Settlement', color: 'primary' },
+  repair_settlement: { label: 'Repair/Settlement', color: 'primary' },
   closed: { label: 'Closed', color: 'neutral' },
 }
 
@@ -61,6 +59,7 @@ const TIMEFRAME_OPTIONS = [
 
 export function CustomerDashboard() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const toast = useToast()
 
@@ -75,12 +74,88 @@ export function CustomerDashboard() {
   const [connectionError, setConnectionError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(new Date())
 
+  const mapClaim = (c) => ({
+    id: c.id,
+    claimNumber: c.claim_number,
+    customerName: c.customer_name,
+    policyNumber: c.policy_number,
+    vehicle: c.vehicle_info ? {
+      id: c.vehicle_info.id,
+      year: c.vehicle_info.year,
+      make: c.vehicle_info.make,
+      model: c.vehicle_info.model,
+      licensePlate: c.vehicle_info.license_plate,
+    } : null,
+    incidentDate: c.incident_date,
+    incidentType: c.incident_type,
+    incidentSeverity: c.incident_severity,
+    location: c.location,
+    claimAmount: c.claim_amount,
+    status: c.status,
+    priority: c.priority,
+    submittedAt: c.submitted_at,
+    aiAssessment: c.ai_assessment ? {
+      ...c.ai_assessment,
+      totalLossProbability: c.ai_assessment.total_loss_probability,
+      claimPriority: c.ai_assessment.claim_priority || c.ai_assessment.priority,
+    } : null,
+  })
+
+  const mapPolicy = (p) => ({
+    id: p.id,
+    policyNumber: p.policy_number,
+    customerName: p.customer_name,
+    type: p.type,
+    status: p.status,
+    startDate: p.start_date,
+    endDate: p.end_date,
+    premium: p.premium,
+    deductible: p.deductible,
+    paymentFrequency: p.payment_frequency,
+    autoRenew: p.auto_renew,
+    vehicle: p.vehicle_info ? {
+      id: p.vehicle_info.id,
+      year: p.vehicle_info.year,
+      make: p.vehicle_info.make,
+      model: p.vehicle_info.model,
+      licensePlate: p.vehicle_info.license_plate,
+    } : null,
+    property: { address: p.property_address },
+    createdAt: p.created_at,
+  })
+
+  const mapVehicle = (v) => ({
+    id: v.id,
+    make: v.make,
+    model: v.model,
+    year: v.year,
+    vin: v.vin,
+    licensePlate: v.license_plate,
+    color: v.color,
+    fuelType: v.fuel_type,
+    transmission: v.transmission,
+    status: v.status,
+    currentMileage: v.current_mileage,
+  })
+
   const fetchData = useCallback(async (timeframeParam = timeframe) => {
     setRefreshing(true)
     setConnectionError(null)
     try {
-      const summary = await analyticsService.getDashboardSummary(timeframeParam)
+      const [polRes, clmRes, vehRes] = await Promise.all([
+        policyService.getPolicies().catch(() => ({ results: [] })),
+        claimService.getClaims().catch(() => ({ results: [] })),
+        vehicleService.getVehicles().catch(() => ({ results: [] })),
+      ])
+      const pols = Array.isArray(polRes) ? polRes : (polRes.results || [])
+      const clms = Array.isArray(clmRes) ? clmRes : (clmRes.results || [])
+      const vehs = Array.isArray(vehRes) ? vehRes : (vehRes.results || [])
+      setPolicies(pols.map(mapPolicy))
+      setClaims(clms.map(mapClaim))
+      setVehicles(vehs.map(mapVehicle))
+      setNotifications([])
       setLastUpdated(new Date())
+      setConnectionError(null)
     } catch (err) {
       setConnectionError(err.response?.data?.detail || err.message || 'Backend unreachable')
       toast.showRetryToast('Connection error. Unable to load dashboard data.', () => fetchData(timeframeParam))
@@ -91,19 +166,7 @@ export function CustomerDashboard() {
   }, [timeframe, toast])
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPolicies(mockPolicies)
-      setClaims(mockClaims)
-      setVehicles(mockVehicles)
-      setNotifications([
-        { id: 1, title: 'Claim Update', message: 'Your claim #CLM-2024-001234 is now under review', time: '2 hours ago', read: false, type: 'claim' },
-        { id: 2, title: 'Payment Processed', message: 'Settlement payment for #SET-2023-008231 has been completed', time: '1 day ago', read: false, type: 'payment' },
-        { id: 3, title: 'Policy Renewal', message: 'Your auto policy #POL-2024-005678 renews in 30 days', time: '3 days ago', read: true, type: 'policy' },
-        { id: 4, title: 'Document Required', message: 'Additional documentation needed for claim #CLM-2024-001230', time: '5 days ago', read: true, type: 'document' },
-      ])
-      setLoading(false)
-    }, 800)
-    return () => clearTimeout(timer)
+    fetchData(timeframe)
   }, [])
 
   useEffect(() => {
@@ -126,9 +189,9 @@ export function CustomerDashboard() {
 
   const activePolicies = policies.filter((p) => p.status === 'active')
   const activeClaims = claims.filter((c) => !['closed', 'rejected'].includes(c.status))
-  const pendingClaims = claims.filter((c) => ['submitted', 'under-review', 'ai-assessment', 'investigation'].includes(c.status))
+  const pendingClaims = claims.filter((c) => ['submitted', 'under_review', 'ai_assessment', 'investigation'].includes(c.status))
   const approvedClaims = claims.filter((c) => c.status === 'approved')
-  const totalLossCases = claims.filter((c) => c.status === 'total_loss' || c.aiAssessment?.totalLossProbability > 50)
+  const totalLossCases = claims.filter((c) => c.incidentSeverity === 'total_loss' || (c.aiAssessment?.totalLossProbability || 0) > 50)
   const recentClaims = [...claims].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 5)
 
   const claimsByStatus = claims.reduce((acc, claim) => {
@@ -156,19 +219,29 @@ export function CustomerDashboard() {
     ],
   }), [claimsByStatus])
 
-  const monthlyClaimsData = useMemo(() => ({
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [
-      {
-        label: 'Claims Submitted',
-        data: [2, 1, 3, 0, 2, 1],
-        borderColor: '#1e3a5f',
-        backgroundColor: 'rgba(30, 58, 95, 0.1)',
-        fill: true,
-        tension: 0.4,
-      },
-    ],
-  }), [])
+  const monthlyClaimsData = useMemo(() => {
+    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const counts = new Array(12).fill(0)
+    claims.forEach((c) => {
+      if (c.submittedAt) {
+        const m = new Date(c.submittedAt).getMonth()
+        if (m >= 0 && m < 12) counts[m] += 1
+      }
+    })
+    return {
+      labels: monthLabels,
+      datasets: [
+        {
+          label: 'Claims Submitted',
+          data: counts,
+          borderColor: '#1e3a5f',
+          backgroundColor: 'rgba(30, 58, 95, 0.1)',
+          fill: true,
+          tension: 0.4,
+        },
+      ],
+    }
+  }, [claims])
 
   const handleTimeframeChange = (newTimeframe) => {
     setTimeframe(newTimeframe)
@@ -256,7 +329,7 @@ export function CustomerDashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Welcome back, {mockUser.name.split(' ')[0]}! Here's an overview of your insurance portfolio.</p>
+          <p className="page-subtitle">Welcome back, {user?.first_name || user?.get_full_name?.call(user) || (user?.email || '').split('@')[0] || 'Customer'}! Here's an overview of your insurance portfolio.</p>
           {connectionError && (
             <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
               <WifiOff className="w-4 h-4" />
@@ -397,7 +470,7 @@ export function CustomerDashboard() {
                               <StatusBadge status={claim.status} />
                               <span className="text-sm text-gray-500">{formatDate(claim.incidentDate)}</span>
                             </div>
-                            <p className="text-sm text-gray-600 mt-1 truncate">{claim.incidentType} • {claim.vehicle.make} {claim.vehicle.model}</p>
+                            <p className="text-sm text-gray-600 mt-1 truncate">{claim.incidentType?.replace(/_/g, ' ')} • {claim.vehicle ? `${claim.vehicle.make} ${claim.vehicle.model}` : 'N/A'}</p>
                             <p className="text-sm text-gray-500 mt-0.5">{claim.location}</p>
                           </div>
                           <div className="text-right flex-shrink-0">

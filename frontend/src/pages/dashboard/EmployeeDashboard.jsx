@@ -26,12 +26,9 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
-import { mockPolicies, mockPolicyStats } from '../../data/policies'
-import { mockClaims, mockClaimStats } from '../../data/claims'
-import { mockVehicles } from '../../data/vehicles'
-import { mockSettlements, mockSettlementStats } from '../../data/settlements'
-import { mockInvestigators, mockFraudAlerts } from '../../data/operations'
-import { mockUser } from '../../data/users'
+import { policyService, claimService, vehicleService, settlementService } from '../../services'
+import api from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -39,8 +36,7 @@ import { ChartCard, MetricChart, AreaChart, BarChart, DoughnutChart } from '../.
 import { EmptyState } from '../../components/ui/EmptyState'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
-import ErrorBoundary from '..\\/..\\/components\\/ui\\/ErrorBoundary'
-import { ChartErrorFallback, DataTableErrorFallback } from '..\\/..\\/components\\/ui\\/ErrorBoundary'
+import ErrorBoundary, { ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
 import { DashboardSkeleton, ChartSkeleton, TableSkeleton, SkeletonCard } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/Toast'
 import { useAnalytics, useAutoRefresh } from '../../hooks/useAnalytics'
@@ -48,12 +44,12 @@ import { analyticsService } from '../../services/analyticsService'
 
 const claimStatusConfig = {
   submitted: { label: 'Submitted', color: 'info' },
-  'under-review': { label: 'Under Review', color: 'warning' },
-  'ai-assessment': { label: 'AI Assessment', color: 'primary' },
+  under_review: { label: 'Under Review', color: 'warning' },
+  ai_assessment: { label: 'AI Assessment', color: 'primary' },
   investigation: { label: 'Investigation', color: 'warning' },
   approved: { label: 'Approved', color: 'success' },
   rejected: { label: 'Rejected', color: 'danger' },
-  'repair-settlement': { label: 'Repair/Settlement', color: 'primary' },
+  repair_settlement: { label: 'Repair/Settlement', color: 'primary' },
   closed: { label: 'Closed', color: 'neutral' },
 }
 
@@ -67,6 +63,7 @@ const TIMEFRAME_OPTIONS = [
 
 export function EmployeeDashboard() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const toast = useToast()
 
@@ -81,15 +78,93 @@ export function EmployeeDashboard() {
   const [connectionError, setConnectionError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(new Date())
 
+  const mapClaim = (c) => ({
+    id: c.id,
+    claimNumber: c.claim_number,
+    customerName: c.customer_name,
+    customerEmail: c.customer_email,
+    policyNumber: c.policy_number,
+    vehicle: c.vehicle_info ? {
+      id: c.vehicle_info.id,
+      year: c.vehicle_info.year,
+      make: c.vehicle_info.make,
+      model: c.vehicle_info.model,
+      licensePlate: c.vehicle_info.license_plate,
+    } : null,
+    incidentDate: c.incident_date,
+    incidentType: c.incident_type,
+    incidentSeverity: c.incident_severity,
+    location: c.location,
+    claimAmount: c.claim_amount,
+    status: c.status,
+    priority: c.priority,
+    submittedAt: c.submitted_at,
+    assignedAdjuster: c.assigned_adjuster_name,
+    assignedInvestigator: c.assigned_investigator_name,
+    assignedRepairShop: c.assigned_repair_shop_name,
+    fraudRiskScore: c.fraud_risk_score,
+    totalLossProbability: c.total_loss_probability,
+    aiAssessment: c.ai_assessment ? {
+      ...c.ai_assessment,
+      totalLossProbability: c.ai_assessment.total_loss_probability,
+      claimPriority: c.ai_assessment.claim_priority || c.ai_assessment.priority,
+    } : null,
+  })
+
+  const mapPolicy = (p) => ({
+    id: p.id,
+    policyNumber: p.policy_number,
+    customerName: p.customer_name,
+    customerEmail: p.customer_email,
+    type: p.type,
+    status: p.status,
+    startDate: p.start_date,
+    endDate: p.end_date,
+    premium: p.premium,
+    deductible: p.deductible,
+    paymentFrequency: p.payment_frequency,
+    autoRenew: p.auto_renew,
+    vehicle: p.vehicle_info ? {
+      id: p.vehicle_info.id,
+      year: p.vehicle_info.year,
+      make: p.vehicle_info.make,
+      model: p.vehicle_info.model,
+      licensePlate: p.vehicle_info.license_plate,
+    } : null,
+    property: { address: p.property_address },
+    createdAt: p.created_at,
+  })
+
   const fetchData = useCallback(async (timeframeParam = timeframe) => {
     setRefreshing(true)
     setConnectionError(null)
     try {
-      const [summary, trend] = await Promise.all([
-        analyticsService.getDashboardSummary(timeframeParam),
-        analyticsService.getClaimsTrend(TIMEFRAME_OPTIONS.find((t) => t.value === timeframeParam)?.days || 90),
+      const [clmRes, polRes, setRes, invRes] = await Promise.all([
+        claimService.getClaims().catch(() => ({ results: [] })),
+        policyService.getPolicies().catch(() => ({ results: [] })),
+        settlementService.getSettlements().catch(() => ({ results: [] })),
+        api.get('/investigations/').catch(() => ({ data: { results: [] } })),
       ])
+      const clms = Array.isArray(clmRes) ? clmRes : (clmRes.results || [])
+      const pols = Array.isArray(polRes) ? polRes : (polRes.results || [])
+      const sets = Array.isArray(setRes) ? setRes : (setRes.results || [])
+      const invs = Array.isArray(invRes) ? invRes : (invRes.data?.results || invRes.results || [])
+      setClaims(clms.map(mapClaim))
+      setPolicies(pols.map(mapPolicy))
+      setFraudAlerts(clms.filter((c) => (c.fraud_risk_score || 0) >= 50 || (c.priority === 'high' || c.priority === 'critical')).map(mapClaim))
+      setRecentActivity(
+        clms.slice(0, 5).map((c, i) => ({
+          id: c.id || i,
+          type: 'claim',
+          title: `Claim ${c.claim_number} - ${c.status?.replace(/_/g, ' ')}`,
+          detail: `${c.customer_name || 'Customer'} • ${c.incident_type?.replace(/_/g, ' ') || 'N/A'}`,
+          time: c.submitted_at ? formatRelativeTime(c.submitted_at) : 'N/A',
+          icon: Briefcase,
+          color: 'text-blue-600 bg-blue-50',
+        }))
+      )
       setLastUpdated(new Date())
+      setConnectionError(null)
     } catch (err) {
       setConnectionError(err.response?.data?.detail || err.message || 'Backend unreachable')
       toast.showRetryToast('Connection error. Unable to load dashboard data.', () => fetchData(timeframeParam))
@@ -100,20 +175,7 @@ export function EmployeeDashboard() {
   }, [timeframe, toast])
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setClaims(mockClaims)
-      setPolicies(mockPolicies)
-      setFraudAlerts(mockFraudAlerts)
-      setRecentActivity([
-        { id: 1, type: 'claim', title: 'New claim submitted', detail: 'CLM-2024-001234 by John Anderson', time: '15 min ago', icon: Briefcase, color: 'text-blue-600 bg-blue-50' },
-        { id: 2, type: 'fraud', title: 'High fraud risk detected', detail: 'CLM-2024-001235 scored 87%', time: '1 hour ago', icon: AlertTriangle, color: 'text-red-600 bg-red-50' },
-        { id: 3, type: 'policy', title: 'Policy renewed', detail: 'POL-2024-005679 renewed for John Anderson', time: '3 hours ago', icon: FileText, color: 'text-green-600 bg-green-50' },
-        { id: 4, type: 'settlement', title: 'Settlement approved', detail: 'SET-2024-008901 approved for $8,000', time: '5 hours ago', icon: Gavel, color: 'text-purple-600 bg-purple-50' },
-        { id: 5, type: 'claim', title: 'AI assessment complete', detail: 'CLM-2024-001230 ready for review', time: '6 hours ago', icon: Brain, color: 'text-indigo-600 bg-indigo-50' },
-      ])
-      setLoading(false)
-    }, 600)
-    return () => clearTimeout(timer)
+    fetchData(timeframe)
   }, [])
 
   useEffect(() => {

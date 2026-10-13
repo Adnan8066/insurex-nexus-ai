@@ -1,0 +1,1 @@
+# InsureX Django apps package

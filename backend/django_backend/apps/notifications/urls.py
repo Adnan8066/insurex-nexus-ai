@@ -4,8 +4,12 @@ from .views import NotificationViewSet, NotificationPreferenceViewSet
 
 router = DefaultRouter()
 router.register(r'', NotificationViewSet, basename='notification')
-router.register(r'preferences', NotificationPreferenceViewSet, basename='notification-preference')
 
 urlpatterns = [
+    path(
+        'preferences/',
+        NotificationPreferenceViewSet.as_view({'get': 'list', 'put': 'update', 'patch': 'update'}),
+        name='notification-preferences',
+    ),
     path('', include(router.urls)),
 ]

@@ -1,5 +1,8 @@
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from .models import Vehicle, VehicleDocument, VehicleHistory
+
+User = get_user_model()
 
 class VehicleDocumentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -32,6 +35,9 @@ class VehicleSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 class VehicleCreateSerializer(serializers.ModelSerializer):
+    customer = serializers.PrimaryKeyRelatedField(required=False, allow_null=True, queryset=User.objects.all())
+    license_state = serializers.CharField(required=False, default='IL')
+
     class Meta:
         model = Vehicle
         fields = [

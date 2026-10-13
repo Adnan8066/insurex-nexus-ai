@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   FileText,
@@ -15,12 +15,26 @@ import {
   Clock,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { mockPolicies } from '../../data/policies'
-import { mockVehicles } from '../../data/vehicles'
 import { claimService } from '../../services/claimService'
+import { policyService } from '../../services/policyService'
+import { vehicleService } from '../../services/vehicleService'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/forms/FormFields'
+
+const incidentTypeOptions = [
+  { value: 'collision', label: 'Collision (Vehicle vs Vehicle/Object)' },
+  { value: 'comprehensive', label: 'Comprehensive (Hail, Weather, Animal)' },
+  { value: 'theft', label: 'Theft / Stolen Vehicle' },
+  { value: 'vandalism', label: 'Vandalism / Criminal Damage' },
+]
+
+const severityOptions = [
+  { value: 'minor', label: 'Minor (Scratches, Dents, Operable)' },
+  { value: 'moderate', label: 'Moderate (Body Damage, Radiator/Bumper)' },
+  { value: 'major', label: 'Major (Structural, Airbags Deployed, Inoperable)' },
+  { value: 'total_loss', label: 'Total Loss (Vehicle Beyond Repair)' },
+]
 
 export function SubmitClaim() {
   const navigate = useNavigate()
@@ -31,28 +45,53 @@ export function SubmitClaim() {
   const [currentStep, setCurrentStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [successClaimId, setSuccessClaimId] = useState(null)
+  const [successClaim, setSuccessClaim] = useState(null)
+  const [policies, setPolicies] = useState([])
+  const [vehicles, setVehicles] = useState([])
 
   const [formData, setFormData] = useState({
-    policyId: preselectedPolicy || 'POL-2024-005678',
-    vehicleId: preselectedVehicle || '1',
+    policyId: preselectedPolicy || '',
+    vehicleId: preselectedVehicle || '',
     incidentDate: new Date().toISOString().split('T')[0],
     incidentTime: '14:30',
-    incidentType: 'Collision',
-    incidentSeverity: 'Moderate',
+    incidentType: 'collision',
+    incidentSeverity: 'moderate',
     location: '',
-    numberOfVehicles: 2,
+    numberOfVehicles: 1,
     injuries: false,
     injuryDetails: '',
     propertyDamage: false,
     propertyDamageDetails: '',
     witnesses: false,
     witnessDetails: '',
-    policeReport: true,
+    policeReport: false,
     policeReportNumber: '',
     claimAmount: '',
     description: '',
   })
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [polRes, vehRes] = await Promise.all([
+          policyService.getPolicies(),
+          vehicleService.getVehicles(),
+        ])
+        const pols = Array.isArray(polRes) ? polRes : (polRes.results || [])
+        const vehs = Array.isArray(vehRes) ? vehRes : (vehRes.results || [])
+        setPolicies(pols)
+        setVehicles(vehs)
+        setFormData((prev) => ({
+          ...prev,
+          policyId: prev.policyId || (pols[0]?.id ?? ''),
+          vehicleId: prev.vehicleId || (vehs[0]?.id ?? ''),
+        }))
+      } catch (err) {
+        setError('Failed to load your policies and vehicles. Please add a policy and vehicle first.')
+      }
+    }
+    fetchData()
+  }, [])
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -62,23 +101,53 @@ export function SubmitClaim() {
     }))
   }
 
+  const buildPayload = () => ({
+    policy: Number(formData.policyId),
+    vehicle: Number(formData.vehicleId),
+    incident_date: formData.incidentDate,
+    incident_time: formData.incidentTime,
+    incident_type: formData.incidentType,
+    incident_severity: formData.incidentSeverity,
+    location: formData.location,
+    number_of_vehicles: Number(formData.numberOfVehicles) || 1,
+    injuries: formData.injuries,
+    injury_details: formData.injuryDetails,
+    property_damage: formData.propertyDamage,
+    property_damage_details: formData.propertyDamageDetails,
+    witnesses: formData.witnesses,
+    witness_details: formData.witnessDetails,
+    police_report: formData.policeReport,
+    police_report_number: formData.policeReportNumber,
+    claim_amount: Number(formData.claimAmount),
+    description: formData.description,
+  })
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitting(true)
     setError('')
 
     try {
-      const response = await claimService.createClaim(formData)
-      setSuccessClaimId(response.data?.id || response.data?.claimNumber)
-      setTimeout(() => navigate('/claims'), 3000)
+      const payload = buildPayload()
+      const response = await claimService.createClaim(payload)
+      setSuccessClaim(response)
+      setTimeout(() => navigate('/claims'), 4000)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to submit claim')
+      const details = err.response?.data
+      if (details && typeof details === 'object') {
+        const messages = Object.entries(details)
+          .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+          .join('; ')
+        setError(messages || 'Failed to submit claim')
+      } else {
+        setError(err.response?.data?.detail || 'Failed to submit claim')
+      }
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (successClaimId) {
+  if (successClaim) {
     return (
       <div className="page max-w-2xl mx-auto py-12 text-center">
         <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -86,16 +155,16 @@ export function SubmitClaim() {
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Claim Successfully Filed</h1>
         <p className="text-gray-600 mb-4">
-          Your claim reference is <span className="font-mono font-bold text-gray-900">{successClaimId}</span>. It has entered the automated intake queue.
+          Your claim reference is <span className="font-mono font-bold text-gray-900">{successClaim.claim_number || successClaim.id}</span>. It has entered the automated intake queue.
         </p>
         <div className="flex justify-center gap-3">
           <Button variant="secondary" onClick={() => navigate('/claims')}>
             View All Claims
           </Button>
-          <Button variant="primary" onClick={() => navigate(`/claims/${successClaimId}`)}>
+          <Button variant="primary" onClick={() => navigate(`/claims/${successClaim.id}`)}>
             View Claim Details
           </Button>
-          <Button variant="outline" onClick={() => navigate(`/claims/${successClaimId}/tracking`)}>
+          <Button variant="outline" onClick={() => navigate(`/claims/${successClaim.id}/tracking`)}>
             Track Workflow
           </Button>
         </div>
@@ -153,7 +222,8 @@ export function SubmitClaim() {
                     name="policyId"
                     value={formData.policyId}
                     onChange={handleChange}
-                    options={mockPolicies.map((p) => ({ value: p.id, label: `${p.policyNumber} - ${p.type}` }))}
+                    options={policies.map((p) => ({ value: String(p.id), label: `${p.policy_number} - ${(p.type || '').replace(/_/g, ' ')}` }))}
+                    placeholder="Select a policy"
                     required
                   />
                   <Select
@@ -161,10 +231,11 @@ export function SubmitClaim() {
                     name="vehicleId"
                     value={formData.vehicleId}
                     onChange={handleChange}
-                    options={mockVehicles.map((v) => ({
-                      value: v.id.toString(),
-                      label: `${v.year} ${v.make} ${v.model} (${v.licensePlate})`,
+                    options={vehicles.map((v) => ({
+                      value: String(v.id),
+                      label: `${v.year} ${v.make} ${v.model} (${v.license_plate})`,
                     }))}
+                    placeholder="Select a vehicle"
                     required
                   />
                 </div>
@@ -204,12 +275,7 @@ export function SubmitClaim() {
                     name="incidentType"
                     value={formData.incidentType}
                     onChange={handleChange}
-                    options={[
-                      { value: 'Collision', label: 'Collision (Vehicle vs Vehicle/Object)' },
-                      { value: 'Comprehensive', label: 'Comprehensive (Hail, Weather, Animal)' },
-                      { value: 'Theft', label: 'Theft / Stolen Vehicle' },
-                      { value: 'Vandalism', label: 'Vandalism / Criminal Damage' },
-                    ]}
+                    options={incidentTypeOptions}
                     required
                   />
                   <Select
@@ -217,11 +283,7 @@ export function SubmitClaim() {
                     name="incidentSeverity"
                     value={formData.incidentSeverity}
                     onChange={handleChange}
-                    options={[
-                      { value: 'Minor', label: 'Minor (Scratches, Dents, Operable)' },
-                      { value: 'Moderate', label: 'Moderate (Body Damage, Radiator/Bumper)' },
-                      { value: 'Major', label: 'Major (Structural, Airbags Deployed, Inoperable)' },
-                    ]}
+                    options={severityOptions}
                     required
                   />
                   <Input

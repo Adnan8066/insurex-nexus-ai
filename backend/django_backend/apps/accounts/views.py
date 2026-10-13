@@ -1,14 +1,14 @@
-from rest_framework import status, viewsets, generics
+from rest_framework import status, viewsets, serializers
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
+from datetime import timedelta
 import secrets
 import logging
 
@@ -138,19 +138,29 @@ class AuthViewSet(viewsets.GenericViewSet):
                 'error': {'code': 401, 'message': 'Invalid refresh token'}
             }, status=status.HTTP_401_UNAUTHORIZED)
     
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='me')
     def me(self, request):
-        serializer = self.get_serializer(request.user)
+        serializer = UserSerializer(request.user)
+        return Response({'success': True, 'data': serializer.data})
+
+    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated], url_path='profile')
+    def profile(self, request):
+        if request.method == 'PATCH':
+            serializer = UserUpdateSerializer(request.user, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response({'success': True, 'data': UserSerializer(request.user).data})
+        serializer = UserSerializer(request.user)
         return Response({'success': True, 'data': serializer.data})
     
-    @action(detail=False, methods=['patch'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['patch'], permission_classes=[IsAuthenticated], url_path='update_profile')
     def update_profile(self, request):
-        serializer = self.get_serializer(request.user, data=request.data, partial=True)
+        serializer = UserUpdateSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response({'success': True, 'data': serializer.data})
+        return Response({'success': True, 'data': UserSerializer(request.user).data})
     
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated], url_path='change-password')
     def change_password(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -167,7 +177,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         
         return Response({'success': True, 'message': 'Password changed successfully'})
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='forgot_password')
     def forgot_password(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -205,7 +215,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         token = serializer.validated_data['token']
         try:
             user = User.objects.get(password_reset_token=token)
-            if user.password_reset_token_created < timezone.now() - timezone.timedelta(hours=1):
+            if user.password_reset_token_created < timezone.now() - timedelta(hours=1):
                 return Response({
                     'success': False,
                     'error': {'code': 400, 'message': 'Reset token has expired'}

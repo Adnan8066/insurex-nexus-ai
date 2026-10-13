@@ -3,43 +3,101 @@ import { useParams, Link } from 'react-router-dom'
 import {
   Car,
   Calendar,
-  DollarSign,
   Wrench,
   FileText,
   ArrowLeft,
   Edit,
   Download,
   MoreVertical,
-  ChevronRight,
-  Clock,
   CheckCircle,
-  AlertTriangle,
-  MapPin,
   Gauge,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
-import { mockVehicles } from '../../data/vehicles'
-import { mockClaims } from '../../data/claims'
+import { vehicleService, claimService } from '../../services'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+
+const mapVehicle = (v) => ({
+  id: v.id,
+  make: v.make,
+  model: v.model,
+  year: v.year,
+  vin: v.vin,
+  color: v.color,
+  licensePlate: v.license_plate,
+  licenseState: v.license_state,
+  registrationExpiry: v.registration_expiry,
+  purchaseDate: v.purchase_date,
+  purchasePrice: v.purchase_price,
+  currentMileage: v.current_mileage,
+  fuelType: v.fuel_type,
+  transmission: v.transmission,
+  status: v.status,
+  customerName: v.customer_name,
+  policyNumber: v.policy_number,
+  policyId: v.policy,
+  documents: (v.documents || []).map((d) => ({
+    id: d.id,
+    name: d.original_name,
+    type: d.document_type,
+    file: d.file,
+    uploadedAt: d.uploaded_at,
+  })),
+  history: v.history || [],
+})
+
+const mapClaim = (c) => ({
+  id: c.id,
+  claimNumber: c.claim_number,
+  incidentDate: c.incident_date,
+  incidentType: c.incident_type,
+  incidentSeverity: c.incident_severity,
+  claimAmount: c.claim_amount,
+  status: c.status,
+  submittedAt: c.submitted_at,
+  location: c.location,
+})
 
 export function VehicleDetails() {
   const { id } = useParams()
   const [loading, setLoading] = useState(true)
   const [vehicle, setVehicle] = useState(null)
+  const [claims, setClaims] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const found = mockVehicles.find((v) => v.id === parseInt(id))
-      setVehicle(found || null)
-      setLoading(false)
-    }, 400)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    const fetchData = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const [vehicleRes, claimsRes] = await Promise.all([
+          vehicleService.getVehicle(id),
+          vehicleService.getVehicleClaims(id),
+        ])
+        if (!cancelled) {
+          setVehicle(mapVehicle(vehicleRes))
+          const claimsData = Array.isArray(claimsRes) ? claimsRes : (claimsRes.results || [])
+          setClaims(claimsData.map(mapClaim))
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.response?.data?.detail || 'Failed to load vehicle')
+          setVehicle(null)
+          setClaims([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchData()
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
   if (loading) {
@@ -48,6 +106,16 @@ export function VehicleDetails() {
         <div className="page-header">
           <div className="h-8 bg-gray-200 rounded w-48 mb-2"></div>
           <div className="h-4 bg-gray-200 rounded w-64"></div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="h-32 bg-gray-200 rounded-xl"></div>
+            <div className="h-48 bg-gray-200 rounded-xl"></div>
+          </div>
+          <div className="space-y-6">
+            <div className="h-32 bg-gray-200 rounded-xl"></div>
+            <div className="h-32 bg-gray-200 rounded-xl"></div>
+          </div>
         </div>
       </div>
     )
@@ -62,6 +130,9 @@ export function VehicleDetails() {
             Back to Vehicles
           </Link>
         </div>
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+        )}
         <EmptyState
           icon={<Car className="w-12 h-12" />}
           title="Vehicle not found"
@@ -72,7 +143,7 @@ export function VehicleDetails() {
     )
   }
 
-  const vehicleClaims = mockClaims.filter((c) => c.vehicleId === vehicle.id)
+  const vehicleClaims = claims
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Car },
@@ -90,10 +161,10 @@ export function VehicleDetails() {
             Back to Vehicles
           </Link>
           <div className="flex items-center gap-3">
-            <h1 className="page-title">{vehicle.year} {vehicle.make} {vehicle.model}</h1>
+            <h1 className="page-title">{vehicle.year || ''} {vehicle.make || ''} {vehicle.model || ''}</h1>
             <StatusBadge status={vehicle.status} />
           </div>
-          <p className="page-subtitle">{vehicle.color} • {vehicle.licensePlate} • VIN: {vehicle.vin.slice(-6)}</p>
+          <p className="page-subtitle">{vehicle.color || ''} • {vehicle.licensePlate || ''} • VIN: {vehicle.vin ? vehicle.vin.slice(-6) : ''}</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm">
@@ -136,27 +207,27 @@ export function VehicleDetails() {
                   <dl className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                       <dt className="text-sm font-medium text-gray-500">VIN</dt>
-                      <dd className="mt-1 text-gray-900 font-mono">{vehicle.vin}</dd>
+                      <dd className="mt-1 text-gray-900 font-mono">{vehicle.vin || ''}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">License Plate</dt>
-                      <dd className="mt-1 text-gray-900">{vehicle.licensePlate}</dd>
+                      <dd className="mt-1 text-gray-900">{vehicle.licensePlate || ''}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Color</dt>
-                      <dd className="mt-1 text-gray-900">{vehicle.color}</dd>
+                      <dd className="mt-1 text-gray-900">{vehicle.color || ''}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Fuel Type</dt>
-                      <dd className="mt-1 text-gray-900">{vehicle.fuelType}</dd>
+                      <dd className="mt-1 text-gray-900">{vehicle.fuelType ? vehicle.fuelType.replace(/_/g, ' ') : ''}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Transmission</dt>
-                      <dd className="mt-1 text-gray-900">{vehicle.transmission}</dd>
+                      <dd className="mt-1 text-gray-900">{vehicle.transmission ? vehicle.transmission.replace(/_/g, ' ') : ''}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Current Mileage</dt>
-                      <dd className="mt-1 text-gray-900">{vehicle.currentMileage.toLocaleString()} mi</dd>
+                      <dd className="mt-1 text-gray-900">{vehicle.currentMileage != null ? vehicle.currentMileage.toLocaleString() : ''} mi</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Registration Expiry</dt>
@@ -175,7 +246,7 @@ export function VehicleDetails() {
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Linked Policy</dt>
-                      <dd className="mt-1 text-gray-900">{vehicle.policyId}</dd>
+                      <dd className="mt-1 text-gray-900">{vehicle.policyNumber || vehicle.policyId || ''}</dd>
                     </div>
                   </dl>
                 </CardContent>
@@ -191,16 +262,16 @@ export function VehicleDetails() {
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-gray-900">{claim.claimNumber}</span>
-                                <StatusBadge status={claim.status} />
-                                <span className="text-sm text-gray-500">{formatDate(claim.incidentDate)}</span>
-                              </div>
-                              <p className="text-sm text-gray-600 mt-1">{claim.incidentType} • {claim.incidentSeverity}</p>
-                              <p className="text-sm text-gray-500 mt-0.5">{claim.location}</p>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="font-semibold text-gray-900">{formatCurrency(claim.claimAmount)}</p>
-                              <p className="text-xs text-gray-500">{formatRelativeTime(claim.submittedAt)}</p>
+                               <span className="font-medium text-gray-900">{claim.claimNumber || ''}</span>
+                                 <StatusBadge status={claim.status} />
+                                 <span className="text-sm text-gray-500">{formatDate(claim.incidentDate)}</span>
+                               </div>
+                               <p className="text-sm text-gray-600 mt-1">{claim.incidentType ? claim.incidentType.replace(/_/g, ' ') : ''} • {claim.incidentSeverity ? claim.incidentSeverity.replace(/_/g, ' ') : ''}</p>
+                               <p className="text-sm text-gray-500 mt-0.5">{claim.location || ''}</p>
+                             </div>
+                             <div className="text-right flex-shrink-0">
+                               <p className="font-semibold text-gray-900">{formatCurrency(claim.claimAmount)}</p>
+                               <p className="text-xs text-gray-500">{formatRelativeTime(claim.submittedAt)}</p>
                             </div>
                           </div>
                         </Link>
@@ -229,12 +300,12 @@ export function VehicleDetails() {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-gray-900">{claim.claimNumber}</span>
+                              <span className="font-medium text-gray-900">{claim.claimNumber || ''}</span>
                               <StatusBadge status={claim.status} />
                               <span className="text-sm text-gray-500">{formatDate(claim.incidentDate)}</span>
                             </div>
-                            <p className="text-sm text-gray-600 mt-1">{claim.incidentType} • {claim.incidentSeverity}</p>
-                            <p className="text-sm text-gray-500 mt-0.5">{claim.location}</p>
+                            <p className="text-sm text-gray-600 mt-1">{claim.incidentType ? claim.incidentType.replace(/_/g, ' ') : ''} • {claim.incidentSeverity ? claim.incidentSeverity.replace(/_/g, ' ') : ''}</p>
+                            <p className="text-sm text-gray-500 mt-0.5">{claim.location || ''}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
                             <p className="font-semibold text-gray-900">{formatCurrency(claim.claimAmount)}</p>
@@ -259,23 +330,25 @@ export function VehicleDetails() {
             <Card>
               <CardHeader title="Documents" action={<Button variant="outline" size="sm">Upload</Button>} />
               <CardContent>
-                {vehicle.documents.length > 0 ? (
-                  <div className="space-y-3">
-                    {vehicle.documents.map((doc, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-primary" />
+                    {vehicle.documents && vehicle.documents.length > 0 ? (
+                      <div className="space-y-3">
+                        {vehicle.documents.map((doc, index) => (
+                          <div key={doc.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                                <FileText className="w-5 h-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">{doc.name || ''}</p>
+                                <p className="text-sm text-gray-500">{doc.type ? doc.type.replace(/_/g, ' ') : ''} • {formatDate(doc.uploadedAt)}</p>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="sm" asChild>
+                              <a href={doc.file} target="_blank" rel="noreferrer">View</a>
+                            </Button>
                           </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{doc.name}</p>
-                            <p className="text-sm text-gray-500">{doc.type} • {formatDate(doc.uploadedAt)}</p>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm">View</Button>
+                        ))}
                       </div>
-                    ))}
-                  </div>
                 ) : (
                   <EmptyState
                     icon={<FileText className="w-12 h-12" />}
@@ -377,15 +450,15 @@ export function VehicleDetails() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Claim Amount</span>
-                  <span className="font-semibold text-gray-900">{formatCurrency(vehicleClaims.reduce((sum, c) => sum + c.claimAmount, 0))}</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(vehicleClaims.reduce((sum, c) => sum + (Number(c.claimAmount) || 0), 0))}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Vehicle Age</span>
-                  <span className="font-semibold text-gray-900">{new Date().getFullYear() - vehicle.year} years</span>
+                  <span className="font-semibold text-gray-900">{vehicle.year ? new Date().getFullYear() - vehicle.year : 0} years</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Mileage</span>
-                  <span className="font-semibold text-gray-900">{vehicle.currentMileage.toLocaleString()} mi</span>
+                  <span className="font-semibold text-gray-900">{vehicle.currentMileage != null ? vehicle.currentMileage.toLocaleString() : ''} mi</span>
                 </div>
               </div>
             </CardContent>

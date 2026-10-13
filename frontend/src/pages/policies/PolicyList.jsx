@@ -3,25 +3,25 @@ import { Link } from 'react-router-dom'
 import {
   FileText,
   Search,
-  Filter,
   Plus,
-  MoreVertical,
   Shield,
   Calendar,
   DollarSign,
   Car,
   Home,
   Building2,
+  Trash2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate } from '../../utils/helpers'
-import { mockPolicies } from '../../data/policies'
+import { policyService } from '../../services'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../components/tables/DataTable'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { ConfirmDialog } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 
 const policyTypes = [
@@ -51,14 +51,47 @@ export function PolicyList() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [sortConfig, setSortConfig] = useState({ key: 'startDate', direction: 'desc' })
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPolicies(mockPolicies)
-      setFilteredPolicies(mockPolicies)
-      setLoading(false)
-    }, 500)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    const fetchPolicies = async () => {
+      try {
+        const res = await policyService.getPolicies()
+        const results = Array.isArray(res) ? res : (res.results || [])
+        const mapped = results.map((p) => ({
+          id: p.id,
+          policyNumber: p.policy_number,
+          type: p.type,
+          status: p.status,
+          startDate: p.start_date,
+          endDate: p.end_date,
+          premium: p.premium,
+          deductible: p.deductible,
+          paymentFrequency: p.payment_frequency,
+          autoRenew: p.auto_renew,
+          customer: p.customer,
+          customerName: p.customer_name,
+          customerEmail: p.customer_email,
+          vehicle: p.vehicle_info || p.vehicle || null,
+        }))
+        if (!cancelled) {
+          setPolicies(mapped)
+          setFilteredPolicies(mapped)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPolicies([])
+          setFilteredPolicies([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchPolicies()
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -68,11 +101,11 @@ export function PolicyList() {
       const searchLower = search.toLowerCase()
       result = result.filter(
         (p) =>
-          p.policyNumber.toLowerCase().includes(searchLower) ||
-          p.type.toLowerCase().includes(searchLower) ||
-          p.customerName.toLowerCase().includes(searchLower) ||
-          (p.vehicle && p.vehicle.make.toLowerCase().includes(searchLower)) ||
-          (p.vehicle && p.vehicle.model.toLowerCase().includes(searchLower))
+          (p.policyNumber || '').toLowerCase().includes(searchLower) ||
+          (p.type || '').toLowerCase().includes(searchLower) ||
+          (p.customerName || '').toLowerCase().includes(searchLower) ||
+          (p.vehicle && p.vehicle.make && p.vehicle.make.toLowerCase().includes(searchLower)) ||
+          (p.vehicle && p.vehicle.model && p.vehicle.model.toLowerCase().includes(searchLower))
       )
     }
 
@@ -99,6 +132,21 @@ export function PolicyList() {
     setFilteredPolicies(result)
     setCurrentPage(1)
   }, [search, typeFilter, statusFilter, sortConfig, policies])
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await policyService.deletePolicy(deleteTarget.id)
+      setPolicies((prev) => prev.filter((p) => p.id !== deleteTarget.id))
+      setFilteredPolicies((prev) => prev.filter((p) => p.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to delete policy')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const handleSort = (key) => {
     setSortConfig((prev) => ({
@@ -152,6 +200,12 @@ export function PolicyList() {
           </Button>
         </Link>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-6">
@@ -237,9 +291,13 @@ export function PolicyList() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Link to={`/policies/${policy.id}`} className="text-primary hover:underline text-sm">View</Link>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
+                            <button
+                              onClick={() => setDeleteTarget(policy)}
+                              className="text-red-600 hover:text-red-700 p-1"
+                              title="Delete policy"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -266,6 +324,16 @@ export function PolicyList() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Policy"
+        message={`Are you sure you want to delete policy ${deleteTarget?.policyNumber}? This action cannot be undone.`}
+        confirmText="Delete"
+        loading={deleting}
+      />
     </div>
   )
 }

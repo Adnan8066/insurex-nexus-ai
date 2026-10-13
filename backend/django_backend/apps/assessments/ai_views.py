@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from apps.claims.models import Claim
 from .models import ClaimAssessment, AgentOutput, DecisionFlow, AssessmentType, AssessmentStatus
@@ -114,9 +115,6 @@ def generate_recommendation(assessment):
 
 def calculate_confidence(assessment):
     return 85.0
-
-
-from django.utils import timezone
 
 
 @api_view(['POST'])
