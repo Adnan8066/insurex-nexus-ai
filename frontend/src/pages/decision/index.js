@@ -1,2 +1,2 @@
 export { AIDecisionCenter } from './AIDecisionCenter'
-export default { AIDecisionCenter }
+export { AIDecisionCenter as default } from './AIDecisionCenter'

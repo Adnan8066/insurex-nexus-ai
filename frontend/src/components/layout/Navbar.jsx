@@ -16,7 +16,7 @@ import {
 import { useAuth } from '../../context/AuthContext'
 
 export function Navbar({ sidebarCollapsed, onToggleSidebar }) {
-  const { user, logout, hasRole } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
@@ -46,34 +46,9 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }) {
   }, [darkMode])
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
-        setShowUserMenu(false)
-      }
-  useEffect(() => {
-    const saved = localStorage.getItem("theme")
-    if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      setDarkMode(true)
-      document.documentElement.classList.add("dark")
-    } else {
-      setDarkMode(false)
-      document.documentElement.classList.remove("dark")
-    }
-  }, [])
-
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add("dark")
-      localStorage.setItem("theme", "dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-      localStorage.setItem("theme", "light")
-    }
-  }, [darkMode])
-
-      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
-        setShowNotifications(false)
-      }
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) setShowUserMenu(false)
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) setShowNotifications(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)

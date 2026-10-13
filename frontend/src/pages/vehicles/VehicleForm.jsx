@@ -33,6 +33,15 @@ export function VehicleForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    if (!id) return
+    let active = true
+    vehicleService.getVehicle(id).then((vehicle) => {
+      if (active) setFormData((current) => ({ ...current, ...vehicle, licensePlate: vehicle.license_plate, licenseState: vehicle.license_state, fuelType: vehicle.fuel_type, currentMileage: vehicle.current_mileage, registrationExpiry: vehicle.registration_expiry || '', purchaseDate: vehicle.purchase_date || '', purchasePrice: vehicle.purchase_price || '' }))
+    }).catch(() => { if (active) setError('Unable to load this vehicle.') })
+    return () => { active = false }
+  }, [id])
+
   // Convert camelCase to snake_case for backend
   const toSnakeCase = (data) => {
     const result = {}
@@ -61,9 +70,9 @@ export function VehicleForm() {
       purchase_date: formData.purchaseDate || null,
       purchase_price: formData.purchasePrice || null,
       current_mileage: Number(formData.currentMileage) || 0,
-      fuel_type: fuelTypeMap[formData.fuelType] || 'gasoline',
-      transmission: transmissionMap[formData.transmission] || 'automatic',
-      status: statusMap[formData.status] || 'active',
+      fuel_type: formData.fuelType.toLowerCase(),
+      transmission: formData.transmission.toLowerCase(),
+      status: formData.status === 'totaled' ? 'total_loss' : formData.status,
     }
     return payload
   }
@@ -74,6 +83,7 @@ export function VehicleForm() {
     setError('')
 
     try {
+      const payload = buildPayload()
       if (isEdit) {
         await vehicleService.updateVehicle(id, payload)
       } else {
@@ -125,15 +135,15 @@ export function VehicleForm() {
             <Input label="License Plate" name="licensePlate" value={formData.licensePlate} onChange={handleChange} required />
             <Input label="Color" name="color" value={formData.color} onChange={handleChange} required />
             <Select label="Fuel Type" name="fuelType" value={formData.fuelType} onChange={handleChange}
-              options={[{value:'Gasoline',label:'Gasoline'},{value:'Diesel',label:'Diesel'},{value:'Hybrid',label:'Hybrid'},{value:'Electric',label:'Electric'}]} />
+              options={[{value:'gasoline',label:'Gasoline'},{value:'diesel',label:'Diesel'},{value:'hybrid',label:'Hybrid'},{value:'electric',label:'Electric'}]} />
             <Select label="Transmission" name="transmission" value={formData.transmission} onChange={handleChange}
-              options={[{value:'Automatic',label:'Automatic'},{value:'Manual',label:'Manual'},{value:'CVT',label:'CVT'}]} />
+              options={[{value:'automatic',label:'Automatic'},{value:'manual',label:'Manual'},{value:'cvt',label:'CVT'}]} />
             <Input label="Current Mileage" name="currentMileage" type="number" value={formData.currentMileage} onChange={handleChange} />
             <Input label="Registration Expiry" name="registrationExpiry" type="date" value={formData.registrationExpiry} onChange={handleChange} />
             <Input label="Purchase Date" name="purchaseDate" type="date" value={formData.purchaseDate} onChange={handleChange} />
             <Input label="Purchase Price" name="purchasePrice" type="number" value={formData.purchasePrice} onChange={handleChange} />
             <Select label="Status" name="status" value={formData.status} onChange={handleChange}
-              options={[{value:'active',label:'Active'},{value:'inactive',label:'Inactive'},{value:'sold',label:'Sold'},{value:'totaled',label:'Totaled'}]} />
+              options={[{value:'active',label:'Active'},{value:'inactive',label:'Inactive'},{value:'sold',label:'Sold'},{value:'total_loss',label:'Total loss'}]} />
           </div>
         </div>
 

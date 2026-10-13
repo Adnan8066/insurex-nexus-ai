@@ -56,7 +56,7 @@ class ErrorBoundary extends Component {
               We encountered an unexpected error. Please try again or contact support if the problem persists.
             </p>
             
-            {process.env.NODE_ENV === 'development' && error && (
+            {import.meta.env.DEV && error && (
               <details className="text-left mb-4 p-3 bg-gray-100 rounded text-xs text-gray-700 overflow-auto max-h-48">
                 <summary className="font-medium cursor-pointer mb-2">Error Details</summary>
                 <pre>{error.toString()}</pre>

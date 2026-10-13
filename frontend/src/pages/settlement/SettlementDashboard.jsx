@@ -283,7 +283,7 @@ export function SettlementDashboard() {
             </div>
 
             <p className="text-xs text-gray-500">
-              Disbursement will initiate direct ACH transfer to policyholder's verified bank account on file.
+              Disbursement will initiate direct ACH transfer to policyholder&apos;s verified bank account on file.
             </p>
 
             <div className="flex justify-end gap-2 pt-4 border-t">

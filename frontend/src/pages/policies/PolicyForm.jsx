@@ -15,17 +15,26 @@ export function PolicyForm() {
   const [formData, setFormData] = useState({
     type: 'auto_comprehensive',
     status: 'pending',
-    start_date: new Date().toISOString().split('T')[0],
-    end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
     premium: '',
     deductible: '500',
-    payment_frequency: 'annual',
-    auto_renew: true,
+    paymentFrequency: 'annual',
+    autoRenew: true,
     agent: '',
   })
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!id) return
+    let active = true
+    policyService.getPolicy(id).then((policy) => {
+      if (active) setFormData((current) => ({ ...current, ...policy, startDate: policy.start_date, endDate: policy.end_date, paymentFrequency: policy.payment_frequency, autoRenew: policy.auto_renew }))
+    }).catch(() => { if (active) setError('Unable to load this policy.') })
+    return () => { active = false }
+  }, [id])
 
   // Convert camelCase to snake_case for backend
   const toSnakeCase = (data) => {
@@ -46,13 +55,13 @@ export function PolicyForm() {
     const payload = {
       customer: user?.id || null,
       agent: null,
-      type: typeMap[formData.type] || 'auto_comprehensive',
+      type: formData.type,
       status: formData.status,
       start_date: formData.startDate,
       end_date: formData.endDate,
       premium: Number(formData.premium),
       deductible: Number(formData.deductible),
-      payment_frequency: frequencyMap[formData.paymentFrequency] || 'annual',
+      payment_frequency: formData.paymentFrequency,
       auto_renew: formData.autoRenew,
       property_address: formData.propertyAddress || '',
       property_type: formData.propertyType || '',
@@ -68,6 +77,7 @@ export function PolicyForm() {
     setError('')
 
     try {
+      const payload = buildPayload()
       if (isEdit) {
         await policyService.updatePolicy(id, payload)
       } else {
@@ -114,12 +124,12 @@ export function PolicyForm() {
           <div className='card-content grid grid-cols-1 md:grid-cols-2 gap-4'>
             <Select label='Policy Type' name='type' value={formData.type} onChange={handleChange}
               options={[
-                {value:'Comprehensive Auto',label:'Comprehensive Auto'},
-                {value:'Liability Only',label:'Liability Only'},
-                {value:'Homeowners',label:'Homeowners'},
-                {value:'Renters',label:'Renters'},
-                {value:'Life Insurance',label:'Life Insurance'},
-                {value:'Commercial',label:'Commercial'},
+                {value:'auto_comprehensive',label:'Comprehensive Auto'},
+                {value:'auto_collision',label:'Collision Auto'},
+                {value:'auto_liability',label:'Liability Auto'},
+                {value:'homeowners',label:'Homeowners'},
+                {value:'renters',label:'Renters'},
+                {value:'umbrella',label:'Umbrella'},
               ]} />
             <Select label="Status" name="status" value={formData.status} onChange={handleChange}
               options={[{value:'active',label:'Active'},{value:'pending',label:'Pending'},{value:'expired',label:'Expired'},{value:'cancelled',label:'Cancelled'}]} />
@@ -128,7 +138,7 @@ export function PolicyForm() {
             <Input label="Annual Premium" name="premium" type="number" value={formData.premium} onChange={handleChange} placeholder="e.g., 1250" required />
             <Input label="Deductible" name="deductible" type="number" value={formData.deductible} onChange={handleChange} placeholder="e.g., 500" required />
             <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange}
-              options={[{value:'annual',label:'Annual'},{value:'semi-annual',label:'Semi-Annual'},{value:'quarterly',label:'Quarterly'},{value:'monthly',label:'Monthly'}]} />
+              options={[{value:'annual',label:'Annual'},{value:'semi_annual',label:'Semi-Annual'},{value:'quarterly',label:'Quarterly'},{value:'monthly',label:'Monthly'}]} />
             <Input label="Agent" name="agent" value={formData.agent} onChange={handleChange} placeholder="Agent name" />
             <div className="flex items-center gap-2">
               <input type="checkbox" id="autoRenew" name="autoRenew" checked={formData.autoRenew} onChange={handleChange} className="w-4 h-4" />

@@ -329,7 +329,7 @@ export function CustomerDashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Welcome back, {user?.first_name || user?.get_full_name?.call(user) || (user?.email || '').split('@')[0] || 'Customer'}! Here's an overview of your insurance portfolio.</p>
+          <p className="page-subtitle">Welcome back, {user?.first_name || user?.get_full_name?.call(user) || (user?.email || '').split('@')[0] || 'Customer'}! Here&apos;s an overview of your insurance portfolio.</p>
           {connectionError && (
             <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
               <WifiOff className="w-4 h-4" />

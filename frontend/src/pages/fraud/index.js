@@ -1,2 +1,2 @@
 export { FraudDashboard } from './FraudDashboard'
-export default { FraudDashboard }
+export { FraudDashboard as default } from './FraudDashboard'

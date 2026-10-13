@@ -1,2 +1,2 @@
 export { AIAssessment } from './AIAssessment'
-export default { AIAssessment }
+export { AIAssessment as default } from './AIAssessment'

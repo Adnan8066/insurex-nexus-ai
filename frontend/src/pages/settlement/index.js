@@ -1,2 +1,2 @@
 export { SettlementDashboard } from './SettlementDashboard'
-export default { SettlementDashboard }
+export { SettlementDashboard as default } from './SettlementDashboard'
