@@ -1,15 +1,15 @@
-from rest_framework import viewsets, status, filters
+﻿from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Vehicle, VehicleDocument, VehicleHistory, VehicleStatus
+from .models import Vehicle, VehicleDocument, VehicleHistory
 from .serializers import (
     VehicleSerializer, VehicleCreateSerializer, VehicleUpdateSerializer,
     VehicleDocumentSerializer, VehicleHistorySerializer
 )
-from common.permissions import IsOwnerOrAdmin, IsStaffMember
+from common.permissions import IsOwnerOrAdmin
 
 
 class VehicleViewSet(viewsets.ModelViewSet):
@@ -50,19 +50,20 @@ class VehicleViewSet(viewsets.ModelViewSet):
         full = VehicleSerializer(serializer.instance, context={'request': request}).data
         return Response(full, status=status.HTTP_201_CREATED, headers=headers)
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        customer = serializer.validated_data.get('customer') or user
-        if not user.is_staff_member:
-            customer = user
-        serializer.save(customer=customer)
-
     @action(detail=True, methods=['get'], url_path='claims')
     def list_claims(self, request, pk=None):
         from apps.claims.serializers import ClaimSerializer
         vehicle = self.get_object()
         serializer = ClaimSerializer(vehicle.claims.all(), many=True)
         return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.is_staff_member:
+            customer = serializer.validated_data.get('customer') or user
+        else:
+            customer = user
+        serializer.save(customer=customer)
     
     @action(detail=True, methods=['post'], url_path='documents')
     def upload_document(self, request, pk=None):

@@ -104,7 +104,7 @@ class ClaimCreateSerializer(serializers.ModelSerializer):
         if vehicle.customer != customer and not customer.is_staff_member:
             raise serializers.ValidationError('Vehicle does not belong to the current user.')
         
-        if vehicle.policy_id and vehicle.policy != policy:
+        if vehicle.policy_id and vehicle.policy_id != policy.id:
             raise serializers.ValidationError('Vehicle is not covered by the selected policy.')
         
         return attrs

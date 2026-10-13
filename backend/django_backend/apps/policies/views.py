@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, filters
+﻿from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -11,7 +11,7 @@ from .serializers import (
     PolicySerializer, PolicyCreateSerializer, PolicyUpdateSerializer,
     PolicyCoverageSerializer, PolicyDocumentSerializer, PremiumHistorySerializer
 )
-from common.permissions import IsOwnerOrAdmin, IsStaffMember
+from common.permissions import IsOwnerOrAdmin
 
 
 class PolicyViewSet(viewsets.ModelViewSet):
@@ -66,7 +66,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         import uuid
-        policy_number = f"POL-{uuid.uuid4().hex[:8].upper()}"
+        policy_number = f'POL-{uuid.uuid4().hex[:8].upper()}'
         customer = serializer.validated_data.get('customer') or user
         if not user.is_staff_member:
             customer = user

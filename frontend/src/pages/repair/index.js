@@ -1,2 +1,2 @@
 export { RepairDashboard } from './RepairDashboard'
-export default { RepairDashboard }
+export { RepairDashboard as default } from './RepairDashboard'

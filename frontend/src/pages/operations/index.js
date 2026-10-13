@@ -1,2 +1,2 @@
 export { AIOperations } from './AIOperations'
-export default { AIOperations }
+export { AIOperations as default } from './AIOperations'

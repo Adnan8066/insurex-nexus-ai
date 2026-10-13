@@ -81,20 +81,53 @@ export function SubmitClaim() {
         const vehs = Array.isArray(vehRes) ? vehRes : (vehRes.results || [])
         setPolicies(pols)
         setVehicles(vehs)
+        const requestedPolicy = preselectedPolicy && pols.some((policy) => String(policy.id) === String(preselectedPolicy))
+          ? String(preselectedPolicy)
+          : ''
+        const requestedVehicle = preselectedVehicle && vehs.find((vehicle) => String(vehicle.id) === String(preselectedVehicle))
+        const defaultVehicle = (requestedVehicle && (!requestedPolicy || !requestedVehicle.policy || String(requestedVehicle.policy) === requestedPolicy)
+          ? requestedVehicle
+          : null)
+          || vehs.find((vehicle) => !requestedPolicy || !vehicle.policy || String(vehicle.policy) === requestedPolicy)
+          || vehs[0]
+        const selectedPolicy = requestedPolicy
+          || (defaultVehicle?.policy ? String(defaultVehicle.policy) : String(pols[0]?.id || ''))
         setFormData((prev) => ({
           ...prev,
-          policyId: prev.policyId || (pols[0]?.id ?? ''),
-          vehicleId: prev.vehicleId || (vehs[0]?.id ?? ''),
+          policyId: requestedPolicy || selectedPolicy || prev.policyId,
+          vehicleId: defaultVehicle ? String(defaultVehicle.id) : prev.vehicleId,
         }))
       } catch (err) {
         setError('Failed to load your policies and vehicles. Please add a policy and vehicle first.')
       }
     }
     fetchData()
-  }, [])
+  }, [preselectedPolicy, preselectedVehicle])
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
+    if (name === 'vehicleId') {
+      const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(value))
+      setFormData((prev) => ({
+        ...prev,
+        vehicleId: value,
+        ...(selectedVehicle?.policy ? { policyId: String(selectedVehicle.policy) } : {}),
+      }))
+      return
+    }
+    if (name === 'policyId') {
+      const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(formData.vehicleId))
+      const selectedPolicyId = value
+      const compatibleVehicle = selectedVehicle?.policy && String(selectedVehicle.policy) !== selectedPolicyId
+        ? vehicles.find((vehicle) => !vehicle.policy || String(vehicle.policy) === selectedPolicyId)
+        : selectedVehicle
+      setFormData((prev) => ({
+        ...prev,
+        policyId: value,
+        ...(compatibleVehicle ? { vehicleId: String(compatibleVehicle.id) } : { vehicleId: '' }),
+      }))
+      return
+    }
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
@@ -222,7 +255,12 @@ export function SubmitClaim() {
                     name="policyId"
                     value={formData.policyId}
                     onChange={handleChange}
-                    options={policies.map((p) => ({ value: String(p.id), label: `${p.policy_number} - ${(p.type || '').replace(/_/g, ' ')}` }))}
+                    options={policies
+                      .filter((policy) => {
+                        const vehicle = vehicles.find((item) => String(item.id) === String(formData.vehicleId))
+                        return !vehicle?.policy || String(vehicle.policy) === String(policy.id)
+                      })
+                      .map((p) => ({ value: String(p.id), label: `${p.policy_number} - ${(p.type || '').replace(/_/g, ' ')}` }))}
                     placeholder="Select a policy"
                     required
                   />

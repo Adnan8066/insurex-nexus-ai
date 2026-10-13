@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, FileText, Save, X, Car, Home, Building2 } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
@@ -6,31 +6,15 @@ import { Input, Select, Textarea } from '../../components/forms/FormFields'
 import { policyService } from '../../services'
 import { useAuth } from '../../context/AuthContext'
 
-const typeMap = {
-  'Comprehensive Auto': 'auto_comprehensive',
-  'Collision Auto': 'auto_collision',
-  'Liability Auto': 'auto_liability',
-  'Homeowners': 'homeowners',
-  'Renters': 'renters',
-  'Umbrella': 'umbrella',
-}
-
-const frequencyMap = {
-  'annual': 'annual',
-  'semi-annual': 'semi_annual',
-  'quarterly': 'quarterly',
-  'monthly': 'monthly',
-}
-
 export function PolicyForm() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const isEdit = !!id
   const { user } = useAuth()
+  const isEdit = !!id
 
   const [formData, setFormData] = useState({
-    type: 'Comprehensive Auto',
-    status: 'active',
+    type: 'auto_comprehensive',
+    status: 'pending',
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
     premium: '',
@@ -38,14 +22,29 @@ export function PolicyForm() {
     paymentFrequency: 'annual',
     autoRenew: true,
     agent: '',
-    propertyAddress: '',
-    propertyType: '',
-    propertyYearBuilt: '',
-    propertySquareFootage: '',
   })
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!id) return
+    let active = true
+    policyService.getPolicy(id).then((policy) => {
+      if (active) setFormData((current) => ({ ...current, ...policy, startDate: policy.start_date, endDate: policy.end_date, paymentFrequency: policy.payment_frequency, autoRenew: policy.auto_renew }))
+    }).catch(() => { if (active) setError('Unable to load this policy.') })
+    return () => { active = false }
+  }, [id])
+
+  // Convert camelCase to snake_case for backend
+  const toSnakeCase = (data) => {
+    const result = {}
+    for (const [key, value] of Object.entries(data)) {
+      const snakeKey = key.replace(/([A-Z])/g, "_$1").toLowerCase()
+      result[snakeKey] = value
+    }
+    return result
+  }
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -56,13 +55,13 @@ export function PolicyForm() {
     const payload = {
       customer: user?.id || null,
       agent: null,
-      type: typeMap[formData.type] || 'auto_comprehensive',
+      type: formData.type,
       status: formData.status,
       start_date: formData.startDate,
       end_date: formData.endDate,
       premium: Number(formData.premium),
       deductible: Number(formData.deductible),
-      payment_frequency: frequencyMap[formData.paymentFrequency] || 'annual',
+      payment_frequency: formData.paymentFrequency,
       auto_renew: formData.autoRenew,
       property_address: formData.propertyAddress || '',
       property_type: formData.propertyType || '',
@@ -101,36 +100,36 @@ export function PolicyForm() {
   }
 
   return (
-    <div className="page max-w-3xl">
-      <div className="page-header">
+    <div className='page max-w-3xl'>
+      <div className='page-header'>
         <div>
-          <Link to="/policies" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-2">
-            <ArrowLeft className="w-4 h-4" />
+          <Link to='/policies' className='inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-2'>
+            <ArrowLeft className='w-4 h-4' />
             Back to Policies
           </Link>
-          <h1 className="page-title">{isEdit ? 'Edit Policy' : 'Create Policy'}</h1>
-          <p className="page-subtitle">{isEdit ? 'Update policy details' : 'Issue a new insurance policy'}</p>
+          <h1 className='page-title'>{isEdit ? 'Edit Policy' : 'Create Policy'}</h1>
+          <p className='page-subtitle'>{isEdit ? 'Update policy details' : 'Issue a new insurance policy'}</p>
         </div>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className='mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="card">
-          <div className="card-header"><h3 className="card-title">Policy Details</h3></div>
-          <div className="card-content grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Select label="Policy Type" name="type" value={formData.type} onChange={handleChange}
+      <form onSubmit={handleSubmit} className='space-y-6'>
+        <div className='card'>
+          <div className='card-header'><h3 className='card-title'>Policy Details</h3></div>
+          <div className='card-content grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <Select label='Policy Type' name='type' value={formData.type} onChange={handleChange}
               options={[
-                {value:'Comprehensive Auto',label:'Comprehensive Auto'},
-                {value:'Collision Auto',label:'Collision Auto'},
-                {value:'Liability Auto',label:'Liability Auto'},
-                {value:'Homeowners',label:'Homeowners'},
-                {value:'Renters',label:'Renters'},
-                {value:'Umbrella',label:'Umbrella'},
+                {value:'auto_comprehensive',label:'Comprehensive Auto'},
+                {value:'auto_collision',label:'Collision Auto'},
+                {value:'auto_liability',label:'Liability Auto'},
+                {value:'homeowners',label:'Homeowners'},
+                {value:'renters',label:'Renters'},
+                {value:'umbrella',label:'Umbrella'},
               ]} />
             <Select label="Status" name="status" value={formData.status} onChange={handleChange}
               options={[{value:'active',label:'Active'},{value:'pending',label:'Pending'},{value:'expired',label:'Expired'},{value:'cancelled',label:'Cancelled'}]} />
@@ -139,7 +138,8 @@ export function PolicyForm() {
             <Input label="Annual Premium" name="premium" type="number" value={formData.premium} onChange={handleChange} placeholder="e.g., 1250" required />
             <Input label="Deductible" name="deductible" type="number" value={formData.deductible} onChange={handleChange} placeholder="e.g., 500" required />
             <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange}
-              options={[{value:'annual',label:'Annual'},{value:'semi-annual',label:'Semi-Annual'},{value:'quarterly',label:'Quarterly'},{value:'monthly',label:'Monthly'}]} />
+              options={[{value:'annual',label:'Annual'},{value:'semi_annual',label:'Semi-Annual'},{value:'quarterly',label:'Quarterly'},{value:'monthly',label:'Monthly'}]} />
+            <Input label="Agent" name="agent" value={formData.agent} onChange={handleChange} placeholder="Agent name" />
             <div className="flex items-center gap-2">
               <input type="checkbox" id="autoRenew" name="autoRenew" checked={formData.autoRenew} onChange={handleChange} className="w-4 h-4" />
               <label htmlFor="autoRenew" className="text-sm text-gray-700">Auto Renew</label>
@@ -157,11 +157,30 @@ export function PolicyForm() {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3">
-          <Link to="/policies"><Button variant="ghost">Cancel</Button></Link>
-          <Button type="submit" disabled={loading}>
-            <Save className="w-4 h-4 mr-2" />
-            {loading ? 'Saving...' : 'Save Policy'}
+        <div className='card'>
+          <div className='card-header'><h3 className='card-title'>Vehicle (for Auto Policies)</h3></div>
+          <div className='card-content grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <Select label='Vehicle' name='vehicle' value={formData.vehicle} onChange={handleChange}
+              options={[]}
+              placeholder='Select a vehicle' />
+          </div>
+        </div>
+
+        <div className='card'>
+          <div className='card-header'><h3 className='card-title'>Property Details (for Home/Renters)</h3></div>
+          <div className='card-content grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <Textarea label='Property Address' name='property_address' value={formData.property_address} onChange={handleChange} rows={2} placeholder='Full property address' />
+            <Input label='Property Type' name='property_type' value={formData.property_type} onChange={handleChange} placeholder='e.g., Single Family Home' />
+            <Input label='Year Built' name='property_year_built' type='number' value={formData.property_year_built} onChange={handleChange} />
+            <Input label='Square Footage' name='property_square_footage' type='number' value={formData.property_square_footage} onChange={handleChange} />
+          </div>
+        </div>
+
+        <div className='flex items-center justify-end gap-3'>
+          <Link to='/policies'><Button variant='ghost'>Cancel</Button></Link>
+          <Button type='submit' disabled={loading}>
+            <Save className='w-4 h-4 mr-2' />
+            {loading ? 'Saving...' : (isEdit ? 'Update Policy' : 'Create Policy')}
           </Button>
         </div>
       </form>
@@ -170,3 +189,6 @@ export function PolicyForm() {
 }
 
 export default PolicyForm
+
+
+

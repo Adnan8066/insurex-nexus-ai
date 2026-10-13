@@ -1,2 +1,2 @@
 export { AdminDashboard } from './AdminDashboard'
-export default { AdminDashboard }
+export { AdminDashboard as default } from './AdminDashboard'

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Shield, Mail, Lock, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react'
+import { Shield, Mail, Lock, ArrowLeft, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
@@ -122,14 +122,14 @@ export function ForgotPassword() {
               </div>
               <h1 className="text-3xl font-bold text-gray-900">Check your email</h1>
               <p className="mt-2 text-gray-600">
-                We've sent a password reset link to <strong>{formData.email}</strong>
+                We&apos;ve sent a password reset link to <strong>{formData.email}</strong>
               </p>
               <p className="mt-2 text-sm text-gray-500">The link will expire in 1 hour</p>
             </>
           ) : (
             <>
               <h1 className="text-3xl font-bold text-gray-900">Forgot password?</h1>
-              <p className="mt-2 text-gray-600">Enter your email and we'll send you a reset link</p>
+              <p className="mt-2 text-gray-600">Enter your email and we&apos;ll send you a reset link</p>
             </>
           )}
         </div>
@@ -209,7 +209,7 @@ export function ForgotPassword() {
               Resend email
             </Button>
             <p className="mt-4 text-sm text-gray-600">
-              Didn't receive the email?{' '}
+              Didn&apos;t receive the email?{' '}
               <button onClick={() => setStep('email')} className="font-medium text-primary hover:underline">
                 Try again
               </button>

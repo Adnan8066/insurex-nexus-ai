@@ -1,2 +1,2 @@
 export { InvestigatorDashboard } from './InvestigatorDashboard'
-export default { InvestigatorDashboard }
+export { InvestigatorDashboard as default } from './InvestigatorDashboard'

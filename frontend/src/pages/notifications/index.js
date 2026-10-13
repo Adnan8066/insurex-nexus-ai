@@ -1,2 +1,2 @@
 export { Notifications } from './Notifications'
-export default { Notifications }
+export { Notifications as default } from './Notifications'
