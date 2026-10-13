@@ -11,7 +11,7 @@ from .serializers import (
     PolicySerializer, PolicyCreateSerializer, PolicyUpdateSerializer,
     PolicyCoverageSerializer, PolicyDocumentSerializer, PremiumHistorySerializer
 )
-from common.permissions import IsOwnerOrAdmin, IsStaffMember
+from common.permissions import IsOwnerOrAdmin
 
 
 class PolicyViewSet(viewsets.ModelViewSet):
@@ -50,11 +50,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['create']:
-<<<<<<< HEAD
-            return [IsAuthenticated()]  # Allow all authenticated users to create
-=======
             return [IsAuthenticated()]
->>>>>>> 15f89af0341a27bca9485af126ff85bcc9e638ed
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsOwnerOrAdmin()]
         return [IsAuthenticated()]
@@ -70,22 +66,11 @@ class PolicyViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         import uuid
-<<<<<<< HEAD
         policy_number = f'POL-{uuid.uuid4().hex[:8].upper()}'
-        user = self.request.user
-        if user.is_staff_member:
-            # Staff can specify any customer
-            serializer.save(policy_number=policy_number)
-        else:
-            # Customers can only create policies for themselves
-            serializer.save(policy_number=policy_number, customer=user)
-=======
-        policy_number = f"POL-{uuid.uuid4().hex[:8].upper()}"
         customer = serializer.validated_data.get('customer') or user
         if not user.is_staff_member:
             customer = user
         serializer.save(policy_number=policy_number, customer=customer)
->>>>>>> 15f89af0341a27bca9485af126ff85bcc9e638ed
     
     @action(detail=True, methods=['post'], url_path='documents')
     def upload_document(self, request, pk=None):

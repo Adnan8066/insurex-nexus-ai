@@ -71,7 +71,9 @@ class ClaimViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         import uuid
         claim_number = f"CLM-{uuid.uuid4().hex[:8].upper()}"
-        claim = serializer.save(customer=self.request.user, claim_number=claim_number)
+        user = self.request.user
+        customer = serializer.validated_data['policy'].customer if user.is_staff_member else user
+        claim = serializer.save(customer=customer, claim_number=claim_number)
         
         ClaimStatusHistory.objects.create(
             claim=claim,
