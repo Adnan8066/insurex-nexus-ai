@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, FileText, Save, X, Car, Home, Building2 } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/forms/FormFields'
+import { policyService } from '../../services'
 
 export function PolicyForm() {
   const navigate = useNavigate()
@@ -21,15 +22,31 @@ export function PolicyForm() {
     agent: '',
   })
 
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     setFormData({ ...formData, [name]: type === 'checked' ? checked : value })
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    alert('Policy saved! (Demo mode - data not persisted)')
-    navigate('/policies')
+    setLoading(true)
+    setError('')
+
+    try {
+      if (isEdit) {
+        await policyService.updatePolicy(id, formData)
+      } else {
+        await policyService.createPolicy(formData)
+      }
+      navigate('/policies')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to save policy')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -44,6 +61,12 @@ export function PolicyForm() {
           <p className="page-subtitle">{isEdit ? 'Update policy details' : 'Issue a new insurance policy'}</p>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="card">
@@ -76,7 +99,10 @@ export function PolicyForm() {
 
         <div className="flex items-center justify-end gap-3">
           <Link to="/policies"><Button variant="ghost">Cancel</Button></Link>
-          <Button type="submit"><Save className="w-4 h-4 mr-2" />Save Policy</Button>
+          <Button type="submit" disabled={loading}>
+            <Save className="w-4 h-4 mr-2" />
+            {loading ? 'Saving...' : 'Save Policy'}
+          </Button>
         </div>
       </form>
     </div>

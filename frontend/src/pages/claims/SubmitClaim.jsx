@@ -17,7 +17,7 @@ import {
 import { clsx } from 'clsx'
 import { mockPolicies } from '../../data/policies'
 import { mockVehicles } from '../../data/vehicles'
-import { mockClaims } from '../../data/claims'
+import { claimService } from '../../services/claimService'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/forms/FormFields'
@@ -30,6 +30,7 @@ export function SubmitClaim() {
 
   const [currentStep, setCurrentStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
   const [successClaimId, setSuccessClaimId] = useState(null)
 
   const [formData, setFormData] = useState({
@@ -61,76 +62,20 @@ export function SubmitClaim() {
     }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitting(true)
+    setError('')
 
-    setTimeout(() => {
-      const generatedId = `CLM-2024-${Math.floor(100000 + Math.random() * 900000)}`
-      const selectedPolicy = mockPolicies.find((p) => p.id === formData.policyId) || mockPolicies[0]
-      const selectedVehicle = mockVehicles.find((v) => v.id.toString() === formData.vehicleId.toString()) || mockVehicles[0]
-
-      const newClaim = {
-        id: generatedId,
-        claimNumber: generatedId,
-        customerId: 1,
-        customerName: 'John Anderson',
-        policyId: selectedPolicy.id,
-        policyNumber: selectedPolicy.policyNumber,
-        vehicleId: selectedVehicle.id,
-        vehicle: {
-          make: selectedVehicle.make,
-          model: selectedVehicle.model,
-          year: selectedVehicle.year,
-          licensePlate: selectedVehicle.licensePlate,
-        },
-        incidentDate: formData.incidentDate,
-        incidentTime: formData.incidentTime,
-        incidentType: formData.incidentType,
-        incidentSeverity: formData.incidentSeverity,
-        location: formData.location || 'Springfield, IL',
-        numberOfVehicles: parseInt(formData.numberOfVehicles) || 1,
-        injuries: formData.injuries,
-        injuryDetails: formData.injuryDetails,
-        propertyDamage: formData.propertyDamage,
-        propertyDamageDetails: formData.propertyDamageDetails,
-        witnesses: formData.witnesses,
-        witnessDetails: formData.witnessDetails,
-        policeReport: formData.policeReport,
-        policeReportNumber: formData.policeReportNumber || 'PD-PENDING',
-        claimAmount: parseFloat(formData.claimAmount) || 5000,
-        status: 'submitted',
-        submittedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        assignedAdjuster: 'Sarah Mitchell',
-        assignedInvestigator: null,
-        assignedRepairShop: null,
-        documents: [],
-        timeline: [
-          {
-            id: 1,
-            status: 'submitted',
-            title: 'Claim Submitted',
-            description: 'New claim registered via portal',
-            timestamp: new Date().toISOString(),
-            user: 'John Anderson',
-          },
-        ],
-        aiAssessment: {
-          predictedRepairCost: parseFloat(formData.claimAmount) * 0.95 || 4750,
-          fraudRiskScore: 18,
-          totalLossProbability: formData.incidentSeverity === 'Major' ? 65 : 4,
-          claimPriority: formData.incidentSeverity === 'Major' ? 'High' : 'Medium',
-          aiRecommendation: 'Standard processing initiated',
-          confidence: 89,
-          factors: [{ factor: 'Initial intake complete', impact: 'positive', weight: 0.3 }],
-        },
-      }
-
-      mockClaims.unshift(newClaim)
+    try {
+      const response = await claimService.createClaim(formData)
+      setSuccessClaimId(response.data?.id || response.data?.claimNumber)
+      setTimeout(() => navigate('/claims'), 3000)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to submit claim')
+    } finally {
       setSubmitting(false)
-      setSuccessClaimId(generatedId)
-    }, 800)
+    }
   }
 
   if (successClaimId) {

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Car, Save, X } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
+import { vehicleService } from '../../services'
 
 export function VehicleForm() {
   const navigate = useNavigate()
@@ -25,14 +26,30 @@ export function VehicleForm() {
     status: 'active',
   })
 
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    alert('Vehicle saved! (Demo mode - data not persisted)')
-    navigate('/vehicles')
+    setLoading(true)
+    setError('')
+
+    try {
+      if (isEdit) {
+        await vehicleService.updateVehicle(id, formData)
+      } else {
+        await vehicleService.createVehicle(formData)
+      }
+      navigate('/vehicles')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to save vehicle')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -47,6 +64,12 @@ export function VehicleForm() {
           <p className="page-subtitle">{isEdit ? 'Update vehicle information' : 'Register a new insured vehicle'}</p>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="card">
@@ -73,7 +96,10 @@ export function VehicleForm() {
 
         <div className="flex items-center justify-end gap-3">
           <Link to="/vehicles"><Button variant="ghost">Cancel</Button></Link>
-          <Button type="submit"><Save className="w-4 h-4 mr-2" />Save Vehicle</Button>
+          <Button type="submit" disabled={loading}>
+            <Save className="w-4 h-4 mr-2" />
+            {loading ? 'Saving...' : 'Save Vehicle'}
+          </Button>
         </div>
       </form>
     </div>

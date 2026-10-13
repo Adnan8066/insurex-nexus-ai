@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   FileText,
   Briefcase,
@@ -18,6 +18,11 @@ import {
   Gavel,
   Brain,
   BarChart3,
+  RefreshCw,
+  Download,
+  Calendar,
+  Wifi,
+  WifiOff,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
@@ -25,8 +30,7 @@ import { mockPolicies, mockPolicyStats } from '../../data/policies'
 import { mockClaims, mockClaimStats } from '../../data/claims'
 import { mockVehicles } from '../../data/vehicles'
 import { mockSettlements, mockSettlementStats } from '../../data/settlements'
-import { mockInvestigators } from '../../data/operations'
-import { mockFraudAlerts } from '../../data/operations'
+import { mockInvestigators, mockFraudAlerts } from '../../data/operations'
 import { mockUser } from '../../data/users'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
@@ -35,6 +39,11 @@ import { ChartCard, MetricChart, AreaChart, BarChart, DoughnutChart } from '../.
 import { EmptyState } from '../../components/ui/EmptyState'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
+import { ErrorBoundary, ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
+import { DashboardSkeleton, ChartSkeleton, TableSkeleton, SkeletonCard } from '../../components/ui/Skeleton'
+import { useToast } from '../../components/ui/Toast'
+import { useAnalytics, useAutoRefresh } from '../../hooks/useAnalytics'
+import { analyticsService } from '../../services/analyticsService'
 
 const claimStatusConfig = {
   submitted: { label: 'Submitted', color: 'info' },
@@ -47,12 +56,47 @@ const claimStatusConfig = {
   closed: { label: 'Closed', color: 'neutral' },
 }
 
+const TIMEFRAME_OPTIONS = [
+  { value: 'week', label: 'Last 7 Days', days: 7 },
+  { value: 'month', label: 'Last 30 Days', days: 30 },
+  { value: 'quarter', label: 'Current Quarter', days: 90 },
+  { value: 'ytd', label: 'Year to Date', days: 365 },
+  { value: 'year', label: 'Last Year', days: 365 },
+]
+
 export function EmployeeDashboard() {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const toast = useToast()
+
   const [loading, setLoading] = useState(true)
   const [claims, setClaims] = useState([])
   const [policies, setPolicies] = useState([])
   const [fraudAlerts, setFraudAlerts] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
+  const [timeframe, setTimeframe] = useState(searchParams.get('timeframe') || 'quarter')
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [connectionError, setConnectionError] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(new Date())
+
+  const fetchData = useCallback(async (timeframeParam = timeframe) => {
+    setRefreshing(true)
+    setConnectionError(null)
+    try {
+      const [summary, trend] = await Promise.all([
+        analyticsService.getDashboardSummary(timeframeParam),
+        analyticsService.getClaimsTrend(TIMEFRAME_OPTIONS.find((t) => t.value === timeframeParam)?.days || 90),
+      ])
+      setLastUpdated(new Date())
+    } catch (err) {
+      setConnectionError(err.response?.data?.detail || err.message || 'Backend unreachable')
+      toast.showRetryToast('Connection error. Unable to load dashboard data.', () => fetchData(timeframeParam))
+    } finally {
+      setRefreshing(false)
+      setLoading(false)
+    }
+  }, [timeframe, toast])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -71,10 +115,23 @@ export function EmployeeDashboard() {
     return () => clearTimeout(timer)
   }, [])
 
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams)
+    if (timeframe !== 'quarter') {
+      params.set('timeframe', timeframe)
+    } else {
+      params.delete('timeframe')
+    }
+    setSearchParams(params, { replace: true })
+  }, [timeframe, setSearchParams])
+
+  useAutoRefresh(autoRefresh, 60000, () => fetchData(timeframe))
+
   const activePolicies = policies.filter((p) => p.status === 'active')
   const activeClaims = claims.filter((c) => !['closed', 'rejected'].includes(c.status))
   const pendingClaims = claims.filter((c) => ['submitted', 'under-review', 'ai-assessment', 'investigation'].includes(c.status))
   const highRiskClaims = fraudAlerts.filter((f) => f.riskLevel === 'high')
+  const totalLossCases = claims.filter((c) => c.status === 'total_loss' || c.aiAssessment?.totalLossProbability > 50)
   const totalClaimAmount = claims.reduce((sum, c) => sum + c.claimAmount, 0)
   const avgClaimCost = claims.length > 0 ? totalClaimAmount / claims.length : 0
 
@@ -83,7 +140,7 @@ export function EmployeeDashboard() {
     return acc
   }, {})
 
-  const claimStatusData = {
+  const claimStatusData = useMemo(() => ({
     labels: Object.keys(claimStatusConfig).map((k) => claimStatusConfig[k].label),
     datasets: [
       {
@@ -94,9 +151,9 @@ export function EmployeeDashboard() {
         borderWidth: 0,
       },
     ],
-  }
+  }), [claimsByStatus])
 
-  const fraudRiskData = {
+  const fraudRiskData = useMemo(() => ({
     labels: ['Low', 'Medium', 'High'],
     datasets: [
       {
@@ -109,9 +166,9 @@ export function EmployeeDashboard() {
         borderWidth: 0,
       },
     ],
-  }
+  }), [fraudAlerts])
 
-  const monthlyData = {
+  const monthlyData = useMemo(() => ({
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
     datasets: [
       {
@@ -131,9 +188,33 @@ export function EmployeeDashboard() {
         tension: 0.4,
       },
     ],
-  }
+  }), [])
 
   const recentClaims = [...claims].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 5)
+
+  const handleTimeframeChange = (newTimeframe) => {
+    setTimeframe(newTimeframe)
+    setLoading(true)
+    fetchData(newTimeframe)
+  }
+
+  const handleExport = async () => {
+    try {
+      const report = await analyticsService.exportReport('csv', { timeframe, claims: claims.length, policies: policies.length })
+      const blob = new Blob([report], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `executive-report-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      toast.showSuccess('Executive report exported successfully')
+    } catch (err) {
+      toast.showError('Failed to export report')
+    }
+  }
 
   const metricCards = [
     {
@@ -144,6 +225,7 @@ export function EmployeeDashboard() {
       bgColor: 'bg-blue-50',
       trend: '+12%',
       trendLabel: 'vs last month',
+      link: '/policies',
     },
     {
       title: 'Active Claims',
@@ -153,6 +235,17 @@ export function EmployeeDashboard() {
       bgColor: 'bg-purple-50',
       trend: '+3',
       trendLabel: 'this week',
+      link: '/claims',
+    },
+    {
+      title: 'Pending Claims',
+      value: pendingClaims.length,
+      icon: Clock,
+      iconColor: 'text-yellow-600',
+      bgColor: 'bg-yellow-50',
+      trend: '+5',
+      trendLabel: 'awaiting review',
+      link: '/claims?status=pending',
     },
     {
       title: 'Fraud Alerts',
@@ -162,15 +255,20 @@ export function EmployeeDashboard() {
       bgColor: 'bg-red-50',
       trend: '+2',
       trendLabel: 'high risk',
+      link: '/fraud',
     },
+  ]
+
+  const totalLossCards = [
     {
-      title: 'Avg Claim Cost',
-      value: formatCurrencyCompact(avgClaimCost),
-      icon: DollarSign,
-      iconColor: 'text-green-600',
-      bgColor: 'bg-green-50',
-      trend: '-5%',
-      trendLabel: 'vs last quarter',
+      title: 'Total Loss Cases',
+      value: totalLossCases.length,
+      icon: AlertTriangle,
+      iconColor: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+      trend: '+1',
+      trendLabel: 'pending',
+      link: '/claims?status=total_loss',
     },
   ]
 
@@ -182,18 +280,7 @@ export function EmployeeDashboard() {
   ]
 
   if (loading) {
-    return (
-      <div className="page animate-pulse">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="card p-6">
-              <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
-              <div className="h-10 bg-gray-200 rounded w-1/2"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   return (
@@ -202,145 +289,247 @@ export function EmployeeDashboard() {
         <div>
           <h1 className="page-title">Employee Dashboard</h1>
           <p className="page-subtitle">Insurance operations overview and key metrics</p>
+          {connectionError && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+              <WifiOff className="w-4 h-4" />
+              <span>Connection error: {connectionError}</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-gray-500" />
+            <select
+              value={timeframe}
+              onChange={(e) => handleTimeframeChange(e.target.value)}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary"
+            >
+              {TIMEFRAME_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={clsx(autoRefresh && 'text-primary bg-primary/10')}
+            title={autoRefresh ? 'Auto-refresh ON (60s)' : 'Auto-refresh OFF'}
+          >
+            <RefreshCw className={clsx('w-4 h-4', autoRefresh && 'animate-spin')} />
+            <span className="ml-1">{autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}</span>
+          </Button>
+
+          <Button variant="ghost" size="sm" className="relative" onClick={() => fetchData(timeframe)} loading={refreshing}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+
           <Button variant="ghost" size="sm" className="relative">
             <Bell className="w-5 h-5" />
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center">3</span>
           </Button>
-          <Button variant="primary" size="sm">
-            Export Report
+
+          <Button variant="primary" size="sm" onClick={handleExport} loading={refreshing}>
+            <Download className="w-4 h-4 mr-2" />
+            Export Executive Report
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {metricCards.map((metric) => (
-          <Card key={metric.title} hover className="group">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">{metric.title}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
-                  <div className="flex items-center gap-1 mt-2 text-sm font-medium text-green-600">
-                    <TrendingUp className="w-4 h-4" />
-                    <span>{metric.trend}</span>
-                    <span className="text-gray-500">{metric.trendLabel}</span>
+          <ErrorBoundary
+            key={metric.title}
+            fallback={({ resetError }) => (
+              <div className="card p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">{metric.title}</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">-</p>
+                  </div>
+                  <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
+                    <metric.icon className="w-6 h-6" />
                   </div>
                 </div>
-                <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
-                  <metric.icon className="w-6 h-6" />
-                </div>
+                <Button variant="ghost" size="sm" onClick={resetError} className="mt-4">
+                  Retry
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          >
+            <Card hover className="group cursor-pointer" onClick={() => navigate(metric.link)}>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">{metric.title}</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
+                    <div className="flex items-center gap-1 mt-2 text-sm font-medium text-green-600">
+                      <TrendingUp className="w-4 h-4" />
+                      <span>{metric.trend}</span>
+                      <span className="text-gray-500">{metric.trendLabel}</span>
+                    </div>
+                  </div>
+                  <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
+                    <metric.icon className="w-6 h-6" />
+                  </div>
+                </div>
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center text-sm text-gray-500 group-hover:text-primary transition-colors">
+                  <span>View details</span>
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </div>
+              </CardContent>
+            </Card>
+          </ErrorBoundary>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <ChartCard title="Claims Trend" subtitle="New vs resolved claims over 7 months">
-          <AreaChart data={monthlyData} height={300} />
-        </ChartCard>
+        <ErrorBoundary fallback={({ resetError, retryCount }) => (
+          <ChartErrorFallback title="Claims Over Time" resetError={resetError} retryCount={retryCount} />
+        )}>
+          <ChartCard
+            title="Claims Over Time"
+            subtitle={`New vs resolved claims (${TIMEFRAME_OPTIONS.find((t) => t.value === timeframe)?.label})`}
+            action={
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Clock className="w-4 h-4" />
+                <span>Updated {formatRelativeTime(lastUpdated)}</span>
+              </div>
+            }
+          >
+            <AreaChart data={monthlyData} height={300} />
+          </ChartCard>
+        </ErrorBoundary>
+
         <div className="grid grid-cols-1 gap-6">
-          <ChartCard title="Claim Status Distribution" subtitle="Current pipeline status">
-            <DoughnutChart data={claimStatusData} height={250} />
-          </ChartCard>
-          <ChartCard title="Fraud Risk Distribution" subtitle="Risk levels across flagged claims">
-            <DoughnutChart data={fraudRiskData} height={250} />
-          </ChartCard>
+          <ErrorBoundary fallback={({ resetError, retryCount }) => (
+            <ChartErrorFallback title="Claim Status Distribution" resetError={resetError} retryCount={retryCount} />
+          )}>
+            <ChartCard title="Claim Status Distribution" subtitle="Current pipeline status">
+              <DoughnutChart data={claimStatusData} height={250} />
+            </ChartCard>
+          </ErrorBoundary>
+
+          <ErrorBoundary fallback={({ resetError, retryCount }) => (
+            <ChartErrorFallback title="Fraud Risk Distribution" resetError={resetError} retryCount={retryCount} />
+          )}>
+            <ChartCard title="Fraud Risk Distribution" subtitle="Risk levels across flagged claims">
+              <DoughnutChart data={fraudRiskData} height={250} />
+            </ChartCard>
+          </ErrorBoundary>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader
-              title="Recent Claims"
-              subtitle="Latest claims requiring attention"
-              action={
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/claims">View All <ArrowRight className="w-4 h-4 ml-1" /></Link>
-                </Button>
-              }
-            />
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Claim ID</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Assigned</TableHead>
-                    <TableHead className="w-24">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentClaims.map((claim) => (
-                    <TableRow key={claim.id} clickable onClick={() => window.location.href = `/claims/${claim.id}`}>
-                      <TableCell className="font-mono font-medium">{claim.claimNumber}</TableCell>
-                      <TableCell>{claim.customerName}</TableCell>
-                      <TableCell>{claim.incidentType}</TableCell>
-                      <TableCell className="font-medium">{formatCurrency(claim.claimAmount)}</TableCell>
-                      <TableCell><StatusBadge status={claim.status} /></TableCell>
-                      <TableCell>
-                        <Badge variant={claim.aiAssessment?.claimPriority === 'High' ? 'danger' : claim.aiAssessment?.claimPriority === 'Medium' ? 'warning' : 'success'}>
-                          {claim.aiAssessment?.claimPriority || 'Medium'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">{claim.assignedAdjuster || 'Unassigned'}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <ErrorBoundary fallback={({ resetError, retryCount }) => (
+            <DataTableErrorFallback title="Recent Claims" resetError={resetError} retryCount={retryCount} />
+          )}>
+            <Card>
+              <CardHeader
+                title="Recent Claims"
+                subtitle="Latest claims requiring attention"
+                action={
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to="/claims">View All <ArrowRight className="w-4 h-4 ml-1" /></Link>
+                  </Button>
+                }
+              />
+              <CardContent className="p-0">
+                {recentClaims.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Claim ID</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Priority</TableHead>
+                        <TableHead>Assigned</TableHead>
+                        <TableHead className="w-24">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentClaims.map((claim) => (
+                        <TableRow key={claim.id} clickable onClick={() => navigate(`/claims/${claim.id}`)}>
+                          <TableCell className="font-mono font-medium">{claim.claimNumber}</TableCell>
+                          <TableCell>{claim.customerName}</TableCell>
+                          <TableCell>{claim.incidentType}</TableCell>
+                          <TableCell className="font-medium">{formatCurrency(claim.claimAmount)}</TableCell>
+                          <TableCell><StatusBadge status={claim.status} /></TableCell>
+                          <TableCell>
+                            <Badge variant={claim.aiAssessment?.claimPriority === 'High' ? 'danger' : claim.aiAssessment?.claimPriority === 'Medium' ? 'warning' : 'success'}>
+                              {claim.aiAssessment?.claimPriority || 'Medium'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">{claim.assignedAdjuster || 'Unassigned'}</TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="p-8">
+                    <EmptyState
+                      title="No recent claims"
+                      description="No claims have been submitted recently."
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </ErrorBoundary>
         </div>
         <div>
-          <Card>
-            <CardHeader
-              title="High-Risk Fraud Alerts"
-              subtitle="Claims requiring investigation"
-            />
-            <CardContent className="p-0">
-              {fraudAlerts.length > 0 ? (
-                <div className="divide-y divide-gray-200">
-                  {fraudAlerts.slice(0, 5).map((alert) => (
-                    <Link key={alert.id} to={`/fraud/${alert.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-gray-900">{alert.claimNumber}</span>
-                            <Badge variant={alert.riskLevel === 'high' ? 'danger' : alert.riskLevel === 'medium' ? 'warning' : 'success'}>
-                              {alert.riskLevel} risk
-                            </Badge>
+          <ErrorBoundary fallback={({ resetError, retryCount }) => (
+            <DataTableErrorFallback title="High-Risk Fraud Alerts" resetError={resetError} retryCount={retryCount} />
+          )}>
+            <Card>
+              <CardHeader
+                title="High-Risk Fraud Alerts"
+                subtitle="Claims requiring investigation"
+              />
+              <CardContent className="p-0">
+                {fraudAlerts.length > 0 ? (
+                  <div className="divide-y divide-gray-200">
+                    {fraudAlerts.slice(0, 5).map((alert) => (
+                      <Link key={alert.id} to={`/fraud/${alert.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-gray-900">{alert.claimNumber}</span>
+                              <Badge variant={alert.riskLevel === 'high' ? 'danger' : alert.riskLevel === 'medium' ? 'warning' : 'success'}>
+                                {alert.riskLevel} risk
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">{alert.customerName}</p>
+                            <p className="text-xs text-gray-500">Score: {alert.fraudRiskScore}% • {formatRelativeTime(alert.createdAt)}</p>
                           </div>
-                          <p className="text-sm text-gray-600 mt-1">{alert.customerName}</p>
-                          <p className="text-xs text-gray-500">Score: {alert.fraudRiskScore}% • {formatRelativeTime(alert.createdAt)}</p>
+                          <div className="text-right flex-shrink-0">
+                            <span className="text-lg font-bold text-gray-900">{alert.fraudRiskScore}%</span>
+                          </div>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <span className="text-lg font-bold text-gray-900">{alert.fraudRiskScore}%</span>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  icon={<Shield className="w-12 h-12" />}
-                  title="No fraud alerts"
-                  description="No high-risk claims detected at this time."
-                />
-              )}
-            </CardContent>
-          </Card>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={<Shield className="w-12 h-12" />}
+                    title="No fraud alerts"
+                    description="No high-risk claims detected at this time."
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </ErrorBoundary>
         </div>
       </div>
 

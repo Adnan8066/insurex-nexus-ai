@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   FileText,
   Briefcase,
@@ -13,6 +13,10 @@ import {
   Shield,
   ArrowRight,
   MoreVertical,
+  RefreshCw,
+  Download,
+  Calendar,
+  WifiOff,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
@@ -26,6 +30,10 @@ import { Button } from '../../components/ui/Button'
 import { ChartCard, MetricChart, AreaChart, DoughnutChart } from '../../components/charts/ChartComponents'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { ErrorBoundary, ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
+import { DashboardSkeleton, ChartSkeleton, TableSkeleton } from '../../components/ui/Skeleton'
+import { useToast } from '../../components/ui/Toast'
+import { analyticsService } from '../../services/analyticsService'
 
 const claimStatusConfig = {
   submitted: { label: 'Submitted', color: 'info' },
@@ -38,12 +46,44 @@ const claimStatusConfig = {
   closed: { label: 'Closed', color: 'neutral' },
 }
 
+const TIMEFRAME_OPTIONS = [
+  { value: 'week', label: 'Last 7 Days', days: 7 },
+  { value: 'month', label: 'Last 30 Days', days: 30 },
+  { value: 'quarter', label: 'Current Quarter', days: 90 },
+  { value: 'ytd', label: 'Year to Date', days: 365 },
+  { value: 'year', label: 'Last Year', days: 365 },
+]
+
 export function CustomerDashboard() {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const toast = useToast()
+
   const [loading, setLoading] = useState(true)
   const [policies, setPolicies] = useState([])
   const [claims, setClaims] = useState([])
   const [vehicles, setVehicles] = useState([])
   const [notifications, setNotifications] = useState([])
+  const [timeframe, setTimeframe] = useState(searchParams.get('timeframe') || 'quarter')
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [connectionError, setConnectionError] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(new Date())
+
+  const fetchData = useCallback(async (timeframeParam = timeframe) => {
+    setRefreshing(true)
+    setConnectionError(null)
+    try {
+      const summary = await analyticsService.getDashboardSummary(timeframeParam)
+      setLastUpdated(new Date())
+    } catch (err) {
+      setConnectionError(err.response?.data?.detail || err.message || 'Backend unreachable')
+      toast.showRetryToast('Connection error. Unable to load dashboard data.', () => fetchData(timeframeParam))
+    } finally {
+      setRefreshing(false)
+      setLoading(false)
+    }
+  }, [timeframe, toast])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -61,10 +101,29 @@ export function CustomerDashboard() {
     return () => clearTimeout(timer)
   }, [])
 
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams)
+    if (timeframe !== 'quarter') {
+      params.set('timeframe', timeframe)
+    } else {
+      params.delete('timeframe')
+    }
+    setSearchParams(params, { replace: true })
+  }, [timeframe, setSearchParams])
+
+  useEffect(() => {
+    let interval
+    if (autoRefresh) {
+      interval = setInterval(() => fetchData(timeframe), 60000)
+    }
+    return () => clearInterval(interval)
+  }, [autoRefresh, timeframe, fetchData])
+
   const activePolicies = policies.filter((p) => p.status === 'active')
   const activeClaims = claims.filter((c) => !['closed', 'rejected'].includes(c.status))
   const pendingClaims = claims.filter((c) => ['submitted', 'under-review', 'ai-assessment', 'investigation'].includes(c.status))
   const approvedClaims = claims.filter((c) => c.status === 'approved')
+  const totalLossCases = claims.filter((c) => c.status === 'total_loss' || c.aiAssessment?.totalLossProbability > 50)
   const recentClaims = [...claims].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 5)
 
   const claimsByStatus = claims.reduce((acc, claim) => {
@@ -72,27 +131,27 @@ export function CustomerDashboard() {
     return acc
   }, {})
 
-  const claimStatusData = {
+  const claimStatusData = useMemo(() => ({
     labels: Object.keys(claimStatusConfig).map((k) => claimStatusConfig[k].label),
     datasets: [
       {
         data: Object.keys(claimStatusConfig).map((k) => claimsByStatus[k] || 0),
         backgroundColor: [
-          '#3b82f6', // info
-          '#f59e0b', // warning
-          '#1e3a5f', // primary
-          '#f59e0b', // warning
-          '#10b981', // success
-          '#ef4444', // danger
-          '#1e3a5f', // primary
-          '#94a3b8', // neutral
+          '#3b82f6',
+          '#f59e0b',
+          '#1e3a5f',
+          '#f59e0b',
+          '#10b981',
+          '#ef4444',
+          '#1e3a5f',
+          '#94a3b8',
         ],
         borderWidth: 0,
       },
     ],
-  }
+  }), [claimsByStatus])
 
-  const monthlyClaimsData = {
+  const monthlyClaimsData = useMemo(() => ({
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
     datasets: [
       {
@@ -104,6 +163,30 @@ export function CustomerDashboard() {
         tension: 0.4,
       },
     ],
+  }), [])
+
+  const handleTimeframeChange = (newTimeframe) => {
+    setTimeframe(newTimeframe)
+    setLoading(true)
+    fetchData(newTimeframe)
+  }
+
+  const handleExport = async () => {
+    try {
+      const report = await analyticsService.exportReport('csv', { timeframe, claims: claims.length, policies: policies.length })
+      const blob = new Blob([report], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `customer-report-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      toast.showSuccess('Report exported successfully')
+    } catch (err) {
+      toast.showError('Failed to export report')
+    }
   }
 
   const metricCards = [
@@ -141,6 +224,17 @@ export function CustomerDashboard() {
     },
   ]
 
+  const totalLossCards = [
+    {
+      title: 'Total Loss Cases',
+      value: totalLossCases.length,
+      icon: AlertTriangle,
+      iconColor: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+      link: '/claims?status=total_loss',
+    },
+  ]
+
   const quickActions = [
     { label: 'File New Claim', href: '/claims/new', icon: AlertTriangle, color: 'bg-red-50 text-red-600 hover:bg-red-100' },
     { label: 'View Policies', href: '/policies', icon: FileText, color: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
@@ -149,22 +243,7 @@ export function CustomerDashboard() {
   ]
 
   if (loading) {
-    return (
-      <div className="page animate-pulse">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="card p-6">
-              <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
-              <div className="h-10 bg-gray-200 rounded w-1/2"></div>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="card lg:col-span-2 p-6 h-96"><div className="h-full bg-gray-100 rounded"></div></div>
-          <div className="card p-6 h-96"><div className="h-full bg-gray-100 rounded"></div></div>
-        </div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   return (
@@ -173,145 +252,216 @@ export function CustomerDashboard() {
         <div>
           <h1 className="page-title">Dashboard</h1>
           <p className="page-subtitle">Welcome back, {mockUser.name.split(' ')[0]}! Here's an overview of your insurance portfolio.</p>
+          {connectionError && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+              <WifiOff className="w-4 h-4" />
+              <span>Connection error: {connectionError}</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-gray-500" />
+            <select
+              value={timeframe}
+              onChange={(e) => handleTimeframeChange(e.target.value)}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary"
+            >
+              {TIMEFRAME_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={clsx(autoRefresh && 'text-primary bg-primary/10')}
+            title={autoRefresh ? 'Auto-refresh ON (60s)' : 'Auto-refresh OFF'}
+          >
+            <RefreshCw className={clsx('w-4 h-4', autoRefresh && 'animate-spin')} />
+            <span className="ml-1">{autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}</span>
+          </Button>
+
+          <Button variant="ghost" size="sm" className="relative" onClick={() => fetchData(timeframe)} loading={refreshing}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+
           <Button variant="ghost" size="sm" className="relative">
             <Bell className="w-5 h-5" />
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center">3</span>
           </Button>
-          <Button variant="primary" size="sm" asChild>
-            <Link to="/claims/new">
-              <AlertTriangle className="w-4 h-4 mr-2" />
-              File Claim
-            </Link>
+
+          <Button variant="primary" size="sm" onClick={handleExport} loading={refreshing}>
+            <Download className="w-4 h-4 mr-2" />
+            Export Report
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {metricCards.map((metric) => (
-          <Link key={metric.title} to={metric.link} className="card hover:shadow-lg transition-shadow group">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">{metric.title}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
+          <ErrorBoundary
+            key={metric.title}
+            fallback={({ resetError }) => (
+              <div className="card p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">{metric.title}</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">-</p>
+                  </div>
+                  <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
+                    <metric.icon className="w-6 h-6" />
+                  </div>
                 </div>
-                <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
-                  <metric.icon className="w-6 h-6" />
+                <Button variant="ghost" size="sm" onClick={resetError} className="mt-4">
+                  Retry
+                </Button>
+              </div>
+            )}
+          >
+            <Link key={metric.title} to={metric.link} className="card hover:shadow-lg transition-shadow group">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">{metric.title}</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
+                  </div>
+                  <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
+                    <metric.icon className="w-6 h-6" />
+                  </div>
                 </div>
-              </div>
-              <div className="mt-4 flex items-center text-sm text-gray-500 group-hover:text-primary transition-colors">
-                <span>View details</span>
-                <ArrowRight className="w-4 h-4 ml-1" />
-              </div>
-            </CardContent>
-          </Link>
+                <div className="mt-4 flex items-center text-sm text-gray-500 group-hover:text-primary transition-colors">
+                  <span>View details</span>
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </div>
+              </CardContent>
+            </Link>
+          </ErrorBoundary>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2">
-          <ChartCard title="Claims Overview" subtitle="Monthly claims submitted over the past 6 months">
-            <AreaChart data={monthlyClaimsData} height={300} />
-          </ChartCard>
+          <ErrorBoundary fallback={({ resetError, retryCount }) => (
+            <ChartErrorFallback title="Claims Overview" resetError={resetError} retryCount={retryCount} />
+          )}>
+            <ChartCard title="Claims Overview" subtitle={`Monthly claims submitted (${TIMEFRAME_OPTIONS.find((t) => t.value === timeframe)?.label})`}>
+              <AreaChart data={monthlyClaimsData} height={300} />
+            </ChartCard>
+          </ErrorBoundary>
         </div>
         <div>
-          <ChartCard title="Claim Status Distribution" subtitle="Current status of all your claims">
-            <DoughnutChart data={claimStatusData} height={300} />
-          </ChartCard>
+          <ErrorBoundary fallback={({ resetError, retryCount }) => (
+            <ChartErrorFallback title="Claim Status Distribution" resetError={resetError} retryCount={retryCount} />
+          )}>
+            <ChartCard title="Claim Status Distribution" subtitle="Current status of all your claims">
+              <DoughnutChart data={claimStatusData} height={300} />
+            </ChartCard>
+          </ErrorBoundary>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader
-              title="Recent Claims"
-              subtitle="Your 5 most recent claims"
-              action={
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/claims">View All <ArrowRight className="w-4 h-4 ml-1" /></Link>
-                </Button>
-              }
-            />
-            <CardContent className="p-0">
-              {recentClaims.length > 0 ? (
-                <div className="divide-y divide-gray-200">
-                  {recentClaims.map((claim) => (
-                    <Link key={claim.id} to={`/claims/${claim.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span className="font-semibold text-gray-900">{claim.claimNumber}</span>
-                            <StatusBadge status={claim.status} />
-                            <span className="text-sm text-gray-500">{formatDate(claim.incidentDate)}</span>
+          <ErrorBoundary fallback={({ resetError, retryCount }) => (
+            <DataTableErrorFallback title="Recent Claims" resetError={resetError} retryCount={retryCount} />
+          )}>
+            <Card>
+              <CardHeader
+                title="Recent Claims"
+                subtitle="Your 5 most recent claims"
+                action={
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to="/claims">View All <ArrowRight className="w-4 h-4 ml-1" /></Link>
+                  </Button>
+                }
+              />
+              <CardContent className="p-0">
+                {recentClaims.length > 0 ? (
+                  <div className="divide-y divide-gray-200">
+                    {recentClaims.map((claim) => (
+                      <Link key={claim.id} to={`/claims/${claim.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <span className="font-semibold text-gray-900">{claim.claimNumber}</span>
+                              <StatusBadge status={claim.status} />
+                              <span className="text-sm text-gray-500">{formatDate(claim.incidentDate)}</span>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1 truncate">{claim.incidentType} • {claim.vehicle.make} {claim.vehicle.model}</p>
+                            <p className="text-sm text-gray-500 mt-0.5">{claim.location}</p>
                           </div>
-                          <p className="text-sm text-gray-600 mt-1 truncate">{claim.incidentType} • {claim.vehicle.make} {claim.vehicle.model}</p>
-                          <p className="text-sm text-gray-500 mt-0.5">{claim.location}</p>
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-semibold text-gray-900">{formatCurrency(claim.claimAmount)}</p>
+                            <p className="text-xs text-gray-500">{formatRelativeTime(claim.submittedAt)}</p>
+                          </div>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="font-semibold text-gray-900">{formatCurrency(claim.claimAmount)}</p>
-                          <p className="text-xs text-gray-500">{formatRelativeTime(claim.submittedAt)}</p>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  title="No claims yet"
-                  description="You haven't filed any claims yet. Click 'File Claim' to get started."
-                  action={<Button asChild><Link to="/claims/new">File Claim</Link></Button>}
-                />
-              )}
-            </CardContent>
-          </Card>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="No claims yet"
+                    description="You haven't filed any claims yet. Click 'File Claim' to get started."
+                    action={<Button asChild><Link to="/claims/new">File Claim</Link></Button>}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </ErrorBoundary>
         </div>
         <div>
-          <Card>
-            <CardHeader
-              title="Active Policies"
-              subtitle="Your current coverage"
-              action={
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/policies">View All</Link>
-                </Button>
-              }
-            />
-            <CardContent className="p-0">
-              {activePolicies.length > 0 ? (
-                <div className="divide-y divide-gray-200">
-                  {activePolicies.map((policy) => (
-                    <Link key={policy.id} to={`/policies/${policy.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-gray-900">{policy.type}</span>
-                            <StatusBadge status={policy.status} />
+          <ErrorBoundary fallback={({ resetError, retryCount }) => (
+            <DataTableErrorFallback title="Active Policies" resetError={resetError} retryCount={retryCount} />
+          )}>
+            <Card>
+              <CardHeader
+                title="Active Policies"
+                subtitle="Your current coverage"
+                action={
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to="/policies">View All</Link>
+                  </Button>
+                }
+              />
+              <CardContent className="p-0">
+                {activePolicies.length > 0 ? (
+                  <div className="divide-y divide-gray-200">
+                    {activePolicies.map((policy) => (
+                      <Link key={policy.id} to={`/policies/${policy.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-gray-900">{policy.type}</span>
+                              <StatusBadge status={policy.status} />
+                            </div>
+                            <p className="text-sm text-gray-500 mt-1 truncate">
+                              {policy.vehicle ? `${policy.vehicle.make} ${policy.vehicle.model} (${policy.vehicle.year})` : policy.property?.address}
+                            </p>
+                            <p className="text-sm text-gray-500">Expires {formatDate(policy.endDate)}</p>
                           </div>
-                          <p className="text-sm text-gray-500 mt-1 truncate">
-                            {policy.vehicle ? `${policy.vehicle.make} ${policy.vehicle.model} (${policy.vehicle.year})` : policy.property?.address}
-                          </p>
-                          <p className="text-sm text-gray-500">Expires {formatDate(policy.endDate)}</p>
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-semibold text-gray-900">{formatCurrency(policy.premium)}/yr</p>
+                            <p className="text-xs text-gray-500">Deductible: {formatCurrency(policy.deductible)}</p>
+                          </div>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="font-semibold text-gray-900">{formatCurrency(policy.premium)}/yr</p>
-                          <p className="text-xs text-gray-500">Deductible: {formatCurrency(policy.deductible)}</p>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  icon={<FileText className="w-12 h-12" />}
-                  title="No active policies"
-                  description="You don't have any active policies at the moment."
-                />
-              )}
-            </CardContent>
-          </Card>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={<FileText className="w-12 h-12" />}
+                    title="No active policies"
+                    description="You don't have any active policies at the moment."
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </ErrorBoundary>
         </div>
       </div>
 
