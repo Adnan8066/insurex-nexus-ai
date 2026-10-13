@@ -30,7 +30,12 @@ import { Button } from '../../components/ui/Button'
 import { ChartCard, MetricChart, AreaChart, DoughnutChart } from '../../components/charts/ChartComponents'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
-import { ErrorBoundary, ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
+
+import ErrorBoundary, {
+  ChartErrorFallback,
+  DataTableErrorFallback,
+} from '../../components/ui/ErrorBoundary'
+
 import { DashboardSkeleton, ChartSkeleton, TableSkeleton } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/Toast'
 import { analyticsService } from '../../services/analyticsService'

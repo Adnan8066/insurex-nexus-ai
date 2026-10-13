@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+﻿import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   FileText,
@@ -39,7 +39,8 @@ import { ChartCard, MetricChart, AreaChart, BarChart, DoughnutChart } from '../.
 import { EmptyState } from '../../components/ui/EmptyState'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
-import { ErrorBoundary, ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
+import ErrorBoundary from '..\\/..\\/components\\/ui\\/ErrorBoundary'
+import { ChartErrorFallback, DataTableErrorFallback } from '..\\/..\\/components\\/ui\\/ErrorBoundary'
 import { DashboardSkeleton, ChartSkeleton, TableSkeleton, SkeletonCard } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/Toast'
 import { useAnalytics, useAutoRefresh } from '../../hooks/useAnalytics'
@@ -511,7 +512,7 @@ export function EmployeeDashboard() {
                               </Badge>
                             </div>
                             <p className="text-sm text-gray-600 mt-1">{alert.customerName}</p>
-                            <p className="text-xs text-gray-500">Score: {alert.fraudRiskScore}% • {formatRelativeTime(alert.createdAt)}</p>
+                            <p className="text-xs text-gray-500">Score: {alert.fraudRiskScore}% â€¢ {formatRelativeTime(alert.createdAt)}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
                             <span className="text-lg font-bold text-gray-900">{alert.fraudRiskScore}%</span>
@@ -556,3 +557,4 @@ function formatCurrencyCompact(amount) {
 }
 
 export default EmployeeDashboard
+
