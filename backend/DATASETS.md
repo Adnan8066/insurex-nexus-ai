@@ -20,7 +20,7 @@ Train the app's models from the same datasets with:
 python manage.py train_project_models
 ```
 
-This trains fraud detection, repair-cost, and total-loss models from `insurance_claims.csv`, and a separate fraud model from the full `fraud_oracle.csv`. Fraud Oracle has no repair-cost target, so it is used for fraud classification only. The command evaluates each model on a stratified 20% holdout, then refits it on all available rows. Metrics and class counts are saved to `backend/ml/models/training_report.json`; trained pipelines are saved beside it. The AI assessment endpoints load those pipelines and reload them after retraining.
+This trains fraud detection, repair-cost, and total-loss models from `insurance_claims.csv`, and a separate fraud model from the full `fraud_oracle.csv`. Fraud Oracle has no repair-cost target, so it is used for fraud classification only. The command selects the Fraud Oracle decision threshold on a separate calibration split (targeting 90% calibration precision), measures it once on a stratified 20% holdout, then refits the model on all available rows. The application uses that saved threshold when it labels Fraud Oracle scores high risk. Metrics and class counts are saved to `backend/ml/models/training_report.json`; trained pipelines are saved beside it. Precision is a measured holdout result, not a production guarantee; a higher threshold can sharply reduce recall.
 
 The importer can be rerun safely; it updates the records it previously imported. To validate the CSV headers and row counts without changing the database, run:
 

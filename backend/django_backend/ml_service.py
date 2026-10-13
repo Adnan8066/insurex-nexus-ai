@@ -61,9 +61,9 @@ def _fraud_probability(model, frame):
     return float(probabilities[positive_index])
 
 
-def _fraud_result(score):
+def _fraud_result(score, decision_threshold=70):
     score = round(score, 2)
-    if score > 70:
+    if score >= decision_threshold:
         level, factors = "high", ["model identified a high-risk pattern", "recommend investigation"]
     elif score > 40:
         level, factors = "medium", ["model identified a moderate-risk pattern", "enhanced review recommended"]
@@ -122,7 +122,16 @@ def detect_fraud_ml(claim_data):
     features = _ORACLE_FEATURES if oracle else _INSURANCE_FEATURES
     try:
         score = _fraud_probability(model, _input_frame(claim_data, features)) * 100
-        return _fraud_result(score)
+        threshold = 70
+        if oracle:
+            report_path = os.path.join(MODELS_DIR, "training_report.json")
+            try:
+                import json
+                with open(report_path, encoding="utf-8") as report_file:
+                    threshold = float(json.load(report_file)["decision_thresholds"]["fraud_oracle_fraud"]) * 100
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        return _fraud_result(score, threshold)
     except (ValueError, TypeError, KeyError):
         return _fraud_result(15.0)
 

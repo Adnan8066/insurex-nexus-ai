@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-10-13T10:02:31.713699+00:00",
+  "trained_at": "2026-10-13T10:11:13.248967+00:00",
   "datasets": {
     "insurance_claims": {
       "file": "insurance_claims.csv",
@@ -16,6 +16,10 @@
     "insurance_fraud": "fraud_reported equals Y",
     "fraud_oracle_fraud": "FraudFound_P equals 1"
   },
+  "decision_thresholds": {
+    "insurance_fraud": 0.5,
+    "fraud_oracle_fraud": 0.803338
+  },
   "metrics": [
     {
       "model": "insurance_fraud",
@@ -24,7 +28,9 @@
       "recall": 0.7347,
       "f1": 0.6792,
       "roc_auc": 0.7651,
+      "decision_threshold": 0.5,
       "holdout_rows": 200,
+      "calibration_rows": 0,
       "class_counts": {
         "0": 753,
         "1": 247
@@ -44,7 +50,9 @@
       "recall": 0.5179,
       "f1": 0.4531,
       "roc_auc": 0.6856,
+      "decision_threshold": 0.5,
       "holdout_rows": 200,
+      "calibration_rows": 0,
       "class_counts": {
         "0": 720,
         "1": 280
@@ -52,12 +60,14 @@
     },
     {
       "model": "fraud_oracle_fraud",
-      "accuracy": 0.7267,
-      "precision": 0.1485,
-      "recall": 0.7514,
-      "f1": 0.248,
-      "roc_auc": 0.8202,
+      "accuracy": 0.9403,
+      "precision": 1.0,
+      "recall": 0.0054,
+      "f1": 0.0108,
+      "roc_auc": 0.8221,
+      "decision_threshold": 0.803338,
       "holdout_rows": 3084,
+      "calibration_rows": 3084,
       "class_counts": {
         "0": 14497,
         "1": 923

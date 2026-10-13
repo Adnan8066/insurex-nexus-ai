@@ -14,7 +14,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (accuracy_score, f1_score, mean_absolute_error,
                              precision_score, r2_score, recall_score, roc_auc_score,
-                             root_mean_squared_error)
+                             precision_recall_curve, root_mean_squared_error)
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -78,21 +78,45 @@ def regressor(numeric, categorical):
     return build_pipeline(numeric, categorical, model)
 
 
-def evaluate_classifier(template, X, y, name):
-    X_train, X_test, y_train, y_test = train_test_split(
+def evaluate_classifier(template, X, y, name, minimum_precision=None):
+    X_development, X_test, y_development, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y,
     )
+    threshold = 0.5
+    calibration_rows = 0
+    if minimum_precision is not None:
+        X_train, X_calibration, y_train, y_calibration = train_test_split(
+            X_development, y_development, test_size=0.25, random_state=43,
+            stratify=y_development,
+        )
+        model = template()
+        model.fit(X_train, y_train)
+        calibration_probabilities = model.predict_proba(X_calibration)[:, list(model.classes_).index(1)]
+        precision_values, recall_values, thresholds = precision_recall_curve(y_calibration, calibration_probabilities)
+        eligible = np.flatnonzero(precision_values[:-1] >= minimum_precision)
+        if not len(eligible):
+            raise CommandError(
+                f"Could not reach {minimum_precision:.0%} precision for {name} on the calibration split."
+            )
+        best = eligible[np.argmax(recall_values[eligible])]
+        threshold = float(thresholds[best])
+        calibration_rows = int(len(y_calibration))
+    else:
+        X_train, y_train = X_development, y_development
+
     model = template()
     model.fit(X_train, y_train)
     probabilities = model.predict_proba(X_test)[:, list(model.classes_).index(1)]
-    predictions = (probabilities >= 0.5).astype(int)
+    predictions = (probabilities >= threshold).astype(int)
     metrics = {
         "accuracy": round(float(accuracy_score(y_test, predictions)), 4),
         "precision": round(float(precision_score(y_test, predictions, zero_division=0)), 4),
         "recall": round(float(recall_score(y_test, predictions, zero_division=0)), 4),
         "f1": round(float(f1_score(y_test, predictions, zero_division=0)), 4),
         "roc_auc": round(float(roc_auc_score(y_test, probabilities)), 4),
+        "decision_threshold": round(threshold, 6),
         "holdout_rows": int(len(y_test)),
+        "calibration_rows": calibration_rows,
         "class_counts": {str(k): int(v) for k, v in y.value_counts().sort_index().items()},
     }
     fitted = template()
@@ -178,7 +202,8 @@ class Command(BaseCommand):
             raise CommandError("Fraud Oracle FraudFound_P must contain both 0 and 1 labels.")
         oracle_model, oracle_metrics = evaluate_classifier(
             lambda: classifier(ORACLE_NUMERIC, ORACLE_CATEGORICAL),
-            oracle_X, oracle_y, "fraud_oracle_fraud",
+        oracle_X, oracle_y, "fraud_oracle_fraud",
+        minimum_precision=0.9,
         )
 
         models_dir = options["models_dir"]
@@ -200,6 +225,10 @@ class Command(BaseCommand):
                 "total_loss": "incident_severity equals Total Loss",
                 "insurance_fraud": "fraud_reported equals Y",
                 "fraud_oracle_fraud": "FraudFound_P equals 1",
+            },
+            "decision_thresholds": {
+                "insurance_fraud": fraud_metrics["decision_threshold"],
+                "fraud_oracle_fraud": oracle_metrics["decision_threshold"],
             },
             "metrics": [fraud_metrics, cost_metrics, total_loss_metrics, oracle_metrics],
         }
