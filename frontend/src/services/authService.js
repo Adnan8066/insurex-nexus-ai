@@ -13,7 +13,11 @@ export const authService = {
   async login(credentials) {
     try {
       const response = await api.post('/auth/login/', credentials)
-      return response.data
+      const data = response.data
+      if (data?.success && data?.data) {
+        return data.data
+      }
+      return data
     } catch (error) {
       // Graceful fallback for mock/demo frontend without backend running
       const emailLower = credentials.email?.toLowerCase().trim()
@@ -53,7 +57,11 @@ export const authService = {
   async register(userData) {
     try {
       const response = await api.post('/auth/register/', userData)
-      return response.data
+      const data = response.data
+      if (data?.success && data?.data) {
+        return data.data
+      }
+      return data
     } catch (error) {
       // Mock registration fallback
       const newUser = {
