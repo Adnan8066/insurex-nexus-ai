@@ -1,0 +1,30 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Adnan8066/insurex-nexus-ai.git'
+            }
+        }
+
+        stage('Build Frontend (React)') {
+            steps {
+                dir('frontend') {
+                    bat 'npm install'
+                    bat 'npm run build'
+                }
+            }
+        }
+
+        stage('Test Backend (Django)') {
+            steps {
+                dir('backend') {
+                    bat 'python -m venv venv'
+                    bat 'call venv\\Scripts\\activate.bat && pip install -r ..\\requirements.txt'
+                    bat 'call venv\\Scripts\\activate.bat && python manage.py test'
+                }
+            }
+        }
+    }
+}

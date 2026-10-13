@@ -164,7 +164,7 @@ export function SettlementDashboard() {
                 { value: '', label: 'All Settlement Statuses' },
                 { value: 'approved', label: 'Approved' },
                 { value: 'paid', label: 'Paid' },
-                { value: 'under-review', label: 'Under Review' },
+                { value: 'under_review', label: 'Under Review' },
               ]}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
