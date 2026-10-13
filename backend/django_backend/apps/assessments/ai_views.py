@@ -8,6 +8,11 @@ from django.utils import timezone
 from apps.claims.models import Claim
 from .models import ClaimAssessment, AgentOutput, DecisionFlow, AssessmentType, AssessmentStatus
 from .serializers import ClaimAssessmentSerializer
+from ml_service import (
+    detect_fraud_ml,
+    predict_repair_cost_ml,
+    predict_total_loss_ml,
+)
 
 
 @api_view(['POST'])
@@ -73,34 +78,63 @@ def assess_claim(request):
 
 
 def predict_repair_cost_internal(claim):
-    from decimal import Decimal
-    amount = float(claim.claim_amount)
-    return {
-        'cost': amount * 0.85,
-        'breakdown': {
-            'labor': amount * 0.4,
-            'parts': amount * 0.35,
-            'materials': amount * 0.1,
-            'overhead': amount * 0.05
-        },
-        'time_estimate': 5,
-        'comparable_count': 12
-    }
+    return predict_repair_cost_ml(claim_model_input(claim))
 
 
 def detect_fraud_internal(claim):
-    return {
-        'score': 15.0,
-        'level': 'low',
-        'factors': ['normal claim pattern', 'consistent documentation'],
-        'behavioral': ['prompt reporting', 'cooperative'],
-        'network': {'connected_claims': 0, 'shared_parties': []}
-    }
+    return detect_fraud_ml(claim_model_input(claim))
 
 
 def predict_total_loss_internal(claim):
+    return predict_total_loss_ml(claim_model_input(claim))
+
+
+def claim_model_input(claim):
+    """Return dataset-shaped input for model inference on a claim record."""
+    assessment_data = claim.ai_assessment or {}
+    source_data = assessment_data.get('source_data')
+    if source_data:
+        result = dict(source_data)
+        result['_source_dataset'] = assessment_data.get('source_dataset')
+        return result
+
+    incident_types = {
+        'collision': 'Single Vehicle Collision' if claim.number_of_vehicles == 1 else 'Multi-vehicle Collision',
+        'theft': 'Vehicle Theft',
+        'comprehensive': 'Parked Car',
+    }
+    severities = {
+        'minor': 'Minor Damage',
+        'moderate': 'Minor Damage',
+        'major': 'Major Damage',
+        'total_loss': 'Total Loss',
+    }
+    vehicle = claim.vehicle
+    policy = claim.policy
+    customer_age = None
+    try:
+        birth_date = claim.customer.customer_profile.date_of_birth
+        if birth_date:
+            customer_age = max(0, claim.incident_date.year - birth_date.year)
+    except AttributeError:
+        pass
+
     return {
-        'probability': 10.0
+        '_source_dataset': 'insurance_claims',
+        'age': customer_age,
+        'policy_deductable': float(policy.deductible or 0),
+        'policy_annual_premium': float(policy.premium or 0),
+        'incident_type': incident_types.get(claim.incident_type, 'Other'),
+        'incident_severity': severities.get(claim.incident_severity, 'Minor Damage'),
+        'number_of_vehicles_involved': claim.number_of_vehicles,
+        'property_damage': 'YES' if claim.property_damage else 'NO',
+        'bodily_injuries': int(bool(claim.injuries)),
+        'witnesses': int(bool(claim.witnesses)),
+        'police_report_available': 'YES' if claim.police_report else 'NO',
+        'auto_make': vehicle.make,
+        'auto_model': vehicle.model,
+        'auto_year': vehicle.year,
+        'claim_amount': float(claim.claim_amount or 0),
     }
 
 

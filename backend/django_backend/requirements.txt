@@ -25,10 +25,10 @@ Pillow==11.0.0
 pandas==2.2.3
 numpy>=1.26.0
 
-# Machine Learning - comment out for now due to Python 3.13 compatibility
-# scikit-learn==1.5.2
+# Machine learning inference and dataset training
+scikit-learn>=1.5.2
+joblib>=1.4.0
 # lightgbm==4.3.0
-# joblib==1.4.0
 
 # ML Experiment Tracking - comment out for now
 # mlflow==2.13.1

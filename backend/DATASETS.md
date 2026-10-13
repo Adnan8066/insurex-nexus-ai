@@ -14,6 +14,14 @@ python manage.py migrate
 python manage.py import_project_datasets
 ```
 
+Train the app's models from the same datasets with:
+
+```powershell
+python manage.py train_project_models
+```
+
+This trains fraud detection, repair-cost, and total-loss models from `insurance_claims.csv`, and a separate fraud model from the full `fraud_oracle.csv`. Fraud Oracle has no repair-cost target, so it is used for fraud classification only. The command evaluates each model on a stratified 20% holdout, then refits it on all available rows. Metrics and class counts are saved to `backend/ml/models/training_report.json`; trained pipelines are saved beside it. The AI assessment endpoints load those pipelines and reload them after retraining.
+
 The importer can be rerun safely; it updates the records it previously imported. To validate the CSV headers and row counts without changing the database, run:
 
 ```powershell

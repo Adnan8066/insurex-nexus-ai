@@ -1,166 +1,159 @@
 import os
-import sys
+
 import joblib
-import numpy as np
 import pandas as pd
 from django.conf import settings
 
-# Add ml directory to path
-ML_DIR = os.path.join(settings.BASE_DIR, 'ml')
-sys.path.insert(0, ML_DIR)
 
-# Lazy load models
-_repair_cost_model = None
-_fraud_risk_model = None
-_total_loss_model = None
-_preprocessor = None
+ML_DIR = os.path.join(settings.BASE_DIR.parent, "ml")
+MODELS_DIR = os.path.join(ML_DIR, "models")
+_MODEL_FILES = {
+    "repair_cost": "repair_cost.joblib",
+    "fraud_risk": "fraud_risk.joblib",
+    "total_loss": "total_loss.joblib",
+    "fraud_oracle_fraud": "fraud_oracle_fraud.joblib",
+}
+_models = {name: None for name in _MODEL_FILES}
+_model_mtimes = {}
+
+_INSURANCE_FEATURES = [
+    "age", "policy_deductable", "policy_annual_premium", "incident_type",
+    "incident_severity", "number_of_vehicles_involved", "property_damage",
+    "bodily_injuries", "witnesses", "police_report_available", "auto_make",
+    "auto_model", "auto_year",
+]
+_ORACLE_FEATURES = [
+    "Month", "WeekOfMonth", "DayOfWeek", "Make", "AccidentArea",
+    "DayOfWeekClaimed", "MonthClaimed", "WeekOfMonthClaimed", "Sex",
+    "MaritalStatus", "Age", "Fault", "PolicyType", "VehicleCategory",
+    "VehiclePrice", "Deductible", "DriverRating", "Days_Policy_Accident",
+    "Days_Policy_Claim", "PastNumberOfClaims", "AgeOfVehicle",
+    "AgeOfPolicyHolder", "PoliceReportFiled", "WitnessPresent", "AgentType",
+    "NumberOfSuppliments", "AddressChange_Claim", "NumberOfCars", "Year",
+    "BasePolicy",
+]
+
 
 def load_models():
-    global _repair_cost_model, _fraud_risk_model, _total_loss_model, _preprocessor
-    if _preprocessor is None:
-        models_dir = os.path.join(ML_DIR, 'models')
-        preprocessor_path = os.path.join(models_dir, 'preprocessor.joblib')
-        if os.path.exists(preprocessor_path):
-            from preprocessing.preprocess import DataPreprocessor
-            _preprocessor = DataPreprocessor()
-            _preprocessor.load_preprocessor(preprocessor_path)
-            
-            repair_path = os.path.join(models_dir, 'repair_cost.joblib')
-            if os.path.exists(repair_path):
-                _repair_cost_model = jobobs.load(repair_path)
-            
-            fraud_path = os.path.join(models_dir, 'fraud_risk.joblib')
-            if os.path.exists(fraud_path):
-                _fraud_risk_model = jobobs.load(fraud_path)
-            
-            total_loss_path = os.path.join(models_dir, 'total_loss.joblib')
-            if os.path.exists(total_loss_path):
-                _total_loss_model = jobobs.load(total_loss_path)
+    """Load artifacts lazily and reload them after a new training run."""
+    for name, filename in _MODEL_FILES.items():
+        path = os.path.join(MODELS_DIR, filename)
+        try:
+            modified = os.stat(path).st_mtime_ns
+        except FileNotFoundError:
+            _models[name] = None
+            _model_mtimes.pop(name, None)
+            continue
+        if _model_mtimes.get(name) != modified:
+            _models[name] = joblib.load(path)
+            _model_mtimes[name] = modified
+    return _models
+
+
+def _input_frame(claim_data, feature_names):
+    return pd.DataFrame([{name: claim_data.get(name) for name in feature_names}], columns=feature_names)
+
+
+def _fraud_probability(model, frame):
+    probabilities = model.predict_proba(frame)[0]
+    classes = list(model.classes_)
+    positive_index = classes.index(1) if 1 in classes else classes.index("1")
+    return float(probabilities[positive_index])
+
+
+def _fraud_result(score):
+    score = round(score, 2)
+    if score > 70:
+        level, factors = "high", ["model identified a high-risk pattern", "recommend investigation"]
+    elif score > 40:
+        level, factors = "medium", ["model identified a moderate-risk pattern", "enhanced review recommended"]
+    else:
+        level, factors = "low", ["model identified a low-risk pattern"]
+    return {
+        "score": score,
+        "level": level,
+        "factors": factors,
+        "behavioral": [],
+        "network": {"connected_claims": 0, "shared_parties": []},
+    }
+
+
+def _fallback_repair_cost(claim_data):
+    amount = float(claim_data.get("claim_amount") or claim_data.get("total_claim_amount") or 0)
+    cost = round(amount * 0.85, 2)
+    return {
+        "cost": cost,
+        "breakdown": {
+            "labor": round(cost * 0.4, 2), "parts": round(cost * 0.35, 2),
+            "materials": round(cost * 0.1, 2), "overhead": round(cost * 0.05, 2),
+        },
+        "time_estimate": 5,
+        "comparable_count": 12,
+    }
+
 
 def predict_repair_cost_ml(claim_data):
-    """Use trained ML model to predict repair cost"""
-    load_models()
-    
-    if _repair_cost_model is None or _preprocessor is None:
-        # Fallback to rule-based
-        amount = float(claim_data.get('claim_amount', 0))
-        return {
-            'cost': round(amount * 0.85, 2),
-            'breakdown': {
-                'labor': round(amount * 0.4, 2),
-                'parts': round(amount * 0.35, 2),
-                'materials': round(amount * 0.1, 2),
-                'overhead': round(amount * 0.05, 2)
-            },
-            'time_estimate': 5,
-            'comparable_count': 12
-        }
-    
+    """Predict vehicle repair cost with the model trained on insurance claims."""
+    model = load_models()["repair_cost"]
+    if model is None or claim_data.get("_source_dataset") == "fraud_oracle":
+        return _fallback_repair_cost(claim_data)
     try:
-        df = pd.DataFrame([claim_data])
-        df = _preprocessor.prepare_features(df, target_column='vehicle_claim')
-        X = _preprocessor.scaler.transform(df[_preprocessor.feature_columns])
-        predicted_cost = float(_repair_cost_model.predict(X)[0])
-        
-        amount = float(claim_data.get('claim_amount', predicted_cost))
-        
+        prediction = max(0.0, float(model.predict(_input_frame(claim_data, _INSURANCE_FEATURES))[0]))
         return {
-            'cost': round(predicted_cost, 2),
-            'breakdown': {
-                'labor': round(predicted_cost * 0.4, 2),
-                'parts': round(predicted_cost * 0.35, 2),
-                'materials': round(predicted_cost * 0.1, 2),
-                'overhead': round(predicted_cost * 0.05, 2)
+            "cost": round(prediction, 2),
+            "breakdown": {
+                "labor": round(prediction * 0.4, 2), "parts": round(prediction * 0.35, 2),
+                "materials": round(prediction * 0.1, 2), "overhead": round(prediction * 0.05, 2),
             },
-            'time_estimate': 5,
-            'comparable_count': 12
+            "time_estimate": 5,
+            "comparable_count": 1000,
         }
-    except Exception as e:
-        print(f"ML prediction error: {e}")
-        amount = float(claim_data.get('claim_amount', 0))
-        return {
-            'cost': round(amount * 0.85, 2),
-            'breakdown': {
-                'labor': round(amount * 0.4, 2),
-                'parts': round(amount * 0.35, 2),
-                'materials': round(amount * 0.1, 2),
-                'overhead': round(amount * 0.05, 2)
-            },
-            'time_estimate': 5,
-            'comparable_count': 12
-        }
+    except (ValueError, TypeError, KeyError):
+        return _fallback_repair_cost(claim_data)
+
 
 def detect_fraud_ml(claim_data):
-    """Use trained ML model to detect fraud"""
-    load_models()
-    
-    if _fraud_risk_model is None or _preprocessor is None:
-        return {
-            'score': 15.0,
-            'level': 'low',
-            'factors': ['normal claim pattern', 'consistent documentation'],
-            'behavioral': ['prompt reporting', 'cooperative'],
-            'network': {'connected_claims': 0, 'shared_parties': []}
-        }
-    
+    """Score fraud with the model trained for the source dataset's feature schema."""
+    models = load_models()
+    oracle = claim_data.get("_source_dataset") == "fraud_oracle"
+    model = models["fraud_oracle_fraud"] if oracle else models["fraud_risk"]
+    if model is None:
+        return _fraud_result(15.0)
+    features = _ORACLE_FEATURES if oracle else _INSURANCE_FEATURES
     try:
-        df = pd.DataFrame([claim_data])
-        df = _preprocessor.prepare_features(df, target_column='fraud_reported')
-        df['fraud_reported'] = df['fraud_reported'].map({'Y': 1, 'N': 0, 'Yes': 1, 'No': 0, 1: 1, 0: 0}).fillna(0)
-        X = _preprocessor.scaler.transform(df[_preprocessor.feature_columns])
-        fraud_score = float(_fraud_risk_model.predict_proba(X)[0][1]) * 100
-        
-        if fraud_score > 70:
-            level = 'high'
-            factors = ['high fraud risk indicators detected', 'recommend investigation']
-        elif fraud_score > 40:
-            level = 'medium'
-            factors = ['moderate fraud risk', 'enhanced review recommended']
-        else:
-            level = 'low'
-            factors = ['normal claim pattern', 'consistent documentation']
-        
-        return {
-            'score': round(fraud_score, 2),
-            'level': level,
-            'factors': factors,
-            'behavioral': ['prompt reporting', 'cooperative'],
-            'network': {'connected_claims': 0, 'shared_parties': []}
-        }
-    except Exception as e:
-        print(f"Fraud prediction error: {e}")
-        return {
-            'score': 15.0,
-            'level': 'low',
-            'factors': ['normal claim pattern', 'consistent documentation'],
-            'behavioral': ['prompt reporting', 'cooperative'],
-            'network': {'connected_claims': 0, 'shared_parties': []}
-        }
+        score = _fraud_probability(model, _input_frame(claim_data, features)) * 100
+        return _fraud_result(score)
+    except (ValueError, TypeError, KeyError):
+        return _fraud_result(15.0)
+
 
 def predict_total_loss_ml(claim_data):
-    """Use trained ML model to predict total loss probability"""
-    load_models()
-    
-    if _total_loss_model is None or _preprocessor is None:
-        return {'probability': 10.0}
-    
+    """Estimate total-loss probability from the insurance claims model."""
+    model = load_models()["total_loss"]
+    if model is None or claim_data.get("_source_dataset") == "fraud_oracle":
+        return {"probability": 10.0}
     try:
-        df = pd.DataFrame([claim_data])
-        df = _preprocessor.prepare_features(df, target_column='total_claim_amount')
-        X = _preprocessor.scaler.transform(df[_preprocessor.feature_columns])
-        probability = float(_total_loss_model.predict(X)[0]) * 100
-        
-        return {'probability': round(min(max(probability, 0), 100), 2)}
-    except Exception as e:
-        print(f"Total loss prediction error: {e}")
-        return {'probability': 10.0}
+        probability = _fraud_probability(model, _input_frame(claim_data, _INSURANCE_FEATURES)) * 100
+        return {"probability": round(min(max(probability, 0), 100), 2)}
+    except (ValueError, TypeError, KeyError):
+        return {"probability": 10.0}
+
 
 def get_model_status():
-    """Get status of all ML models"""
-    load_models()
+    models = load_models()
+    report_path = os.path.join(MODELS_DIR, "training_report.json")
+    report = None
+    if os.path.exists(report_path):
+        try:
+            import json
+            with open(report_path, encoding="utf-8") as report_file:
+                report = json.load(report_file)
+        except (OSError, ValueError):
+            report = None
     return {
-        'repair_cost_model': _repair_cost_model is not None,
-        'fraud_risk_model': _fraud_risk_model is not None,
-        'total_loss_model': _total_loss_model is not None,
-        'preprocessor': _preprocessor is not None
+        "repair_cost_model": models["repair_cost"] is not None,
+        "fraud_risk_model": models["fraud_risk"] is not None,
+        "fraud_oracle_model": models["fraud_oracle_fraud"] is not None,
+        "total_loss_model": models["total_loss"] is not None,
+        "training_report": report,
     }
