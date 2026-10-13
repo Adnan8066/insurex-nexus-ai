@@ -192,7 +192,7 @@ export function EmployeeDashboard() {
 
   const activePolicies = policies.filter((p) => p.status === 'active')
   const activeClaims = claims.filter((c) => !['closed', 'rejected'].includes(c.status))
-  const pendingClaims = claims.filter((c) => ['submitted', 'under-review', 'ai-assessment', 'investigation'].includes(c.status))
+  const pendingClaims = claims.filter((c) => ['submitted', 'under_review', 'ai_assessment', 'investigation'].includes(c.status))
   const highRiskClaims = fraudAlerts.filter((f) => f.riskLevel === 'high')
   const totalLossCases = claims.filter((c) => c.status === 'total_loss' || c.aiAssessment?.totalLossProbability > 50)
   const totalClaimAmount = claims.reduce((sum, c) => sum + c.claimAmount, 0)
