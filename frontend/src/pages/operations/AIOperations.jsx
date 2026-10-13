@@ -1,11 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Brain,
   Cpu,
   Zap,
   Activity,
-  Layers,
   Sparkles,
   UserCheck,
   Wrench,
@@ -18,45 +17,154 @@ import {
   Info,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { mockRLOptimization, mockModelPerformance } from '../../data/ai'
+import {
+  assessmentService,
+  claimService,
+  investigationService,
+  repairService,
+} from '../../services'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { ChartCard, LineChart, BarChart } from '../../components/charts/ChartComponents'
+import { ChartCard, BarChart } from '../../components/charts/ChartComponents'
 
 export function AIOperations() {
+  const [models, setModels] = useState([])
+  const [agentOutputs, setAgentOutputs] = useState([])
+  const [assessments, setAssessments] = useState([])
+  const [claims, setClaims] = useState([])
+  const [fraudAlerts, setFraudAlerts] = useState([])
+  const [jobs, setJobs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [optimizing, setOptimizing] = useState(false)
-  const rlData = mockRLOptimization
-  const perf = mockModelPerformance
 
-  const triggerReOptimize = () => {
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const results = await Promise.allSettled([
+        assessmentService.getModelPerformance(),
+        assessmentService.getAgentOutputs(),
+        assessmentService.getAssessments(),
+        claimService.getClaims(),
+        investigationService.getFraudAlerts(),
+        repairService.getJobs(),
+      ])
+      const unwrap = (r) =>
+        r.status === 'fulfilled'
+          ? Array.isArray(r.value) ? r.value : r.value.results || []
+          : []
+      setModels(unwrap(results[0]))
+      setAgentOutputs(unwrap(results[1]))
+      setAssessments(unwrap(results[2]))
+      setClaims(unwrap(results[3]))
+      setFraudAlerts(unwrap(results[4]))
+      setJobs(unwrap(results[5]))
+    } catch (err) {
+      console.error('Failed to load AI operations data:', err)
+      setError(err.message || 'Failed to load AI operations data.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const triggerReOptimize = async () => {
     setOptimizing(true)
-    setTimeout(() => {
+    try {
+      await assessmentService.runAgent('triage-optimizer', {})
+    } catch (err) {
+      console.error('RL optimizer run failed:', err)
+    } finally {
       setOptimizing(false)
-    }, 700)
+    }
   }
 
-  // Reward curve data
-  const rewardCurveData = {
-    labels: ['Ep 10k', 'Ep 20k', 'Ep 30k', 'Ep 40k', 'Ep 50k'],
+  const claimsMap = {}
+  claims.forEach((c) => {
+    claimsMap[String(c.id)] = c
+  })
+
+  // Module 1: Claim Priority Optimization (assessments vs current claim priority)
+  const priorityOptimizations = assessments
+    .filter((a) => {
+      const claim = claimsMap[String(a.claim)]
+      return claim && claim.priority && a.claim_priority && claim.priority !== a.claim_priority
+    })
+    .slice(0, 6)
+    .map((a) => {
+      const claim = claimsMap[String(a.claim)]
+      return {
+        claimId: claim.id,
+        claimNumber: claim.claim_number,
+        currentPriority: claim.priority,
+        recommendedPriority: a.claim_priority,
+        reason: a.ai_recommendation || `AI assessment recommends ${a.claim_priority} priority based on risk scoring.`,
+        score: Math.round(Number(a.confidence || 0) * 100),
+      }
+    })
+
+  // Module 2: Investigator Assignment (fraud alerts with assigned investigators)
+  const investigatorAssignments = fraudAlerts
+    .filter((f) => f.assigned_investigator_name)
+    .slice(0, 6)
+    .map((f) => ({
+      claimId: f.claim,
+      claimNumber: f.claim_number,
+      matchScore: Math.round(Number(f.risk_score) || 0),
+      recommendedInvestigator: f.assigned_investigator_name,
+      reason: f.ai_recommendation || 'Matched based on fraud risk profile and SIU specialty.',
+    }))
+
+  // Module 3: Repair Shop Recommendation (repair jobs)
+  const shopRecommendations = jobs
+    .filter((j) => j.repair_shop_name)
+    .slice(0, 6)
+    .map((j) => ({
+      claimId: j.claim,
+      claimNumber: j.claim_number,
+      matchScore: j.quality_score ? Math.round(Number(j.quality_score)) : 85,
+      recommendedShop: j.repair_shop_name,
+      reason: `Assigned for ${j.repair_stage || 'repair'} — estimated ${j.estimated_cost ? `$${Number(j.estimated_cost).toLocaleString()}` : 'N/A'}.`,
+    }))
+
+  // Module 4: Processing Time Estimates (assessments with repair_time_estimate_days)
+  const processingEstimates = assessments
+    .filter((a) => a.repair_time_estimate_days != null)
+    .slice(0, 6)
+    .map((a) => ({
+      claimId: a.claim,
+      claimNumber: a.claim_number,
+      estimatedDays: Math.round(Number(a.repair_time_estimate_days) || 0),
+      factors: (a.risk_factors || []).slice(0, 3).map((f) => (typeof f === 'string' ? f : f.factor || f.name || 'factor')),
+      confidence: Math.round(Number(a.confidence || 0) * 100),
+    }))
+
+  // Model accuracy comparison chart (real data)
+  const modelChartData = {
+    labels: models.map((m) => `${m.model_type || 'model'} v${m.version || '?'}`),
     datasets: [
       {
-        label: 'Mean Episode Reward',
-        data: [0.42, 0.61, 0.73, 0.82, 0.87],
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        fill: true,
-        tension: 0.35,
+        label: 'Accuracy',
+        data: models.map((m) => Math.round(Number(m.accuracy || 0) * 100)),
+        backgroundColor: '#1e3a5f',
+        borderRadius: 4,
       },
       {
-        label: 'Policy Loss',
-        data: [0.48, 0.32, 0.22, 0.15, 0.12],
-        borderColor: '#ef4444',
-        backgroundColor: 'transparent',
-        tension: 0.35,
+        label: 'F1 Score',
+        data: models.map((m) => Math.round(Number(m.f1_score || 0) * 100)),
+        backgroundColor: '#00c896',
+        borderRadius: 4,
       },
     ],
   }
+
+  const activeModels = models.filter((m) => m.is_active).length
+  const completedAgentRuns = agentOutputs.filter((a) => a.status === 'completed').length
 
   return (
     <div className="page max-w-7xl mx-auto space-y-6">
@@ -76,45 +184,45 @@ export function AIOperations() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="primary" onClick={triggerReOptimize} loading={optimizing}>
+          <Button variant="primary" onClick={triggerReOptimize} disabled={optimizing}>
             <RefreshCw className={clsx('w-4 h-4 mr-2', optimizing && 'animate-spin')} />
-            Run RL Policy Optimizer
+            {optimizing ? 'Running Optimizer...' : 'Run RL Policy Optimizer'}
           </Button>
           <Link to="/ai-decision">
-            <Button variant="outline">
-              Decision Center
-            </Button>
+            <Button variant="outline">Decision Center</Button>
           </Link>
         </div>
       </div>
 
-      {/* Mandatory Notice */}
-      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3.5 shadow-sm">
-        <Info className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
-        <div className="text-sm text-emerald-950">
-          <strong className="font-semibold block mb-0.5">Simulated Reinforcement Learning (RL) Policy Recommendations</strong>
-          These recommendations are produced by our simulated Proximal Policy Optimization (PPO) model trained across 50,000 historical episodes. The actions optimize for minimal turnaround times, high customer retention, and maximum fraud interception.
+      {error && (
+        <div className="bg-gradient-to-r from-red-50 to-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3.5 shadow-sm">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-red-900">{error}</div>
         </div>
-      </div>
+      )}
 
-      {/* Overall Optimization Score Card */}
+      {loading && (
+        <div className="p-8 text-center text-sm text-gray-400">Loading AI operations...</div>
+      )}
+
+      {/* Model Registry Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-primary text-white p-6 rounded-2xl shadow-sm flex flex-col justify-between">
           <div>
-            <span className="text-xs font-semibold text-white/80 uppercase tracking-wider block">Global Optimization Score</span>
-            <div className="text-4xl font-black mt-2">{rlData.overallOptimizationScore} / 100</div>
+            <span className="text-xs font-semibold text-white/80 uppercase tracking-wider block">Registered Models</span>
+            <div className="text-4xl font-black mt-2">{models.length}</div>
           </div>
           <div className="text-xs text-white/70 mt-4 flex items-center justify-between">
-            <span>Model: {rlData.modelVersion}</span>
-            <span className="bg-white/20 px-2 py-0.5 rounded">Active PPO</span>
+            <span>Production Registry</span>
+            <span className="bg-white/20 px-2 py-0.5 rounded">{activeModels} Active</span>
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Claim Triage Queue</span>
-            <div className="text-3xl font-black text-gray-900 mt-1">{rlData.claimPrioritization.length} cases</div>
-            <span className="text-xs text-emerald-600 font-medium">100% Policy-Alighed</span>
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Agent Executions</span>
+            <div className="text-3xl font-black text-gray-900 mt-1">{agentOutputs.length} runs</div>
+            <span className="text-xs text-emerald-600 font-medium">{completedAgentRuns} completed</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <Activity className="w-6 h-6" />
@@ -123,28 +231,28 @@ export function AIOperations() {
 
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Investigator Allocation</span>
-            <div className="text-3xl font-black text-gray-900 mt-1">{rlData.investigatorAssignment.length} matches</div>
-            <span className="text-xs text-gray-500">Based on resolution rates</span>
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Claim Assessments</span>
+            <div className="text-3xl font-black text-gray-900 mt-1">{assessments.length}</div>
+            <span className="text-xs text-gray-500">Inference records</span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-            <UserCheck className="w-6 h-6" />
+          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <Cpu className="w-6 h-6" />
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Avg Turnaround Gain</span>
-            <div className="text-3xl font-black text-emerald-600 mt-1">-4.2 Days</div>
-            <span className="text-xs text-gray-500">Cycle time reduction</span>
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Fraud Alerts Triage</span>
+            <div className="text-3xl font-black text-amber-600 mt-1">{fraudAlerts.length}</div>
+            <span className="text-xs text-gray-500">SIU queue</span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <TrendingUp className="w-6 h-6" />
           </div>
         </div>
       </div>
 
-      {/* Grid of the 4 Key Operations Modules (as requested by prompt) */}
+      {/* Grid of the 4 Key Operations Modules */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Module 1: Claim Priority Optimization */}
         <Card>
@@ -154,27 +262,31 @@ export function AIOperations() {
           />
           <CardContent className="p-6">
             <div className="space-y-3">
-              {rlData.claimPrioritization.map((cp, idx) => (
-                <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Link to={`/claims/${cp.claimId}`} className="font-mono font-bold text-primary hover:underline text-sm">
-                      {cp.claimId}
-                    </Link>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">Current: {cp.currentPriority}</span>
-                      <span className="text-gray-400">→</span>
-                      <Badge variant={cp.recommendedPriority === 'Critical' ? 'danger' : cp.recommendedPriority === 'High' ? 'warning' : 'primary'}>
-                        {cp.recommendedPriority}
-                      </Badge>
+              {priorityOptimizations.length > 0 ? (
+                priorityOptimizations.map((cp, idx) => (
+                  <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Link to={`/claims/${cp.claimId}`} className="font-mono font-bold text-primary hover:underline text-sm">
+                        {cp.claimNumber}
+                      </Link>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">Current: {cp.currentPriority}</span>
+                        <span className="text-gray-400">→</span>
+                        <Badge variant={cp.recommendedPriority === 'critical' || cp.recommendedPriority === 'high' ? 'danger' : cp.recommendedPriority === 'medium' ? 'warning' : 'primary'}>
+                          {cp.recommendedPriority}
+                        </Badge>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-600">{cp.reason}</p>
+                    <div className="flex justify-between items-center text-[11px] text-gray-400 pt-1 border-t border-gray-100">
+                      <span>Optimization Match Score:</span>
+                      <strong className="text-gray-800">{cp.score}/100</strong>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-600">{cp.reason}</p>
-                  <div className="flex justify-between items-center text-[11px] text-gray-400 pt-1 border-t border-gray-100">
-                    <span>Optimization Match Score:</span>
-                    <strong className="text-gray-800">{cp.score}/100</strong>
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-sm text-gray-400">No priority escalations recommended at this time.</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -187,23 +299,27 @@ export function AIOperations() {
           />
           <CardContent className="p-6">
             <div className="space-y-3">
-              {rlData.investigatorAssignment.map((ia, idx) => (
-                <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Link to={`/claims/${ia.claimId}`} className="font-mono font-bold text-primary hover:underline text-sm">
-                      {ia.claimId}
-                    </Link>
-                    <span className="font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full text-xs">
-                      {ia.matchScore}% Match
-                    </span>
+              {investigatorAssignments.length > 0 ? (
+                investigatorAssignments.map((ia, idx) => (
+                  <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Link to={`/claims/${ia.claimId}`} className="font-mono font-bold text-primary hover:underline text-sm">
+                        {ia.claimNumber}
+                      </Link>
+                      <span className="font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full text-xs">
+                        {ia.matchScore}% Match
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                      <UserCheck className="w-4 h-4 text-primary" />
+                      Recommended: {ia.recommendedInvestigator}
+                    </div>
+                    <p className="text-xs text-gray-600">{ia.reason}</p>
                   </div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <UserCheck className="w-4 h-4 text-primary" />
-                    Recommended: {ia.recommendedInvestigator}
-                  </div>
-                  <p className="text-xs text-gray-600">{ia.reason}</p>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-sm text-gray-400">No investigator assignments on record.</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -216,23 +332,27 @@ export function AIOperations() {
           />
           <CardContent className="p-6">
             <div className="space-y-3">
-              {rlData.repairShopRecommendation.map((rs, idx) => (
-                <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Link to={`/claims/${rs.claimId}`} className="font-mono font-bold text-primary hover:underline text-sm">
-                      {rs.claimId}
-                    </Link>
-                    <span className="font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full text-xs">
-                      {rs.matchScore}% Optimal Fit
-                    </span>
+              {shopRecommendations.length > 0 ? (
+                shopRecommendations.map((rs, idx) => (
+                  <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Link to={`/claims/${rs.claimId}`} className="font-mono font-bold text-primary hover:underline text-sm">
+                        {rs.claimNumber}
+                      </Link>
+                      <span className="font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full text-xs">
+                        {rs.matchScore}% Optimal Fit
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                      <Wrench className="w-4 h-4 text-primary" />
+                      Recommended: {rs.recommendedShop}
+                    </div>
+                    <p className="text-xs text-gray-600">{rs.reason}</p>
                   </div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <Wrench className="w-4 h-4 text-primary" />
-                    Recommended: {rs.recommendedShop}
-                  </div>
-                  <p className="text-xs text-gray-600">{rs.reason}</p>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-sm text-gray-400">No repair shop assignments on record.</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -245,42 +365,106 @@ export function AIOperations() {
           />
           <CardContent className="p-6">
             <div className="space-y-3">
-              {rlData.processingTimeEstimates.map((pe, idx) => (
-                <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Link to={`/claims/${pe.claimId}`} className="font-mono font-bold text-primary hover:underline text-sm">
-                      {pe.claimId}
-                    </Link>
-                    <div className="flex items-center gap-1.5 font-bold text-gray-900 text-sm">
-                      <Clock className="w-4 h-4 text-primary" />
-                      {pe.estimatedDays} Business Days
+              {processingEstimates.length > 0 ? (
+                processingEstimates.map((pe, idx) => (
+                  <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Link to={`/claims/${pe.claimId}`} className="font-mono font-bold text-primary hover:underline text-sm">
+                        {pe.claimNumber}
+                      </Link>
+                      <div className="flex items-center gap-1.5 font-bold text-gray-900 text-sm">
+                        <Clock className="w-4 h-4 text-primary" />
+                        {pe.estimatedDays} Business Days
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {pe.factors.length > 0 ? (
+                        pe.factors.map((f, i) => (
+                          <span key={i} className="text-[10px] bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600">
+                            {f}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[10px] text-gray-400">No factors recorded</span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-100 flex justify-between">
+                      <span>Model Confidence:</span>
+                      <strong className="text-gray-800">{pe.confidence}%</strong>
                     </div>
                   </div>
-                  <div className="flex gap-1.5 flex-wrap">
-                    {pe.factors.map((f, i) => (
-                      <span key={i} className="text-[10px] bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600">
-                        {f}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-100 flex justify-between">
-                    <span>Model Confidence:</span>
-                    <strong className="text-gray-800">{pe.confidence}%</strong>
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-sm text-gray-400">No processing time estimates on record.</p>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* RL Training Curve & Convergence */}
-      <ChartCard
-        title="Reinforcement Learning Convergence Curve (PPO Agent)"
-        subtitle="Average episode reward versus policy loss across 50k training iterations"
-      >
-        <LineChart data={rewardCurveData} height={260} />
-      </ChartCard>
+      {/* Model Performance Registry */}
+      <Card>
+        <CardHeader
+          title="Model Performance Registry"
+          subtitle="Registered ML models with validation metrics"
+        />
+        <CardContent className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-gray-500 border-b border-gray-200">
+                  <th className="pb-2 pr-4">Model</th>
+                  <th className="pb-2 pr-4">Version</th>
+                  <th className="pb-2 pr-4">Accuracy</th>
+                  <th className="pb-2 pr-4">Precision</th>
+                  <th className="pb-2 pr-4">Recall</th>
+                  <th className="pb-2 pr-4">F1 Score</th>
+                  <th className="pb-2 pr-4">AUC</th>
+                  <th className="pb-2 pr-4">MAE</th>
+                  <th className="pb-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {models.length > 0 ? (
+                  models.map((m) => (
+                    <tr key={m.id} className="border-b border-gray-100">
+                      <td className="py-2.5 pr-4 font-semibold text-gray-900">{m.model_type}</td>
+                      <td className="py-2.5 pr-4 font-mono text-gray-600">{m.version}</td>
+                      <td className="py-2.5 pr-4">{Math.round(Number(m.accuracy || 0) * 100)}%</td>
+                      <td className="py-2.5 pr-4">{Math.round(Number(m.precision || 0) * 100)}%</td>
+                      <td className="py-2.5 pr-4">{Math.round(Number(m.recall || 0) * 100)}%</td>
+                      <td className="py-2.5 pr-4">{Math.round(Number(m.f1_score || 0) * 100)}%</td>
+                      <td className="py-2.5 pr-4">{m.auc != null ? Math.round(Number(m.auc) * 100) / 100 : '—'}</td>
+                      <td className="py-2.5 pr-4">{m.mae != null ? Number(m.mae).toFixed(2) : '—'}</td>
+                      <td className="py-2.5">
+                        <Badge variant={m.is_active ? 'success' : 'neutral'}>
+                          {m.is_active ? 'Active' : 'Archived'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="9" className="py-6 text-center text-gray-400">
+                      No registered models found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Model Accuracy Comparison */}
+      {models.length > 0 && (
+        <ChartCard
+          title="Model Accuracy Comparison"
+          subtitle="Validation accuracy and F1 score across registered models"
+        >
+          <BarChart data={modelChartData} height={260} />
+        </ChartCard>
+      )}
     </div>
   )
 }

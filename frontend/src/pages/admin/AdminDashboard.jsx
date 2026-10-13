@@ -1,61 +1,94 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import {
-  BarChart3,
-  TrendingUp,
-  FileText,
-  Briefcase,
-  AlertTriangle,
-  Clock,
-  Car,
-  DollarSign,
-  Shield,
-  Download,
-  Calendar,
-  Layers,
-  ArrowRight,
-  TrendingDown,
-} from 'lucide-react'
-import { clsx } from 'clsx'
-import { mockPolicies } from '../../data/policies'
-import { mockClaims } from '../../data/claims'
-import { mockFraudAlerts } from '../../data/operations'
-import { Card, CardHeader, CardContent } from '../../components/ui/Card'
+import { useState, useEffect, useCallback } from 'react'
+import { BarChart3, Download, AlertCircle, RefreshCw } from 'lucide-react'
+import { analyticsService } from '../../services'
 import { Button } from '../../components/ui/Button'
-import { Badge } from '../../components/ui/Badge'
-import { ChartCard, BarChart, LineChart, AreaChart, DoughnutChart, PieChart } from '../../components/charts/ChartComponents'
+import { ChartCard, BarChart, AreaChart, DoughnutChart, PieChart } from '../../components/charts/ChartComponents'
 import { formatCurrency } from '../../utils/helpers'
+
+const PENDING_STATUSES = ['submitted', 'under_review', 'ai_assessment', 'investigation']
+
+const STATUS_LABELS = {
+  submitted: 'Submitted',
+  under_review: 'Under Review',
+  ai_assessment: 'AI Assessment',
+  investigation: 'Investigation',
+  approved: 'Approved',
+  repair: 'Repair',
+  repair_settlement: 'Repair Settlement',
+  closed: 'Closed',
+  rejected: 'Rejected',
+}
 
 export function AdminDashboard() {
   const [dateRange, setDateRange] = useState('quarter')
+  const [summary, setSummary] = useState(null)
+  const [fraudRisk, setFraudRisk] = useState(null)
+  const [trend, setTrend] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Core metrics required by prompt
-  const totalPolicies = mockPolicies.length
-  const activePolicies = mockPolicies.filter((p) => p.status === 'active').length
-  const totalClaims = mockClaims.length
-  const pendingClaims = mockClaims.filter((c) =>
-    ['submitted', 'under-review', 'ai-assessment', 'investigation'].includes(c.status)
-  ).length
-  const fraudAlerts = mockFraudAlerts.length
-  const totalLossCases = mockClaims.filter((c) => (c.aiAssessment?.totalLossProbability || 0) > 50).length || 1
-  const totalClaimAmount = mockClaims.reduce((sum, c) => sum + c.claimAmount, 0)
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [summaryRes, fraudRes, trendRes] = await Promise.all([
+        analyticsService.getDashboardSummary(dateRange),
+        analyticsService.getFraudRiskDistribution(dateRange),
+        analyticsService.getClaimsTrend(180),
+      ])
+      setSummary(summaryRes)
+      setFraudRisk(fraudRes)
+      setTrend(Array.isArray(trendRes) ? trendRes : [])
+    } catch (err) {
+      console.error('Failed to load analytics:', err)
+      setError(err.message || 'Failed to load dashboard analytics.')
+    } finally {
+      setLoading(false)
+    }
+  }, [dateRange])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const claims = summary?.claims || {}
+  const policies = summary?.policies || {}
+  const fraud = summary?.fraud || {}
+  const repairShops = summary?.repair_shops || {}
+  const settlements = summary?.settlements || {}
+
+  const byStatus = claims.by_status || {}
+  const byIncidentType = claims.by_incident_type || {}
+  const pendingClaims = PENDING_STATUSES.reduce((sum, s) => sum + (byStatus[s] || 0), 0)
+  const totalClaims = claims.total || 0
+  const totalLossCases = claims.total_loss_cases || 0
+  const totalClaimAmount = Number(claims.total_amount) || 0
   const averageClaimCost = totalClaims > 0 ? Math.round(totalClaimAmount / totalClaims) : 0
 
-  // 1. Claims over time
+  // 1. Claims over time (group daily trend by month)
+  const monthly = {}
+  trend.forEach((d) => {
+    const month = (d.date || '').slice(0, 7)
+    if (!month) return
+    if (!monthly[month]) monthly[month] = { count: 0, amount: 0 }
+    monthly[month].count += d.count || 0
+    monthly[month].amount += Number(d.total_amount) || 0
+  })
+  const trendLabels = Object.keys(monthly).sort()
   const claimsOverTimeData = {
-    labels: ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'],
+    labels: trendLabels,
     datasets: [
       {
         label: 'Claims Submitted',
-        data: [14, 18, 22, 19, 25, 21],
+        data: trendLabels.map((m) => monthly[m].count),
         borderColor: '#1e3a5f',
         backgroundColor: 'rgba(30, 58, 95, 0.12)',
         fill: true,
         tension: 0.35,
       },
       {
-        label: 'Claims Resolved',
-        data: [11, 15, 19, 17, 23, 19],
+        label: 'Claim Amount ($)',
+        data: trendLabels.map((m) => Math.round(monthly[m].amount)),
         borderColor: '#10b981',
         backgroundColor: 'rgba(16, 185, 129, 0.08)',
         fill: true,
@@ -65,11 +98,12 @@ export function AdminDashboard() {
   }
 
   // 2. Fraud risk distribution
+  const byLevel = fraudRisk?.by_level || {}
   const fraudDistributionData = {
     labels: ['Low Risk (<30%)', 'Moderate Risk (30-65%)', 'High Risk (>65%)'],
     datasets: [
       {
-        data: [68, 24, 8],
+        data: [byLevel.low || 0, byLevel.medium || 0, byLevel.high || 0],
         backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
         borderWidth: 0,
       },
@@ -77,41 +111,74 @@ export function AdminDashboard() {
   }
 
   // 3. Claim status distribution
+  const statusLabels = Object.keys(byStatus)
   const claimStatusDistributionData = {
-    labels: ['Submitted', 'Under Review', 'AI Assessment', 'Investigation', 'Approved', 'Repair', 'Closed'],
+    labels: statusLabels.map((s) => STATUS_LABELS[s] || s),
     datasets: [
       {
         label: 'Claim Count',
-        data: [4, 6, 3, 2, 8, 5, 12],
+        data: statusLabels.map((s) => byStatus[s]),
         backgroundColor: '#1e3a5f',
         borderRadius: 4,
       },
     ],
   }
 
-  // 4. Average repair cost by vehicle category
-  const averageRepairCostData = {
-    labels: ['Sedan', 'SUV / Crossover', 'Truck / Pickup', 'Luxury / EV', 'Compact'],
+  // 4. Total-loss cases vs repairable
+  const totalLossData = {
+    labels: ['Repairable Claims', 'Total Loss Vehicles'],
     datasets: [
       {
-        label: 'Avg Repair Cost ($)',
-        data: [4200, 5800, 6900, 11500, 3100],
+        data: [Math.max(totalClaims - totalLossCases, 0), totalLossCases],
+        backgroundColor: ['#10b981', '#ef4444'],
+        borderWidth: 0,
+      },
+    ],
+  }
+
+  // 5. Claims by incident type
+  const incidentLabels = Object.keys(byIncidentType)
+  const incidentTypeData = {
+    labels: incidentLabels.map((t) => (t || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())),
+    datasets: [
+      {
+        label: 'Claim Count',
+        data: incidentLabels.map((t) => byIncidentType[t]),
         backgroundColor: '#007bff',
         borderRadius: 4,
       },
     ],
   }
 
-  // 5. Total-loss cases vs repairable
-  const totalLossData = {
-    labels: ['Repairable Claims (86%)', 'Total Loss Vehicles (14%)'],
-    datasets: [
-      {
-        data: [86, 14],
-        backgroundColor: ['#10b981', '#ef4444'],
-        borderWidth: 0,
-      },
-    ],
+  const handleExport = () => {
+    const rows = [
+      ['Metric', 'Value'],
+      ['Total Policies', policies.total || 0],
+      ['Active Policies', policies.active || 0],
+      ['Expiring Soon (30d)', policies.expiring_soon || 0],
+      ['Total Claims', totalClaims],
+      ['Pending Claims', pendingClaims],
+      ['Total Loss Cases', totalLossCases],
+      ['Total Claim Amount', totalClaimAmount],
+      ['Average Claim Cost', averageClaimCost],
+      ['Fraud Alerts', fraud.total_alerts || 0],
+      ['High Risk Alerts', fraud.high_risk || 0],
+      ['Settlements Total', settlements.total || 0],
+      ['Settlements Pending Approval', settlements.pending_approval || 0],
+      ['Settlements Pending Payment', settlements.pending_payment || 0],
+      ['Settlements Total Paid', settlements.total_paid || 0],
+      ['Repair Shops Total', repairShops.total || 0],
+      ['Repair Shops Approved', repairShops.approved || 0],
+      ['Repair Jobs Active', repairShops.active_jobs || 0],
+    ]
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `executive-report-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -138,68 +205,79 @@ export function AdminDashboard() {
             className="input-field py-2 text-sm font-semibold"
             aria-label="Reporting Interval"
           >
-            <option value="month">Current Month</option>
-            <option value="quarter">Current Quarter (Q1)</option>
-            <option value="ytd">Year to Date (YTD)</option>
-            <option value="year">Full Year (Last 12M)</option>
+            <option value="week">Last 7 Days</option>
+            <option value="month">Last 30 Days</option>
+            <option value="quarter">Current Quarter</option>
+            <option value="ytd">Year to Date</option>
+            <option value="year">Last Year</option>
           </select>
 
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
             Export Executive Report
           </Button>
         </div>
       </div>
 
-      {/* 7 KPI Metric Cards (Explicitly requested by Prompt) */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            {error}
+          </span>
+          <Button variant="outline" size="sm" onClick={loadData}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {loading && !summary && (
+        <div className="p-8 text-center text-sm text-gray-400">Loading analytics...</div>
+      )}
+
+      {/* 7 KPI Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        {/* 1. Total Policies */}
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
           <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block truncate">Total Policies</span>
-          <p className="text-2xl font-black text-gray-900 mt-1">{totalPolicies}</p>
-          <span className="text-[11px] text-emerald-600 font-semibold">+8% YoY</span>
+          <p className="text-2xl font-black text-gray-900 mt-1">{policies.total || 0}</p>
+          <span className="text-[11px] text-gray-500">In Portfolio</span>
         </div>
 
-        {/* 2. Active Policies */}
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
           <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block truncate">Active Policies</span>
-          <p className="text-2xl font-black text-blue-700 mt-1">{activePolicies}</p>
+          <p className="text-2xl font-black text-blue-700 mt-1">{policies.active || 0}</p>
           <span className="text-[11px] text-gray-500">In Force</span>
         </div>
 
-        {/* 3. Total Claims */}
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
           <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block truncate">Total Claims</span>
           <p className="text-2xl font-black text-gray-900 mt-1">{totalClaims}</p>
           <span className="text-[11px] text-blue-600 font-semibold">Intake All-Time</span>
         </div>
 
-        {/* 4. Pending Claims */}
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
           <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block truncate">Pending Claims</span>
           <p className="text-2xl font-black text-amber-600 mt-1">{pendingClaims}</p>
           <span className="text-[11px] text-amber-600">Action Needed</span>
         </div>
 
-        {/* 5. Fraud Alerts */}
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
           <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block truncate">Fraud Alerts</span>
-          <p className="text-2xl font-black text-red-600 mt-1">{fraudAlerts}</p>
+          <p className="text-2xl font-black text-red-600 mt-1">{fraud.total_alerts || 0}</p>
           <span className="text-[11px] text-red-600">SIU Flagged</span>
         </div>
 
-        {/* 6. Total Loss Cases */}
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
           <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block truncate">Total Loss Cases</span>
           <p className="text-2xl font-black text-purple-700 mt-1">{totalLossCases}</p>
           <span className="text-[11px] text-gray-500">Salvage/Scrap</span>
         </div>
 
-        {/* 7. Average Claim Cost */}
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm col-span-2 md:col-span-1">
           <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block truncate">Avg Claim Cost</span>
           <p className="text-2xl font-black text-emerald-700 mt-1">{formatCurrency(averageClaimCost)}</p>
-          <span className="text-[11px] text-emerald-600 font-semibold">-3.2% vs target</span>
+          <span className="text-[11px] text-gray-500">Per Claim</span>
         </div>
       </div>
 
@@ -208,7 +286,7 @@ export function AdminDashboard() {
         <div className="lg:col-span-2">
           <ChartCard
             title="1. Claims Over Time"
-            subtitle="Monthly claim intake vs resolved claims volume (6 Month Historical Trend)"
+            subtitle="Monthly claim intake vs claim amount (6 Month Historical Trend)"
           >
             <AreaChart data={claimsOverTimeData} height={290} />
           </ChartCard>
@@ -224,7 +302,7 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      {/* Row 2 Charts: Claim Status Distribution + Average Repair Cost */}
+      {/* Row 2 Charts: Claim Status Distribution + Total Loss */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <ChartCard
@@ -245,12 +323,12 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      {/* Row 3 Chart: Average Repair Cost by Vehicle Category */}
+      {/* Row 3 Chart: Claims by Incident Type */}
       <ChartCard
-        title="5. Average Repair Cost by Vehicle Class"
-        subtitle="Benchmark body shop labor and parts expenditure partitioned by chassis type"
+        title="5. Claims by Incident Type"
+        subtitle="Distribution of filed claims by loss cause"
       >
-        <BarChart data={averageRepairCostData} height={260} />
+        <BarChart data={incidentTypeData} height={260} />
       </ChartCard>
     </div>
   )

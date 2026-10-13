@@ -289,7 +289,7 @@ export function VehicleList() {
                 icon={<Car className="w-12 h-12" />}
                 title="No vehicles found"
                 description={search || statusFilter ? 'Try adjusting your search or filters' : 'No vehicles have been added yet'}
-                action={<Button asChild><Link to="/vehicles/new">Add Vehicle</Link></Button>}
+                action={<Link to="/vehicles/new"><Button variant="primary">Add Vehicle</Button></Link>}
               />
             )}
           </div>

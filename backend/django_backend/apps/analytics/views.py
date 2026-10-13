@@ -140,7 +140,10 @@ def dashboard_summary(request):
             'total': claims_qs.count(),
             'new_this_month': claims_qs.filter(submitted_at__gte=thirty_days_ago).count(),
             'by_status': dict(claims_qs.values('status').annotate(count=Count('id')).values_list('status', 'count')),
+            'by_incident_type': dict(claims_qs.values('incident_type').annotate(count=Count('id')).values_list('incident_type', 'count')),
             'total_amount': claims_qs.aggregate(Sum('claim_amount'))['claim_amount__sum'] or 0,
+            'avg_claim_amount': claims_qs.aggregate(Avg('claim_amount'))['claim_amount__avg'] or 0,
+            'total_loss_cases': claims_qs.filter(total_loss_probability__gte=50).count(),
         },
         'policies': {
             'total': policies_qs.count(),

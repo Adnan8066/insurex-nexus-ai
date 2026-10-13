@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Gavel,
@@ -14,7 +14,6 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { mockSettlements, mockSettlementStats } from '../../data/settlements'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -22,37 +21,94 @@ import { Input, Select } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
 import { Modal } from '../../components/ui/Modal'
 import { formatCurrency, formatDate } from '../../utils/helpers'
+import { settlementService } from '../../services'
 
 export function SettlementDashboard() {
-  const [settlements, setSettlements] = useState(mockSettlements)
+  const [settlements, setSettlements] = useState([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [payModalOpen, setPayModalOpen] = useState(false)
   const [activeSettlementForPay, setActiveSettlementForPay] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [processingPayment, setProcessingPayment] = useState(false)
 
-  const stats = mockSettlementStats
+  const mapSettlement = (s) => ({
+    id: s.id,
+    settlementNumber: s.settlement_number,
+    claimId: s.claim,
+    claimNumber: s.claim_number,
+    customerId: s.customer,
+    customerName: s.customer_name || s.customer_email || '—',
+    customerEmail: s.customer_email,
+    estimatedAmount: Number(s.estimated_amount) || 0,
+    deductible: Number(s.deductible) || 0,
+    approvedAmount: Number(s.approved_amount) || 0,
+    status: s.status,
+    paymentStatus: s.payment_status,
+    paymentMethod: s.payment_method,
+    paymentReference: s.payment_reference || null,
+    approvedBy: s.approved_by_name || '—',
+    approvedAt: s.approved_at,
+    paidBy: s.paid_by_name || null,
+    paidAt: s.paid_at,
+    notes: s.notes || '',
+    timeline: s.timeline || [],
+    payments: s.payments || [],
+  })
+
+  const loadSettlements = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await settlementService.getSettlements()
+      const data = response.data
+      const items = Array.isArray(data) ? data : data.results || []
+      setSettlements(items.map(mapSettlement))
+    } catch (err) {
+      console.error('Failed to load settlements:', err)
+      setError(err.message || 'Failed to load settlements. Please try again.')
+      setSettlements([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadSettlements()
+  }, [loadSettlements])
+
+  const stats = useMemo(() => ({
+    totalSettlements: settlements.length,
+    totalApprovedAmount: settlements.reduce((sum, s) => sum + (Number(s.approvedAmount) || 0), 0),
+    totalPaidAmount: settlements
+      .filter((s) => s.paymentStatus === 'completed')
+      .reduce((sum, s) => sum + (Number(s.approvedAmount) || 0), 0),
+    pendingSettlements: settlements.filter((s) => s.paymentStatus === 'pending').length,
+  }), [settlements])
 
   const handleProcessPayment = (settlement) => {
     setActiveSettlementForPay(settlement)
     setPayModalOpen(true)
   }
 
-  const confirmPayment = () => {
+  const confirmPayment = async () => {
     if (!activeSettlementForPay) return
-    setSettlements((prev) =>
-      prev.map((s) =>
-        s.id === activeSettlementForPay.id
-          ? {
-              ...s,
-              paymentStatus: 'completed',
-              paidAt: new Date().toISOString(),
-              paymentReference: 'TXN-' + Math.floor(100000 + Math.random() * 900000),
-            }
-          : s
-      )
-    )
-    setPayModalOpen(false)
-    setActiveSettlementForPay(null)
+    setProcessingPayment(true)
+    try {
+      await settlementService.processPayment(activeSettlementForPay.id, {
+        payment_method: activeSettlementForPay.paymentMethod || 'bank_transfer',
+        payment_reference: 'TXN-' + Math.floor(100000 + Math.random() * 900000),
+      })
+      setPayModalOpen(false)
+      setActiveSettlementForPay(null)
+      await loadSettlements()
+    } catch (err) {
+      console.error('Failed to process payment:', err)
+      setError(err.message || 'Failed to process payment. Please try again.')
+    } finally {
+      setProcessingPayment(false)
+    }
   }
 
   const filtered = settlements.filter((s) => {
@@ -64,6 +120,33 @@ export function SettlementDashboard() {
     const matchesStatus = !statusFilter || s.status === statusFilter
     return matchesSearch && matchesStatus
   })
+
+  const handleExport = () => {
+    const rows = [
+      ['Settlement ID', 'Claim Ref', 'Customer', 'Estimated Amount', 'Deductible', 'Approved Amount', 'Status', 'Payment Status', 'Reference'],
+      ...filtered.map((s) => [
+        s.settlementNumber,
+        s.claimNumber,
+        s.customerName,
+        s.estimatedAmount,
+        s.deductible,
+        s.approvedAmount,
+        s.status,
+        s.paymentStatus,
+        s.paymentReference || '',
+      ]),
+    ]
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `settlements-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="page max-w-7xl mx-auto space-y-6">
@@ -83,7 +166,7 @@ export function SettlementDashboard() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
             Export Ledger
           </Button>
@@ -94,6 +177,17 @@ export function SettlementDashboard() {
           </Link>
         </div>
       </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
+          <span>{error}</span>
+          <Button variant="outline" size="sm" onClick={loadSettlements}>Retry</Button>
+        </div>
+      )}
+
+      {loading && settlements.length === 0 && (
+        <div className="p-8 text-center text-sm text-gray-400">Loading settlements...</div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -220,9 +314,17 @@ export function SettlementDashboard() {
                     <TableCell>
                       <span className={clsx(
                         'text-xs font-semibold px-2 py-0.5 rounded-full inline-block',
-                        s.paymentStatus === 'completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        s.paymentStatus === 'completed'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : s.paymentStatus === 'processing'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-amber-100 text-amber-800'
                       )}>
-                        {s.paymentStatus === 'completed' ? 'Disbursed' : 'Pending ACH'}
+                        {s.paymentStatus === 'completed'
+                          ? 'Disbursed'
+                          : s.paymentStatus === 'processing'
+                            ? 'Processing'
+                            : 'Pending ACH'}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -235,10 +337,16 @@ export function SettlementDashboard() {
                         <Button
                           variant="primary"
                           size="sm"
+                          disabled={processingPayment}
                           onClick={() => handleProcessPayment(s)}
                         >
                           Disburse
                         </Button>
+                      ) : s.paymentStatus === 'processing' ? (
+                        <span className="text-xs text-blue-600 font-semibold flex items-center justify-end gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          Processing
+                        </span>
                       ) : (
                         <span className="text-xs text-emerald-600 font-semibold flex items-center justify-end gap-1">
                           <CheckCircle2 className="w-3.5 h-3.5" />

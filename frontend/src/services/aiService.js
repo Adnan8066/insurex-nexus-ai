@@ -1,43 +1,33 @@
 import api from './api'
 
 export const aiService = {
-  async getClaimAssessment(claimId) {
-    const response = await api.get(`/ai/assessment/${claimId}/`)
+  async assessClaim(data) {
+    const response = await api.post('/ai/assess-claim/', data)
     return response.data
   },
 
-  async triggerAssessment(claimId) {
-    const response = await api.post(`/ai/assessment/${claimId}/trigger/`)
+  async predictRepairCost(data) {
+    const response = await api.post('/ai/predict-repair-cost/', data)
     return response.data
   },
 
-  async getFraudAnalysis(claimId) {
-    const response = await api.get(`/ai/fraud-analysis/${claimId}/`)
+  async detectFraud(data) {
+    const response = await api.post('/ai/detect-fraud/', data)
+    return response.data
+  },
+
+  async predictTotalLoss(data) {
+    const response = await api.post('/ai/predict-total-loss/', data)
+    return response.data
+  },
+
+  async runAgent(agentType, data = {}) {
+    const response = await api.post(`/ai/run-agent/${agentType}/`, data)
     return response.data
   },
 
   async getDecisionFlow(claimId) {
     const response = await api.get(`/ai/decision-flow/${claimId}/`)
-    return response.data
-  },
-
-  async getRLOptimization(params = {}) {
-    const response = await api.get('/ai/rl-optimization/', { params })
-    return response.data
-  },
-
-  async getAgentOutputs(claimId) {
-    const response = await api.get(`/ai/agents/${claimId}/`)
-    return response.data
-  },
-
-  async getModelPerformance() {
-    const response = await api.get('/ai/model-performance/')
-    return response.data
-  },
-
-  async retrainModels() {
-    const response = await api.post('/ai/retrain/')
     return response.data
   },
 }

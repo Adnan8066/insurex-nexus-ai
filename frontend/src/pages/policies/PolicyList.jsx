@@ -318,7 +318,7 @@ export function PolicyList() {
                 icon={<FileText className="w-12 h-12" />}
                 title="No policies found"
                 description={search || typeFilter || statusFilter ? 'Try adjusting your search or filters' : 'No policies have been created yet'}
-                action={<Button asChild><Link to="/policies/new">Create Policy</Link></Button>}
+                action={<Link to="/policies/new"><Button variant="primary">Create Policy</Button></Link>}
               />
             )}
           </div>
