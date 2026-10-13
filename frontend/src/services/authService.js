@@ -19,7 +19,16 @@ export const authService = {
       }
       return data
     } catch (error) {
-      // Graceful fallback for mock/demo frontend without backend running
+      // Only use mock fallback when backend is unreachable (no response)
+      // If backend responded with an error (e.g. 401 invalid credentials), propagate it
+      if (error.response) {
+        const message = error.response?.data?.error?.message
+          || error.response?.data?.detail
+          || 'Invalid credentials'
+        throw { response: { data: { detail: message } } }
+      }
+
+      // Network error / backend down - graceful mock fallback
       const emailLower = credentials.email?.toLowerCase().trim()
       let user = demoUsers[emailLower]
 

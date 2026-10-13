@@ -18,11 +18,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(required=False)
     full_name = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'first_name', 'last_name', 'full_name',
+            'id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'name',
             'role', 'phone', 'address', 'department', 'avatar',
             'date_joined', 'is_verified', 'is_active', 'profile',
         ]
@@ -31,25 +32,41 @@ class UserSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
 
+    def get_name(self, obj):
+        return self.get_full_name(obj)
+
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
-    password_confirm = serializers.CharField(write_only=True)
+    password_confirm = serializers.CharField(write_only=True, required=False)
+    confirmPassword = serializers.CharField(write_only=True, required=False)
+    name = serializers.CharField(write_only=True, required=False)
+    username = serializers.CharField(required=False, allow_blank=True)
     role = serializers.ChoiceField(choices=Role.choices, default=Role.CUSTOMER)
     
     class Meta:
         model = User
         fields = [
-            'username', 'email', 'password', 'password_confirm',
-            'first_name', 'last_name', 'role', 'phone', 'address', 'department',
+            'username', 'email', 'password', 'password_confirm', 'confirmPassword',
+            'name', 'first_name', 'last_name', 'role', 'phone', 'address', 'department',
         ]
     
     def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
+        confirm = attrs.get('password_confirm') or attrs.get('confirmPassword')
+        if not confirm or attrs['password'] != confirm:
             raise serializers.ValidationError({'password_confirm': 'Passwords do not match.'})
+        name = attrs.get('name')
+        if name and not attrs.get('first_name'):
+            parts = name.split(None, 1)
+            attrs['first_name'] = parts[0]
+            attrs['last_name'] = parts[1] if len(parts) > 1 else ''
+        if not attrs.get('username'):
+            attrs['username'] = attrs['email'].split('@')[0]
         return attrs
     
     def create(self, validated_data):
-        validated_data.pop('password_confirm')
+        validated_data.pop('password_confirm', None)
+        validated_data.pop('confirmPassword', None)
+        validated_data.pop('name', None)
         user = User.objects.create_user(**validated_data)
         UserProfile.objects.create(user=user)
         return user

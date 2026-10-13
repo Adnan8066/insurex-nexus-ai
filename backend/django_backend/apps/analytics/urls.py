@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     DashboardMetricViewSet, AnalyticsSnapshotViewSet,
     ReportViewSet, ReportExecutionViewSet,
-    dashboard_summary, claims_trend
+    dashboard_summary, claims_trend, fraud_risk, overview, export_report
 )
 
 router = DefaultRouter()
@@ -16,4 +16,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('dashboard/', dashboard_summary, name='dashboard-summary'),
     path('claims-trend/', claims_trend, name='claims-trend'),
+    path('fraud-risk/', fraud_risk, name='fraud-risk'),
+    path('overview/', overview, name='analytics-overview'),
+    path('export/', export_report, name='analytics-export'),
 ]

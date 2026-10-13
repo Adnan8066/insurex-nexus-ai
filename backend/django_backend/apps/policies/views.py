@@ -4,8 +4,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 
-from .models import Policy, PolicyCoverage, PolicyDocument, PremiumHistory
+from .models import Policy, PolicyCoverage, PolicyDocument, PremiumHistory, PolicyStatus
 from .serializers import (
     PolicySerializer, PolicyCreateSerializer, PolicyUpdateSerializer,
     PolicyCoverageSerializer, PolicyDocumentSerializer, PremiumHistorySerializer
@@ -32,6 +33,15 @@ class PolicyViewSet(viewsets.ModelViewSet):
             return PolicyUpdateSerializer
         return PolicySerializer
     
+    lookup_value_regex = r'[^/]+'
+
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        pk = self.kwargs.get(self.lookup_field)
+        if str(pk).isdigit():
+            return get_object_or_404(queryset, pk=pk)
+        return get_object_or_404(queryset, policy_number=pk)
+
     def get_queryset(self):
         user = self.request.user
         if user.is_staff_member:
@@ -40,15 +50,27 @@ class PolicyViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['create']:
-            return [IsAuthenticated(), IsStaffMember()]
+            return [IsAuthenticated()]
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsOwnerOrAdmin()]
         return [IsAuthenticated()]
-    
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.instance)
+        full = PolicySerializer(serializer.instance, context={'request': request}).data
+        return Response(full, status=status.HTTP_201_CREATED, headers=headers)
+
     def perform_create(self, serializer):
+        user = self.request.user
         import uuid
         policy_number = f"POL-{uuid.uuid4().hex[:8].upper()}"
-        serializer.save(policy_number=policy_number)
+        customer = serializer.validated_data.get('customer') or user
+        if not user.is_staff_member:
+            customer = user
+        serializer.save(policy_number=policy_number, customer=customer)
     
     @action(detail=True, methods=['post'], url_path='documents')
     def upload_document(self, request, pk=None):
@@ -111,7 +133,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
         upcoming_date = timezone.now().date() + timedelta(days=days)
         
         policies = self.get_queryset().filter(
-            status=Policy.PolicyStatus.ACTIVE,
+            status=PolicyStatus.ACTIVE,
             end_date__lte=upcoming_date,
             end_date__gte=timezone.now().date()
         )

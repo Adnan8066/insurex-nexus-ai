@@ -1,5 +1,8 @@
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from .models import Policy, PolicyCoverage, PolicyDocument, PremiumHistory
+
+User = get_user_model()
 
 class PolicyCoverageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -63,6 +66,8 @@ class PolicySerializer(serializers.ModelSerializer):
         return None
 
 class PolicyCreateSerializer(serializers.ModelSerializer):
+    customer = serializers.PrimaryKeyRelatedField(required=False, allow_null=True, queryset=User.objects.all())
+
     class Meta:
         model = Policy
         fields = [

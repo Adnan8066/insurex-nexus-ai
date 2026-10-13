@@ -4,11 +4,33 @@ import { ArrowLeft, Car, Save, X } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { vehicleService } from '../../services'
+import { useAuth } from '../../context/AuthContext'
+
+const fuelTypeMap = {
+  Gasoline: 'gasoline',
+  Diesel: 'diesel',
+  Hybrid: 'hybrid',
+  Electric: 'electric',
+}
+
+const transmissionMap = {
+  Automatic: 'automatic',
+  Manual: 'manual',
+  CVT: 'cvt',
+}
+
+const statusMap = {
+  active: 'active',
+  inactive: 'inactive',
+  sold: 'sold',
+  totaled: 'total_loss',
+}
 
 export function VehicleForm() {
   const navigate = useNavigate()
   const { id } = useParams()
   const isEdit = !!id
+  const { user } = useAuth()
 
   const [formData, setFormData] = useState({
     make: '',
@@ -16,6 +38,7 @@ export function VehicleForm() {
     year: new Date().getFullYear(),
     vin: '',
     licensePlate: '',
+    licenseState: 'IL',
     color: '',
     fuelType: 'Gasoline',
     transmission: 'Automatic',
@@ -33,20 +56,50 @@ export function VehicleForm() {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
+  const buildPayload = () => {
+    const payload = {
+      customer: user?.id || null,
+      make: formData.make,
+      model: formData.model,
+      year: Number(formData.year),
+      vin: formData.vin,
+      color: formData.color,
+      license_plate: formData.licensePlate,
+      license_state: formData.licenseState || 'IL',
+      registration_expiry: formData.registrationExpiry || null,
+      purchase_date: formData.purchaseDate || null,
+      purchase_price: formData.purchasePrice || null,
+      current_mileage: Number(formData.currentMileage) || 0,
+      fuel_type: fuelTypeMap[formData.fuelType] || 'gasoline',
+      transmission: transmissionMap[formData.transmission] || 'automatic',
+      status: statusMap[formData.status] || 'active',
+    }
+    return payload
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
     try {
+      const payload = buildPayload()
       if (isEdit) {
-        await vehicleService.updateVehicle(id, formData)
+        await vehicleService.updateVehicle(id, payload)
       } else {
-        await vehicleService.createVehicle(formData)
+        await vehicleService.createVehicle(payload)
       }
       navigate('/vehicles')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to save vehicle')
+      const details = err.response?.data
+      if (details && typeof details === 'object') {
+        const messages = Object.entries(details)
+          .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+          .join('; ')
+        setError(messages || 'Failed to save vehicle')
+      } else {
+        setError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to save vehicle')
+      }
     } finally {
       setLoading(false)
     }
@@ -80,6 +133,7 @@ export function VehicleForm() {
             <Input label="Year" name="year" type="number" value={formData.year} onChange={handleChange} required />
             <Input label="VIN" name="vin" value={formData.vin} onChange={handleChange} placeholder="17-character VIN" required />
             <Input label="License Plate" name="licensePlate" value={formData.licensePlate} onChange={handleChange} required />
+            <Input label="License State" name="licenseState" value={formData.licenseState} onChange={handleChange} placeholder="e.g., IL" />
             <Input label="Color" name="color" value={formData.color} onChange={handleChange} required />
             <Select label="Fuel Type" name="fuelType" value={formData.fuelType} onChange={handleChange}
               options={[{value:'Gasoline',label:'Gasoline'},{value:'Diesel',label:'Diesel'},{value:'Hybrid',label:'Hybrid'},{value:'Electric',label:'Electric'}]} />

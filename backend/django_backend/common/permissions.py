@@ -8,12 +8,16 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 
 class IsOwnerOrAdmin(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
-        if request.user.role == 'admin':
+        if getattr(request.user, 'role', None) == 'admin' or request.user.is_staff_member:
             return True
         if hasattr(obj, 'user'):
             return obj.user == request.user
-        if hasattr(obj, 'customer') and hasattr(obj.customer, 'user'):
-            return obj.customer.user == request.user
+        if hasattr(obj, 'customer'):
+            customer = obj.customer
+            if customer == request.user:
+                return True
+            if hasattr(customer, 'user'):
+                return customer.user == request.user
         return False
 
 class IsStaffMember(permissions.BasePermission):

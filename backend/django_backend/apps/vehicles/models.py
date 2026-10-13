@@ -42,7 +42,7 @@ class Vehicle(models.Model):
     color = models.CharField(_('color'), max_length=30)
     license_plate = models.CharField(_('license plate'), max_length=20)
     license_state = models.CharField(_('license state'), max_length=2)
-    registration_expiry = models.DateField(_('registration expiry'))
+    registration_expiry = models.DateField(_('registration expiry'), blank=True, null=True)
     purchase_date = models.DateField(_('purchase date'), blank=True, null=True)
     purchase_price = models.DecimalField(_('purchase price'), max_digits=10, decimal_places=2, blank=True, null=True)
     current_mileage = models.IntegerField(_('current mileage'), default=0)

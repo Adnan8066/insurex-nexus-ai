@@ -17,11 +17,12 @@ import {
   Send,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { mockClaims, claimStatusWorkflow } from '../../data/claims'
+import { claimService } from '../../services/claimService'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
+import { EmptyState } from '../../components/ui/EmptyState'
 
 const workflowStages = [
   {
@@ -72,17 +73,48 @@ export function ClaimTracking() {
   const { id } = useParams()
   const [claim, setClaim] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const found = mockClaims.find((c) => c.id === id || c.claimNumber === id) || mockClaims[0]
-      setClaim(found)
-      setLoading(false)
-    }, 300)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    const fetchClaim = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const res = await claimService.getClaim(id)
+        if (!cancelled) {
+          setClaim({
+            id: res.id,
+            claimNumber: res.claim_number,
+            customerName: res.customer_name,
+            policyNumber: res.policy_number,
+            status: res.status,
+            incidentType: res.incident_type,
+            incidentSeverity: res.incident_severity,
+            claimAmount: res.claim_amount,
+            submittedAt: res.submitted_at,
+            assignedAdjuster: res.assigned_adjuster_name,
+            assignedInvestigator: res.assigned_investigator_name,
+            assignedRepairShop: res.assigned_repair_shop_name,
+            aiAssessment: res.ai_assessment,
+            timeline: res.timeline || [],
+            statusHistory: res.status_history || [],
+          })
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.response?.data?.detail || 'Failed to load claim tracking')
+          setClaim(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchClaim()
+    return () => { cancelled = true }
   }, [id])
 
-  if (loading || !claim) {
+  if (loading) {
     return (
       <div className="page animate-pulse space-y-6">
         <div className="h-8 bg-gray-200 rounded w-48"></div>
@@ -91,8 +123,31 @@ export function ClaimTracking() {
     )
   }
 
-  // Find index in stages
-  const currentStageIndex = workflowStages.findIndex((s) => s.id === claim.status) || 1
+  if (!claim) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <Link to="/claims" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-4">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Claims
+          </Link>
+        </div>
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+        )}
+        <EmptyState
+          icon={<Activity className="w-12 h-12" />}
+          title="Claim Not Found"
+          description={`No claim with identifier "${id}" exists.`}
+          action={<Button asChild><Link to="/claims">Browse Claims</Link></Button>}
+        />
+      </div>
+    )
+  }
+
+  // Normalize status to kebab-case to match workflow stage ids
+  const normalizedStatus = (claim.status || '').replace(/_/g, '-')
+  const currentStageIndex = Math.max(0, workflowStages.findIndex((s) => s.id === normalizedStatus))
 
   return (
     <div className="page max-w-5xl mx-auto">

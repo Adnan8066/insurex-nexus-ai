@@ -4,41 +4,88 @@ import {
   FileText,
   Shield,
   Calendar,
-  DollarSign,
   Car,
   Home,
-  Building2,
   ArrowLeft,
   Edit,
   Download,
   MoreVertical,
-  ChevronRight,
-  Clock,
   CheckCircle,
   AlertTriangle,
+  Clock,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate } from '../../utils/helpers'
-import { mockPolicies } from '../../data/policies'
+import { policyService } from '../../services'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+
+const mapPolicy = (p) => ({
+  id: p.id,
+  policyNumber: p.policy_number,
+  customerName: p.customer_name,
+  customerEmail: p.customer_email,
+  agent: p.agent_name,
+  type: p.type,
+  status: p.status,
+  startDate: p.start_date,
+  endDate: p.end_date,
+  premium: p.premium,
+  deductible: p.deductible,
+  paymentFrequency: p.payment_frequency,
+  autoRenew: p.auto_renew,
+  coverage: p.coverage_details || p.coverage || {},
+  vehicle: p.vehicle_info || (p.vehicle ? {
+    id: p.vehicle.id,
+    make: p.vehicle.make,
+    model: p.vehicle.model,
+    year: p.vehicle.year,
+    licensePlate: p.vehicle.license_plate,
+    vin: p.vehicle.vin,
+    color: p.vehicle.color,
+  } : null),
+  propertyAddress: p.property_address,
+  propertyType: p.property_type,
+  propertyYearBuilt: p.property_year_built,
+  propertySquareFootage: p.property_square_footage,
+  documents: p.documents || [],
+  premiumHistory: p.premium_history || [],
+  createdAt: p.created_at,
+  updatedAt: p.updated_at,
+})
 
 export function PolicyDetails() {
   const { id } = useParams()
   const [loading, setLoading] = useState(true)
   const [policy, setPolicy] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const found = mockPolicies.find((p) => p.id === id)
-      setPolicy(found || null)
-      setLoading(false)
-    }, 400)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    const fetchPolicy = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const res = await policyService.getPolicy(id)
+        if (!cancelled) {
+          setPolicy(mapPolicy(res))
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.response?.data?.detail || 'Failed to load policy')
+          setPolicy(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchPolicy()
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
   if (loading) {
@@ -71,12 +118,9 @@ export function PolicyDetails() {
             Back to Policies
           </Link>
         </div>
-        <EmptyState
-          icon={<FileText className="w-12 h-12" />}
-          title="Policy not found"
-          description="The policy you're looking for doesn't exist or has been removed."
-          action={<Button asChild><Link to="/policies">Browse Policies</Link></Button>}
-        />
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+        )}
       </div>
     )
   }
@@ -97,11 +141,11 @@ export function PolicyDetails() {
             <ArrowLeft className="w-4 h-4" />
             Back to Policies
           </Link>
-          <div className="flex items-center gap-3">
-            <h1 className="page-title">{policy.policyNumber}</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="page-title">{policy.policyNumber || ''}</h1>
             <StatusBadge status={policy.status} />
           </div>
-          <p className="page-subtitle">{policy.type} • {policy.customerName}</p>
+          <p className="page-subtitle">{policy.type || ''} • {policy.customerName || ''}</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm">
@@ -145,15 +189,15 @@ export function PolicyDetails() {
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Policy Type</dt>
                       <dd className="mt-1 text-gray-900 flex items-center gap-2">
-                        <span className={clsx('text-gray-400', policy.type.toLowerCase().includes('auto') && 'text-blue-500')}>
-                          {policy.type.toLowerCase().includes('auto') ? <Car className="w-4 h-4" /> : <Home className="w-4 h-4" />}
+                        <span className={clsx('text-gray-400', (policy.type || '').toLowerCase().includes('auto') && 'text-blue-500')}>
+                          {(policy.type || '').toLowerCase().includes('auto') ? <Car className="w-4 h-4" /> : <Home className="w-4 h-4" />}
                         </span>
-                        {policy.type}
+                        {policy.type || ''}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Agent</dt>
-                      <dd className="mt-1 text-gray-900">{policy.agent}</dd>
+                      <dd className="mt-1 text-gray-900">{policy.agent || ''}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Effective Date</dt>
@@ -165,7 +209,7 @@ export function PolicyDetails() {
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Payment Frequency</dt>
-                      <dd className="mt-1 text-gray-900 capitalize">{policy.paymentFrequency}</dd>
+                      <dd className="mt-1 text-gray-900 capitalize">{policy.paymentFrequency ? policy.paymentFrequency.replace(/_/g, ' ') : ''}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Auto Renewal</dt>
@@ -197,7 +241,7 @@ export function PolicyDetails() {
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Payment per Period</dt>
                       <dd className="mt-1 text-2xl font-bold text-gray-900">
-                        {formatCurrency(policy.paymentFrequency === 'monthly' ? policy.premium / 12 : policy.premium)}
+                        {formatCurrency((policy.paymentFrequency === 'monthly' ? (Number(policy.premium) || 0) / 12 : (Number(policy.premium) || 0)))}
                       </dd>
                     </div>
                   </div>
@@ -220,12 +264,12 @@ export function PolicyDetails() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {Object.entries(policy.coverage).map(([key, value]) => (
+                      {Object.entries(policy.coverage || {}).map(([key, value]) => (
                         <tr key={key} className="hover:bg-gray-50">
-                          <td className="py-3 px-4 text-gray-900 capitalize">{key.replace(/([A-Z])/g, ' $1')}</td>
+                          <td className="py-3 px-4 text-gray-900 capitalize">{key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}</td>
                           <td className="py-3 px-4 text-right font-medium text-gray-900">{formatCurrency(value)}</td>
                           <td className="py-3 px-4 text-right text-gray-500">
-                            {key === 'liability' || key === 'dwelling' || key === 'personalProperty' ? formatCurrency(policy.deductible) : 'N/A'}
+                            {key === 'liability' || key === 'dwelling' || key === 'personalProperty' || key === 'personal_property' ? formatCurrency(policy.deductible) : 'N/A'}
                           </td>
                         </tr>
                       ))}
@@ -246,27 +290,23 @@ export function PolicyDetails() {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <dt className="text-sm font-medium text-gray-500">Make</dt>
-                          <dd className="mt-1 text-gray-900">{policy.vehicle.make}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Model</dt>
-                          <dd className="mt-1 text-gray-900">{policy.vehicle.model}</dd>
+                          <dd className="mt-1 text-gray-900">{policy.vehicle.make || ''} {policy.vehicle.model || ''}</dd>
                         </div>
                         <div>
                           <dt className="text-sm font-medium text-gray-500">Year</dt>
-                          <dd className="mt-1 text-gray-900">{policy.vehicle.year}</dd>
+                          <dd className="mt-1 text-gray-900">{policy.vehicle.year || ''}</dd>
                         </div>
                         <div>
                           <dt className="text-sm font-medium text-gray-500">Color</dt>
-                          <dd className="mt-1 text-gray-900">{policy.vehicle.color}</dd>
+                          <dd className="mt-1 text-gray-900">{policy.vehicle.color || ''}</dd>
                         </div>
                         <div>
                           <dt className="text-sm font-medium text-gray-500">VIN</dt>
-                          <dd className="mt-1 text-gray-900 font-mono">{policy.vehicle.vin}</dd>
+                          <dd className="mt-1 text-gray-900 font-mono">{policy.vehicle.vin || ''}</dd>
                         </div>
                         <div>
                           <dt className="text-sm font-medium text-gray-500">License Plate</dt>
-                          <dd className="mt-1 text-gray-900">{policy.vehicle.licensePlate}</dd>
+                          <dd className="mt-1 text-gray-900">{policy.vehicle.licensePlate || ''}</dd>
                         </div>
                       </div>
                     </dl>
@@ -356,15 +396,15 @@ export function PolicyDetails() {
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-500">Days Remaining</span>
                     <span className="font-medium text-gray-900">
-                      {Math.max(0, Math.ceil((new Date(policy.endDate) - new Date()) / (1000 * 60 * 60 * 24)))} days
-                    </span>
+                       {Math.max(0, Math.ceil(((new Date(policy.endDate)) - new Date()) / (1000 * 60 * 60 * 24)))} days
+                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                     <div
                       className="bg-primary h-2 rounded-full transition-all"
                       style={{
-                        width: `${Math.min(100, Math.max(0, ((new Date() - new Date(policy.startDate)) / (new Date(policy.endDate) - new Date(policy.startDate))) * 100))}%`
-                      }}
+                         width: `${Math.min(100, Math.max(0, (((new Date()) - new Date(policy.startDate || new Date())) / ((new Date(policy.endDate || new Date())) - new Date(policy.startDate || new Date())) || 0) * 100))}%`
+                       }}
                     />
                   </div>
                 </div>

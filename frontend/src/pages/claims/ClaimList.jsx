@@ -3,46 +3,47 @@ import { Link, useSearchParams } from 'react-router-dom'
 import {
   Briefcase,
   Search,
-  Filter,
   Plus,
-  ArrowRight,
   Calendar,
-  AlertTriangle,
   Car,
   Clock,
   Eye,
   ShieldCheck,
   TrendingUp,
+  Trash2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
-import { mockClaims, claimStatusWorkflow } from '../../data/claims'
+import { claimService } from '../../services'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../components/tables/DataTable'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { ConfirmDialog } from '../../components/ui/Modal'
 
 const incidentTypes = [
   { value: '', label: 'All Incident Types' },
-  { value: 'Collision', label: 'Collision' },
-  { value: 'Comprehensive', label: 'Comprehensive' },
-  { value: 'Theft', label: 'Theft' },
-  { value: 'Vandalism', label: 'Vandalism' },
+  { value: 'collision', label: 'Collision' },
+  { value: 'comprehensive', label: 'Comprehensive' },
+  { value: 'theft', label: 'Theft' },
+  { value: 'vandalism', label: 'Vandalism' },
 ]
 
 const statusOptions = [
   { value: '', label: 'All Statuses' },
   { value: 'submitted', label: 'Submitted' },
-  { value: 'under-review', label: 'Under Review' },
-  { value: 'ai-assessment', label: 'AI Assessment' },
+  { value: 'under_review', label: 'Under Review' },
+  { value: 'ai_assessment', label: 'AI Assessment' },
   { value: 'investigation', label: 'Investigation' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
-  { value: 'repair-settlement', label: 'Repair/Settlement' },
+  { value: 'repair_settlement', label: 'Repair/Settlement' },
   { value: 'closed', label: 'Closed' },
 ]
+
+const PENDING_STATUSES = ['submitted', 'under_review', 'ai_assessment', 'investigation']
 
 export function ClaimList() {
   const [searchParams] = useSearchParams()
@@ -57,14 +58,72 @@ export function ClaimList() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [sortConfig, setSortConfig] = useState({ key: 'submittedAt', direction: 'desc' })
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
+
+  const fetchClaims = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await claimService.getClaims()
+      const results = Array.isArray(res) ? res : (res.results || [])
+      const mapped = results.map((c) => ({
+        id: c.id,
+        claimNumber: c.claim_number,
+        customer: c.customer,
+        customerName: c.customer_name,
+        customerEmail: c.customer_email,
+        policy: c.policy,
+        policyNumber: c.policy_number,
+        vehicle: c.vehicle_info ? {
+          id: c.vehicle_info.id,
+          year: c.vehicle_info.year,
+          make: c.vehicle_info.make,
+          model: c.vehicle_info.model,
+          licensePlate: c.vehicle_info.license_plate,
+          vin: c.vehicle_info.vin,
+        } : null,
+        incidentDate: c.incident_date,
+        incidentTime: c.incident_time,
+        incidentType: c.incident_type,
+        incidentSeverity: c.incident_severity,
+        location: c.location,
+        numberOfVehicles: c.number_of_vehicles,
+        injuries: c.injuries,
+        propertyDamage: c.property_damage,
+        witnesses: c.witnesses,
+        policeReport: c.police_report,
+        claimAmount: c.claim_amount,
+        description: c.description,
+        status: c.status,
+        priority: c.priority,
+        assignedAdjuster: c.assigned_adjuster_name,
+        assignedInvestigator: c.assigned_investigator_name,
+        assignedRepairShop: c.assigned_repair_shop_name,
+        aiAssessment: c.ai_assessment ? {
+          ...c.ai_assessment,
+          claimPriority: c.ai_assessment.priority || c.ai_assessment.claim_priority,
+        } : null,
+        fraudRiskScore: c.fraud_risk_score,
+        totalLossProbability: c.total_loss_probability,
+        submittedAt: c.submitted_at,
+        updatedAt: c.updated_at,
+        closedAt: c.closed_at,
+      }))
+      setClaims(mapped)
+      setFilteredClaims(mapped)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to load claims')
+      setClaims([])
+      setFilteredClaims([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setClaims(mockClaims)
-      setFilteredClaims(mockClaims)
-      setLoading(false)
-    }, 400)
-    return () => clearTimeout(timer)
+    fetchClaims()
   }, [])
 
   useEffect(() => {
@@ -74,11 +133,11 @@ export function ClaimList() {
       const q = search.toLowerCase()
       result = result.filter(
         (c) =>
-          c.claimNumber.toLowerCase().includes(q) ||
-          c.customerName.toLowerCase().includes(q) ||
-          c.policyNumber.toLowerCase().includes(q) ||
-          (c.vehicle && `${c.vehicle.make} ${c.vehicle.model}`.toLowerCase().includes(q)) ||
-          c.location.toLowerCase().includes(q)
+          (c.claimNumber || '').toLowerCase().includes(q) ||
+          (c.customerName || '').toLowerCase().includes(q) ||
+          (c.policyNumber || '').toLowerCase().includes(q) ||
+          (c.vehicle && `${c.vehicle.make || ''} ${c.vehicle.model || ''}`.toLowerCase().includes(q)) ||
+          (c.location || '').toLowerCase().includes(q)
       )
     }
 
@@ -88,7 +147,7 @@ export function ClaimList() {
 
     if (statusFilter) {
       if (statusFilter === 'pending') {
-        result = result.filter((c) => ['submitted', 'under-review', 'ai-assessment', 'investigation'].includes(c.status))
+        result = result.filter((c) => PENDING_STATUSES.includes(c.status))
       } else {
         result = result.filter((c) => c.status === statusFilter)
       }
@@ -97,6 +156,8 @@ export function ClaimList() {
     result.sort((a, b) => {
       let aVal = a[sortConfig.key]
       let bVal = b[sortConfig.key]
+      if (aVal == null) return 1
+      if (bVal == null) return -1
       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
       return 0
@@ -113,6 +174,21 @@ export function ClaimList() {
     }))
   }
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await claimService.deleteClaim(deleteTarget.id)
+      setClaims((prev) => prev.filter((c) => c.id !== deleteTarget.id))
+      setFilteredClaims((prev) => prev.filter((c) => c.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to delete claim')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const paginatedClaims = filteredClaims.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
@@ -120,7 +196,7 @@ export function ClaimList() {
 
   const stats = {
     total: claims.length,
-    pending: claims.filter((c) => ['submitted', 'under-review', 'ai-assessment', 'investigation'].includes(c.status)).length,
+    pending: claims.filter((c) => PENDING_STATUSES.includes(c.status)).length,
     approved: claims.filter((c) => c.status === 'approved').length,
     closed: claims.filter((c) => c.status === 'closed').length,
   }
@@ -155,6 +231,12 @@ export function ClaimList() {
           </Link>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -279,14 +361,14 @@ export function ClaimList() {
                           <div className="text-xs text-gray-500">{formatRelativeTime(claim.submittedAt)}</div>
                         </TableCell>
                         <TableCell>
-                          <span className="text-sm font-medium text-gray-900">{claim.incidentType}</span>
+                          <span className="text-sm font-medium text-gray-900 capitalize">{claim.incidentType}</span>
                           <span className={clsx(
                             'ml-1.5 inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded',
-                            claim.incidentSeverity === 'Major' ? 'bg-red-100 text-red-700' :
-                            claim.incidentSeverity === 'Moderate' ? 'bg-amber-100 text-amber-700' :
+                            claim.incidentSeverity === 'major' || claim.incidentSeverity === 'total_loss' ? 'bg-red-100 text-red-700' :
+                            claim.incidentSeverity === 'moderate' ? 'bg-amber-100 text-amber-700' :
                             'bg-blue-100 text-blue-700'
                           )}>
-                            {claim.incidentSeverity}
+                            {claim.incidentSeverity?.replace(/_/g, ' ')}
                           </span>
                         </TableCell>
                         <TableCell className="font-semibold text-gray-900">
@@ -299,11 +381,11 @@ export function ClaimList() {
                           {claim.aiAssessment ? (
                             <Badge
                               variant={
-                                claim.aiAssessment.claimPriority === 'High' ? 'danger' :
-                                claim.aiAssessment.claimPriority === 'Medium' ? 'warning' : 'success'
+                                claim.aiAssessment.claimPriority === 'high' || claim.aiAssessment.claimPriority === 'critical' ? 'danger' :
+                                claim.aiAssessment.claimPriority === 'medium' ? 'warning' : 'success'
                               }
                             >
-                              {claim.aiAssessment.claimPriority} Priority
+                              {claim.aiAssessment.claimPriority ? claim.aiAssessment.claimPriority.charAt(0).toUpperCase() + claim.aiAssessment.claimPriority.slice(1) : 'N/A'} Priority
                             </Badge>
                           ) : (
                             <span className="text-xs text-gray-400">Pending</span>
@@ -318,6 +400,13 @@ export function ClaimList() {
                             <Link to={`/claims/${claim.id}/tracking`} className="btn btn-outline btn-sm" title="Track Workflow">
                               Track
                             </Link>
+                            <button
+                              onClick={() => setDeleteTarget(claim)}
+                              className="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
+                              title="Delete claim"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -344,6 +433,16 @@ export function ClaimList() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Claim"
+        message={`Are you sure you want to delete claim ${deleteTarget?.claimNumber}? This action cannot be undone.`}
+        confirmText="Delete"
+        loading={deleting}
+      />
     </div>
   )
 }

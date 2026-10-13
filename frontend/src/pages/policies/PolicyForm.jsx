@@ -4,11 +4,29 @@ import { ArrowLeft, FileText, Save, X, Car, Home, Building2 } from 'lucide-react
 import { Button } from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/forms/FormFields'
 import { policyService } from '../../services'
+import { useAuth } from '../../context/AuthContext'
+
+const typeMap = {
+  'Comprehensive Auto': 'auto_comprehensive',
+  'Collision Auto': 'auto_collision',
+  'Liability Auto': 'auto_liability',
+  'Homeowners': 'homeowners',
+  'Renters': 'renters',
+  'Umbrella': 'umbrella',
+}
+
+const frequencyMap = {
+  'annual': 'annual',
+  'semi-annual': 'semi_annual',
+  'quarterly': 'quarterly',
+  'monthly': 'monthly',
+}
 
 export function PolicyForm() {
   const navigate = useNavigate()
   const { id } = useParams()
   const isEdit = !!id
+  const { user } = useAuth()
 
   const [formData, setFormData] = useState({
     type: 'Comprehensive Auto',
@@ -20,6 +38,10 @@ export function PolicyForm() {
     paymentFrequency: 'annual',
     autoRenew: true,
     agent: '',
+    propertyAddress: '',
+    propertyType: '',
+    propertyYearBuilt: '',
+    propertySquareFootage: '',
   })
 
   const [loading, setLoading] = useState(false)
@@ -27,7 +49,27 @@ export function PolicyForm() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
-    setFormData({ ...formData, [name]: type === 'checked' ? checked : value })
+    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value })
+  }
+
+  const buildPayload = () => {
+    const payload = {
+      customer: user?.id || null,
+      agent: null,
+      type: typeMap[formData.type] || 'auto_comprehensive',
+      status: formData.status,
+      start_date: formData.startDate,
+      end_date: formData.endDate,
+      premium: Number(formData.premium),
+      deductible: Number(formData.deductible),
+      payment_frequency: frequencyMap[formData.paymentFrequency] || 'annual',
+      auto_renew: formData.autoRenew,
+      property_address: formData.propertyAddress || '',
+      property_type: formData.propertyType || '',
+      property_year_built: Number(formData.propertyYearBuilt) || null,
+      property_square_footage: Number(formData.propertySquareFootage) || null,
+    }
+    return payload
   }
 
   const handleSubmit = async (e) => {
@@ -36,14 +78,23 @@ export function PolicyForm() {
     setError('')
 
     try {
+      const payload = buildPayload()
       if (isEdit) {
-        await policyService.updatePolicy(id, formData)
+        await policyService.updatePolicy(id, payload)
       } else {
-        await policyService.createPolicy(formData)
+        await policyService.createPolicy(payload)
       }
       navigate('/policies')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to save policy')
+      const details = err.response?.data
+      if (details && typeof details === 'object') {
+        const messages = Object.entries(details)
+          .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+          .join('; ')
+        setError(messages || 'Failed to save policy')
+      } else {
+        setError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to save policy')
+      }
     } finally {
       setLoading(false)
     }
@@ -75,11 +126,11 @@ export function PolicyForm() {
             <Select label="Policy Type" name="type" value={formData.type} onChange={handleChange}
               options={[
                 {value:'Comprehensive Auto',label:'Comprehensive Auto'},
-                {value:'Liability Only',label:'Liability Only'},
+                {value:'Collision Auto',label:'Collision Auto'},
+                {value:'Liability Auto',label:'Liability Auto'},
                 {value:'Homeowners',label:'Homeowners'},
                 {value:'Renters',label:'Renters'},
-                {value:'Life Insurance',label:'Life Insurance'},
-                {value:'Commercial',label:'Commercial'},
+                {value:'Umbrella',label:'Umbrella'},
               ]} />
             <Select label="Status" name="status" value={formData.status} onChange={handleChange}
               options={[{value:'active',label:'Active'},{value:'pending',label:'Pending'},{value:'expired',label:'Expired'},{value:'cancelled',label:'Cancelled'}]} />
@@ -89,11 +140,20 @@ export function PolicyForm() {
             <Input label="Deductible" name="deductible" type="number" value={formData.deductible} onChange={handleChange} placeholder="e.g., 500" required />
             <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange}
               options={[{value:'annual',label:'Annual'},{value:'semi-annual',label:'Semi-Annual'},{value:'quarterly',label:'Quarterly'},{value:'monthly',label:'Monthly'}]} />
-            <Input label="Agent" name="agent" value={formData.agent} onChange={handleChange} placeholder="Agent name" />
             <div className="flex items-center gap-2">
               <input type="checkbox" id="autoRenew" name="autoRenew" checked={formData.autoRenew} onChange={handleChange} className="w-4 h-4" />
               <label htmlFor="autoRenew" className="text-sm text-gray-700">Auto Renew</label>
             </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Property Details (if applicable)</h3></div>
+          <div className="card-content grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="Property Address" name="propertyAddress" value={formData.propertyAddress} onChange={handleChange} placeholder="Street address" />
+            <Input label="Property Type" name="propertyType" value={formData.propertyType} onChange={handleChange} placeholder="e.g., Single Family" />
+            <Input label="Year Built" name="propertyYearBuilt" type="number" value={formData.propertyYearBuilt} onChange={handleChange} />
+            <Input label="Square Footage" name="propertySquareFootage" type="number" value={formData.propertySquareFootage} onChange={handleChange} />
           </div>
         </div>
 

@@ -10,40 +10,142 @@ import {
   MapPin,
   AlertTriangle,
   Shield,
-  CheckCircle2,
-  XCircle,
   Brain,
   Download,
-  Share2,
-  Users,
   Activity,
-  FileCheck,
   ChevronRight,
   UserCheck,
   Building,
+  Trash2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
-import { mockClaims, claimStatusWorkflow } from '../../data/claims'
+import { claimService } from '../../services'
+import { claimStatusWorkflow } from '../../data/claims'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { ConfirmDialog } from '../../components/ui/Modal'
+
+const mapClaim = (c) => ({
+  id: c.id,
+  claimNumber: c.claim_number,
+  customer: c.customer,
+  customerName: c.customer_name,
+  customerEmail: c.customer_email,
+  policyId: c.policy,
+  policyNumber: c.policy_number,
+  vehicle: c.vehicle_info ? {
+    id: c.vehicle_info.id,
+    year: c.vehicle_info.year,
+    make: c.vehicle_info.make,
+    model: c.vehicle_info.model,
+    licensePlate: c.vehicle_info.license_plate,
+    vin: c.vehicle_info.vin,
+  } : null,
+  incidentDate: c.incident_date,
+  incidentTime: c.incident_time,
+  incidentType: c.incident_type,
+  incidentSeverity: c.incident_severity,
+  location: c.location,
+  latitude: c.latitude,
+  longitude: c.longitude,
+  numberOfVehicles: c.number_of_vehicles,
+  injuries: c.injuries,
+  injuryDetails: c.injury_details,
+  propertyDamage: c.property_damage,
+  propertyDamageDetails: c.property_damage_details,
+  witnesses: c.witnesses,
+  witnessDetails: c.witness_details,
+  policeReport: c.police_report,
+  policeReportNumber: c.police_report_number,
+  claimAmount: c.claim_amount,
+  description: c.description,
+  status: c.status,
+  priority: c.priority,
+  assignedAdjuster: c.assigned_adjuster_name,
+  assignedInvestigator: c.assigned_investigator_name,
+  assignedRepairShop: c.assigned_repair_shop_name,
+  aiAssessment: c.ai_assessment ? {
+    ...c.ai_assessment,
+    predictedRepairCost: c.ai_assessment.predicted_repair_cost,
+    fraudRiskScore: c.ai_assessment.fraud_risk_score,
+    totalLossProbability: c.ai_assessment.total_loss_probability,
+    claimPriority: c.ai_assessment.claim_priority || c.ai_assessment.priority,
+    aiRecommendation: c.ai_assessment.ai_recommendation,
+    confidence: c.ai_assessment.confidence,
+    factors: c.ai_assessment.contributing_factors || [],
+  } : null,
+  fraudRiskScore: c.fraud_risk_score,
+  totalLossProbability: c.total_loss_probability,
+  submittedAt: c.submitted_at,
+  updatedAt: c.updated_at,
+  closedAt: c.closed_at,
+  documents: (c.documents || []).map((d) => ({
+    id: d.id,
+    name: d.original_name,
+    type: d.document_type,
+    description: d.description,
+    file: d.file,
+    uploadedAt: d.uploaded_at,
+    uploadedByName: d.uploaded_by_name,
+    verified: d.verified,
+  })),
+  timeline: (c.timeline || []).map((t) => ({
+    id: t.id,
+    status: t.status,
+    title: t.title,
+    description: t.description,
+    user: t.user_name || t.user,
+    timestamp: t.timestamp,
+    isSystem: t.is_system,
+  })),
+  notes: c.notes || [],
+})
 
 export function ClaimDetails() {
   const { id } = useParams()
   const [claim, setClaim] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const found = mockClaims.find((c) => c.id === id || c.claimNumber === id)
-      setClaim(found || null)
-      setLoading(false)
-    }, 300)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    const fetchClaim = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const res = await claimService.getClaim(id)
+        if (!cancelled) setClaim(mapClaim(res))
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.response?.data?.detail || 'Failed to load claim')
+          setClaim(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchClaim()
+    return () => { cancelled = true }
   }, [id])
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await claimService.deleteClaim(claim.id)
+      window.location.href = '/claims'
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to delete claim')
+      setDeleteOpen(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -67,6 +169,9 @@ export function ClaimDetails() {
             Back to Claims
           </Link>
         </div>
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+        )}
         <EmptyState
           icon={<Briefcase className="w-12 h-12" />}
           title="Claim Not Found"
@@ -85,6 +190,8 @@ export function ClaimDetails() {
     { id: 'timeline', label: 'Activity Timeline', icon: Activity },
   ]
 
+  const severityLabel = (claim.incidentSeverity || '').replace(/_/g, ' ')
+
   return (
     <div className="page">
       {/* Header */}
@@ -97,9 +204,9 @@ export function ClaimDetails() {
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="page-title">{claim.claimNumber}</h1>
             <StatusBadge status={claim.status} />
-            {claim.aiAssessment && (
-              <Badge variant={claim.aiAssessment.claimPriority === 'High' ? 'danger' : claim.aiAssessment.claimPriority === 'Medium' ? 'warning' : 'success'}>
-                {claim.aiAssessment.claimPriority} Priority
+            {claim.aiAssessment?.claimPriority && (
+              <Badge variant={claim.aiAssessment.claimPriority === 'high' || claim.aiAssessment.claimPriority === 'critical' ? 'danger' : claim.aiAssessment.claimPriority === 'medium' ? 'warning' : 'success'}>
+                {claim.aiAssessment.claimPriority.charAt(0).toUpperCase() + claim.aiAssessment.claimPriority.slice(1)} Priority
               </Badge>
             )}
           </div>
@@ -121,8 +228,15 @@ export function ClaimDetails() {
               AI Assessment Center
             </Button>
           </Link>
+          <Button variant="ghost" onClick={() => setDeleteOpen(true)} className="text-red-600 hover:text-red-700">
+            <Trash2 className="w-4 h-4" />
+          </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
@@ -204,7 +318,7 @@ export function ClaimDetails() {
                       <div>
                         <span className="text-gray-500 block text-xs">Vehicle</span>
                         <span className="font-semibold text-gray-900">
-                          {claim.vehicle?.year} {claim.vehicle?.make} {claim.vehicle?.model}
+                          {claim.vehicle ? `${claim.vehicle.year} ${claim.vehicle.make} ${claim.vehicle.model}` : 'N/A'}
                         </span>
                       </div>
                       <div>
@@ -217,7 +331,7 @@ export function ClaimDetails() {
                       </div>
                       <div>
                         <span className="text-gray-500 block text-xs">Incident Type</span>
-                        <span className="font-medium text-gray-900">{claim.incidentType}</span>
+                        <span className="font-medium text-gray-900 capitalize">{claim.incidentType?.replace(/_/g, ' ')}</span>
                       </div>
                     </div>
                   </div>
@@ -315,7 +429,7 @@ export function ClaimDetails() {
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <h4 className="font-semibold text-gray-900 mb-1">Incident Summary & Narrative</h4>
                   <p className="text-sm text-gray-700 leading-relaxed">
-                    Vehicle was operating under normal conditions near {claim.location} when incident occurred. Impact resulted in {claim.incidentSeverity.toLowerCase()} damage requiring professional assessment and repair authorization.
+                    Vehicle was operating under normal conditions near {claim.location} when incident occurred. Impact resulted in {severityLabel.toLowerCase()} damage requiring professional assessment and repair authorization.
                   </p>
                 </div>
               </CardContent>
@@ -326,7 +440,7 @@ export function ClaimDetails() {
             <Card>
               <CardHeader
                 title="AI Assessment Summary"
-                subtitle="Machine Learning preliminary insights (v2.3.1 Model Engine)"
+                subtitle="Machine Learning preliminary insights"
                 action={
                   <Link to={`/ai-assessment?claim=${claim.id}`}>
                     <Button variant="outline" size="sm">Full AI Center</Button>
@@ -360,19 +474,21 @@ export function ClaimDetails() {
                       <p className="font-semibold text-gray-900 text-base">{claim.aiAssessment.aiRecommendation}</p>
                     </div>
 
-                    <div>
-                      <h4 className="font-semibold text-gray-900 text-sm mb-3">Assessment Contributing Factors</h4>
-                      <div className="space-y-2">
-                        {claim.aiAssessment.factors?.map((f, i) => (
-                          <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-white">
-                            <span className="text-sm font-medium text-gray-800">{f.factor}</span>
-                            <Badge variant={f.impact === 'positive' ? 'success' : f.impact === 'negative' ? 'danger' : 'neutral'}>
-                              {f.impact} ({(f.weight * 100).toFixed(0)}%)
-                            </Badge>
-                          </div>
-                        ))}
+                    {claim.aiAssessment.factors && claim.aiAssessment.factors.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-gray-900 text-sm mb-3">Assessment Contributing Factors</h4>
+                        <div className="space-y-2">
+                          {claim.aiAssessment.factors.map((f, i) => (
+                            <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-white">
+                              <span className="text-sm font-medium text-gray-800">{f.factor}</span>
+                              <Badge variant={f.impact === 'positive' ? 'success' : f.impact === 'negative' ? 'danger' : 'neutral'}>
+                                {f.impact} {(f.weight * 100).toFixed(0)}%
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ) : (
                   <EmptyState
@@ -399,12 +515,14 @@ export function ClaimDetails() {
                           </div>
                           <div>
                             <p className="font-semibold text-gray-900 text-sm">{doc.name}</p>
-                            <p className="text-xs text-gray-500">{doc.type} • Uploaded {formatDate(doc.uploadedAt)}</p>
+                            <p className="text-xs text-gray-500">{doc.type?.replace(/_/g, ' ')} • Uploaded {formatDate(doc.uploadedAt)}</p>
                           </div>
                         </div>
-                        <Button variant="outline" size="sm">
-                          <Download className="w-4 h-4 mr-1.5" />
-                          Download
+                        <Button variant="outline" size="sm" asChild>
+                          <a href={doc.file} target="_blank" rel="noreferrer">
+                            <Download className="w-4 h-4 mr-1.5" />
+                            Download
+                          </a>
                         </Button>
                       </div>
                     ))}
@@ -424,21 +542,29 @@ export function ClaimDetails() {
             <Card>
               <CardHeader title="Activity & Status History" />
               <CardContent className="p-6">
-                <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-200">
-                  {claim.timeline?.map((item) => (
-                    <div key={item.id} className="relative flex items-start gap-4">
-                      <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-primary border-4 border-white flex items-center justify-center"></div>
-                      <div className="flex-1 bg-gray-50 p-3.5 rounded-xl border border-gray-100">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-semibold text-gray-900 text-sm">{item.title}</h4>
-                          <span className="text-xs text-gray-400 font-mono">{formatDate(item.timestamp)}</span>
+                {claim.timeline && claim.timeline.length > 0 ? (
+                  <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-200">
+                    {claim.timeline.map((item) => (
+                      <div key={item.id} className="relative flex items-start gap-4">
+                        <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-primary border-4 border-white flex items-center justify-center"></div>
+                        <div className="flex-1 bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-semibold text-gray-900 text-sm">{item.title}</h4>
+                            <span className="text-xs text-gray-400 font-mono">{formatDate(item.timestamp)}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                          <span className="text-xs text-gray-400 mt-1 block">By: {item.user}</span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">{item.description}</p>
-                        <span className="text-xs text-gray-400 mt-1 block">By: {item.user}</span>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={<Activity className="w-12 h-12" />}
+                    title="No activity yet"
+                    description="No timeline events recorded for this claim."
+                  />
+                )}
               </CardContent>
             </Card>
           )}
@@ -451,9 +577,8 @@ export function ClaimDetails() {
             <CardHeader title="Claim Lifecycle Stage" />
             <CardContent className="p-6">
               <div className="space-y-2">
-                {claimStatusWorkflow.map((step, idx) => {
+                {claimStatusWorkflow.map((step) => {
                   const isCurrent = step.id === claim.status
-                  const order = step.order
                   return (
                     <div
                       key={step.id}
@@ -467,7 +592,7 @@ export function ClaimDetails() {
                           'w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold',
                           isCurrent ? 'bg-white text-primary' : 'bg-gray-200 text-gray-700'
                         )}>
-                          {order}
+                          {step.order}
                         </span>
                         <span>{step.label}</span>
                       </div>
@@ -514,6 +639,16 @@ export function ClaimDetails() {
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete Claim"
+        message={`Are you sure you want to delete claim ${claim.claimNumber}? This action cannot be undone.`}
+        confirmText="Delete"
+        loading={deleting}
+      />
     </div>
   )
 }

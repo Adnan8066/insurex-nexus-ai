@@ -33,11 +33,11 @@ class DashboardMetricViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='calculate')
     def calculate(self, request, pk=None):
         metric = self.get_object()
-        try:
-            exec(metric.query, {'models': __import__('django.db.models', fromlist=['models'])})
-            return Response({'status': 'calculated', 'metric': metric.name})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({
+            'status': 'calculated',
+            'metric': metric.name,
+            'value': metric.last_value,
+        })
 
 
 class AnalyticsSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
@@ -119,7 +119,7 @@ class ReportExecutionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsStaffMember])
+@permission_classes([IsAuthenticated])
 def dashboard_summary(request):
     from apps.claims.models import Claim
     from apps.policies.models import Policy, PolicyStatus
@@ -131,18 +131,21 @@ def dashboard_summary(request):
     
     now = timezone.now()
     thirty_days_ago = now - timedelta(days=30)
+    user = request.user
+    claims_qs = Claim.objects.all() if user.is_staff_member else Claim.objects.filter(customer=user)
+    policies_qs = Policy.objects.all() if user.is_staff_member else Policy.objects.filter(customer=user)
     
     summary = {
         'claims': {
-            'total': Claim.objects.count(),
-            'new_this_month': Claim.objects.filter(submitted_at__gte=thirty_days_ago).count(),
-            'by_status': dict(Claim.objects.values('status').annotate(count=Count('id')).values_list('status', 'count')),
-            'total_amount': Claim.objects.aggregate(Sum('claim_amount'))['claim_amount__sum'] or 0,
+            'total': claims_qs.count(),
+            'new_this_month': claims_qs.filter(submitted_at__gte=thirty_days_ago).count(),
+            'by_status': dict(claims_qs.values('status').annotate(count=Count('id')).values_list('status', 'count')),
+            'total_amount': claims_qs.aggregate(Sum('claim_amount'))['claim_amount__sum'] or 0,
         },
         'policies': {
-            'total': Policy.objects.count(),
-            'active': Policy.objects.filter(status=PolicyStatus.ACTIVE).count(),
-            'expiring_soon': Policy.objects.filter(
+            'total': policies_qs.count(),
+            'active': policies_qs.filter(status=PolicyStatus.ACTIVE).count(),
+            'expiring_soon': policies_qs.filter(
                 status=PolicyStatus.ACTIVE,
                 end_date__lte=now.date() + timedelta(days=30),
                 end_date__gte=now.date()
@@ -178,7 +181,33 @@ def dashboard_summary(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsStaffMember])
+@permission_classes([IsAuthenticated])
+def fraud_risk(request):
+    from apps.investigations.models import FraudAlert
+    user = request.user
+    alerts = FraudAlert.objects.all() if user.is_staff_member else FraudAlert.objects.filter(claim__customer=user)
+    by_level = dict(alerts.values('risk_level').annotate(count=Count('id')).values_list('risk_level', 'count'))
+    return Response({
+        'total': alerts.count(),
+        'by_level': by_level,
+        'high_risk': alerts.filter(risk_level='high').count(),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def overview(request):
+    return dashboard_summary(request)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def export_report(request):
+    return Response({'detail': 'Export is not configured in this environment.'}, status=status.HTTP_501_NOT_IMPLEMENTED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def claims_trend(request):
     days = int(request.query_params.get('days', 30))
     end_date = timezone.now().date()
