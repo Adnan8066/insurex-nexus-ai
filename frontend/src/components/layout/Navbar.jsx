@@ -20,28 +20,20 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }) {
   const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => {
+    const savedTheme = window.localStorage.getItem('theme')
+    return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
   const userMenuRef = useRef(null)
   const notificationsRef = useRef(null)
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme")
-    if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      setDarkMode(true)
-      document.documentElement.classList.add("dark")
-    } else {
-      setDarkMode(false)
-      document.documentElement.classList.remove("dark")
-    }
-  }, [])
-
-  useEffect(() => {
     if (darkMode) {
-      document.documentElement.classList.add("dark")
-      localStorage.setItem("theme", "dark")
+      document.documentElement.classList.add('dark')
+      window.localStorage.setItem('theme', 'dark')
     } else {
-      document.documentElement.classList.remove("dark")
-      localStorage.setItem("theme", "light")
+      document.documentElement.classList.remove('dark')
+      window.localStorage.setItem('theme', 'light')
     }
   }, [darkMode])
 
@@ -89,7 +81,7 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }) {
 
         <div className="flex-1 flex items-center justify-end gap-4">
           <button
-            onClick={() => setDarkMode(!darkMode)}
+            onClick={() => setDarkMode((current) => !current)}
             className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100"
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
