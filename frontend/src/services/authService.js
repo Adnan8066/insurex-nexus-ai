@@ -6,7 +6,6 @@ const demoUsers = {
   'employee@demo.com': { id: 2, name: 'Sarah Mitchell', email: 'employee@demo.com', role: 'employee', phone: '+1 (555) 234-5678', department: 'Claims Management' },
   'investigator@demo.com': { id: 3, name: 'Emily Rodriguez', email: 'investigator@demo.com', role: 'investigator', phone: '+1 (555) 345-6789', department: 'SIU Investigations' },
   'repair@demo.com': { id: 4, name: 'Lisa Thompson', email: 'repair@demo.com', role: 'repair', phone: '+1 (555) 456-7890', department: 'AutoFix Collision' },
-  'admin@demo.com': { id: 5, name: 'James Wilson', email: 'admin@demo.com', role: 'admin', phone: '+1 (555) 567-8901', department: 'Executive Analytics' },
 }
 
 export const authService = {
@@ -34,9 +33,7 @@ export const authService = {
 
       if (!user) {
         // Match by role or default to customer
-        if (emailLower.includes('admin')) {
-          user = demoUsers['admin@demo.com']
-        } else if (emailLower.includes('investigat')) {
+        if (emailLower.includes('investigat')) {
           user = demoUsers['investigator@demo.com']
         } else if (emailLower.includes('repair')) {
           user = demoUsers['repair@demo.com']
@@ -65,27 +62,20 @@ export const authService = {
 
   async register(userData) {
     try {
-      const response = await api.post('/auth/register/', userData)
+      // Public signup is customer-only; the backend enforces this independently.
+      const registrationData = { ...userData }
+      delete registrationData.role
+      const response = await api.post('/auth/register/', registrationData)
       const data = response.data
       if (data?.success && data?.data) {
         return data.data
       }
       return data
     } catch (error) {
-      // Mock registration fallback
-      const newUser = {
-        id: Date.now(),
-        name: userData.name || 'New User',
-        email: userData.email,
-        phone: userData.phone,
-        role: userData.role || 'customer',
-        department: userData.role === 'customer' ? 'Policyholder' : 'Insurance Operations',
-      }
-      return {
-        access: 'mock-jwt-access-token-' + Date.now(),
-        refresh: 'mock-jwt-refresh-token-' + Date.now(),
-        user: newUser,
-      }
+      const message = error.response?.data?.detail
+        || Object.values(error.response?.data || {}).flat().join(', ')
+        || 'Unable to create your account. Please check your connection and try again.'
+      throw { response: { data: { detail: message } } }
     }
   },
 

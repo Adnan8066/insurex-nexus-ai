@@ -12,7 +12,7 @@ from datetime import timedelta
 import secrets
 import logging
 
-from .models import User, UserProfile
+from .models import User, UserProfile, Role
 from .serializers import (
     UserSerializer, UserRegistrationSerializer, UserLoginSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer,
@@ -51,7 +51,8 @@ class AuthViewSet(viewsets.GenericViewSet):
     def register(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        # Keep this invariant at the API boundary as defense in depth.
+        user = serializer.save(role=Role.CUSTOMER)
         
         refresh = RefreshToken.for_user(user)
         return Response({

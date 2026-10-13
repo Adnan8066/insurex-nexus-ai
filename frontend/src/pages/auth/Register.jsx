@@ -3,9 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Shield, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { Button } from '../../components/ui/Button'
-import { Input, Select } from '../../components/forms/FormFields'
-import { clsx } from 'clsx'
-import { mockRoles } from '../../data/users'
+import { Input } from '../../components/forms/FormFields'
 
 export function Register() {
   const navigate = useNavigate()
@@ -16,7 +14,6 @@ export function Register() {
     phone: '',
     password: '',
     confirmPassword: '',
-    role: 'customer',
   })
   const [errors, setErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
@@ -32,7 +29,6 @@ export function Register() {
     if (!formData.password) newErrors.password = 'Password is required'
     else if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters'
     if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match'
-    if (!formData.role) newErrors.role = 'Role is required'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -119,17 +115,6 @@ export function Register() {
               autoComplete="tel"
               required
               leftIcon={<Phone className="w-5 h-5 text-gray-400" />}
-            />
-
-            <Select
-              label="Role"
-              name="role"
-              value={formData.role}
-              onChange={handleChange}
-              error={errors.role}
-              options={mockRoles}
-              placeholder="Select your role"
-              required
             />
 
             <Input
