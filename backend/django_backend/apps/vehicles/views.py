@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, filters
+﻿from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -37,10 +37,20 @@ class VehicleViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['create']:
-            return [IsAuthenticated(), IsStaffMember()]
+            return [IsAuthenticated()]  # Allow all authenticated users to create
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsOwnerOrAdmin()]
         return [IsAuthenticated()]
+    
+    def perform_create(self, serializer):
+        # Auto-assign customer for non-staff users
+        user = self.request.user
+        if user.is_staff_member:
+            # Staff can specify any customer
+            serializer.save()
+        else:
+            # Customers can only create vehicles for themselves
+            serializer.save(customer=user)
     
     @action(detail=True, methods=['post'], url_path='documents')
     def upload_document(self, request, pk=None):

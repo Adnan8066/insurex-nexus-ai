@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, filters
+﻿from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -40,15 +40,21 @@ class PolicyViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['create']:
-            return [IsAuthenticated(), IsStaffMember()]
+            return [IsAuthenticated()]  # Allow all authenticated users to create
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsOwnerOrAdmin()]
         return [IsAuthenticated()]
     
     def perform_create(self, serializer):
         import uuid
-        policy_number = f"POL-{uuid.uuid4().hex[:8].upper()}"
-        serializer.save(policy_number=policy_number)
+        policy_number = f'POL-{uuid.uuid4().hex[:8].upper()}'
+        user = self.request.user
+        if user.is_staff_member:
+            # Staff can specify any customer
+            serializer.save(policy_number=policy_number)
+        else:
+            # Customers can only create policies for themselves
+            serializer.save(policy_number=policy_number, customer=user)
     
     @action(detail=True, methods=['post'], url_path='documents')
     def upload_document(self, request, pk=None):
