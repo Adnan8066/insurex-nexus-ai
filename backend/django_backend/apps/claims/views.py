@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 from django.utils import timezone
+from apps.accounts.models import Role
 
 from django.shortcuts import get_object_or_404
 from .models import Claim, ClaimDocument, ClaimStatusHistory, ClaimTimeline, ClaimNote, ClaimStatus
@@ -13,7 +14,7 @@ from .serializers import (
     ClaimStatusUpdateSerializer, ClaimDocumentSerializer,
     ClaimStatusHistorySerializer, ClaimTimelineSerializer, ClaimNoteSerializer
 )
-from common.permissions import IsOwnerOrAdmin, IsStaffMember, CanAccessClaim
+from common.permissions import IsOwnerOrAdmin, IsEmployee, CanIssuePolicy
 
 
 class ClaimViewSet(viewsets.ModelViewSet):
@@ -47,17 +48,25 @@ class ClaimViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff_member:
+        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
             return self.queryset
-        return self.queryset.filter(customer=user)
+        if user.role == Role.INVESTIGATOR:
+            return self.queryset.filter(assigned_investigator=user)
+        if user.role == Role.REPAIR:
+            return self.queryset.filter(assigned_repair_shop__email__iexact=user.email)
+        if user.role == Role.CUSTOMER:
+            return self.queryset.filter(customer=user)
+        return self.queryset.none()
     
     def get_permissions(self):
         if self.action in ['create']:
-            return [IsAuthenticated()]
+            return [IsAuthenticated(), CanIssuePolicy()]
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsOwnerOrAdmin()]
-        elif self.action in ['update_status', 'assign_adjuster', 'assign_investigator', 'assign_repair_shop']:
-            return [IsAuthenticated(), IsStaffMember()]
+        elif self.action in ['claim_status', 'assign_adjuster', 'assign_investigator', 'assign_repair_shop']:
+            if self.action == 'claim_status' and self.request.method == 'GET':
+                return [IsAuthenticated()]
+            return [IsAuthenticated(), IsEmployee()]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -186,7 +195,52 @@ class ClaimViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Invalid investigator'}, status=status.HTTP_400_BAD_REQUEST)
         
         claim.assigned_investigator = investigator
-        claim.save(update_fields=['assigned_investigator'])
+        fields_to_update = ['assigned_investigator']
+        old_status = claim.status
+        if claim.status != ClaimStatus.INVESTIGATION:
+            claim.status = ClaimStatus.INVESTIGATION
+            fields_to_update.append('status')
+        claim.save(update_fields=fields_to_update)
+
+        from apps.investigations.models import FraudAlert, Investigation
+        import uuid
+
+        score = claim.fraud_risk_score or 0
+        risk_level = 'high' if score >= 70 else 'medium' if score >= 35 else 'low'
+        assessment = claim.ai_assessment if isinstance(claim.ai_assessment, dict) else {}
+        fraud_risk = assessment.get('fraud_risk') if isinstance(assessment.get('fraud_risk'), dict) else {}
+        alert, _ = FraudAlert.objects.update_or_create(
+            claim=claim,
+            defaults={
+                'risk_score': score,
+                'risk_level': risk_level,
+                'risk_factors': fraud_risk.get('factors', []),
+                'ai_recommendation': 'Claim assigned to an investigator for review.',
+                'assigned_investigator': investigator,
+                'status': 'investigation',
+            },
+        )
+        investigation, created = Investigation.objects.get_or_create(
+            claim=claim,
+            defaults={
+                'investigator': investigator,
+                'fraud_alert': alert,
+                'case_number': f'INV-{uuid.uuid4().hex[:8].upper()}',
+                'priority': claim.priority,
+                'summary': f'Investigation opened for claim {claim.claim_number}.',
+            },
+        )
+        if not created:
+            investigation.investigator = investigator
+            investigation.fraud_alert = alert
+            investigation.priority = claim.priority
+            investigation.save(update_fields=['investigator', 'fraud_alert', 'priority', 'updated_at'])
+
+        if old_status != claim.status:
+            ClaimStatusHistory.objects.create(
+                claim=claim, from_status=old_status, to_status=claim.status,
+                reason='Investigator assigned', changed_by=request.user,
+            )
         
         ClaimTimeline.objects.create(
             claim=claim,
@@ -206,7 +260,7 @@ class ClaimViewSet(viewsets.ModelViewSet):
         if not repair_shop_id:
             return Response({'error': 'repair_shop_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        from apps.repair_shops.models import RepairShop
+        from apps.repair_shops.models import RepairJob, RepairShop
         try:
             repair_shop = RepairShop.objects.get(id=repair_shop_id, status__in=['approved', 'active'])
         except RepairShop.DoesNotExist:
@@ -214,6 +268,17 @@ class ClaimViewSet(viewsets.ModelViewSet):
         
         claim.assigned_repair_shop = repair_shop
         claim.save(update_fields=['assigned_repair_shop'])
+
+        assessment = claim.ai_assessment if isinstance(claim.ai_assessment, dict) else {}
+        estimate = assessment.get('predicted_repair_cost') or claim.claim_amount
+        RepairJob.objects.update_or_create(
+            claim=claim,
+            defaults={
+                'repair_shop': repair_shop,
+                'priority': claim.priority,
+                'estimated_cost': estimate,
+            },
+        )
         
         ClaimTimeline.objects.create(
             claim=claim,
@@ -294,7 +359,9 @@ class ClaimViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='assigned-to-me')
     def assigned_to_me(self, request):
         claims = self.get_queryset().filter(
-            assigned_adjuster=request.user
-        ) | self.get_queryset().filter(assigned_investigator=request.user)
+            Q(assigned_adjuster=request.user)
+            | Q(assigned_investigator=request.user)
+            | Q(assigned_repair_shop__email__iexact=request.user.email)
+        ).distinct()
         serializer = self.get_serializer(claims, many=True)
         return Response(serializer.data)

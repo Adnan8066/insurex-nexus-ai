@@ -63,9 +63,10 @@ def _fraud_probability(model, frame):
 
 def _fraud_result(score, decision_threshold=70):
     score = round(score, 2)
+    medium_threshold = min(40.0, decision_threshold * 0.5)
     if score >= decision_threshold:
         level, factors = "high", ["model identified a high-risk pattern", "recommend investigation"]
-    elif score > 40:
+    elif score >= medium_threshold:
         level, factors = "medium", ["model identified a moderate-risk pattern", "enhanced review recommended"]
     else:
         level, factors = "low", ["model identified a low-risk pattern"]

@@ -17,6 +17,7 @@ import {
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate } from '../../utils/helpers'
 import { policyService } from '../../services'
+import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -58,6 +59,8 @@ const mapPolicy = (p) => ({
 
 export function PolicyDetails() {
   const { id } = useParams()
+  const { user } = useAuth()
+  const canEditPolicy = ['admin', 'employee'].includes(user?.role)
   const [loading, setLoading] = useState(true)
   const [policy, setPolicy] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
@@ -364,12 +367,12 @@ export function PolicyDetails() {
             <CardHeader title="Quick Actions" />
             <CardContent>
               <div className="space-y-3">
-                <Button variant="outline" className="w-full justify-start gap-3" asChild>
+                {canEditPolicy && <Button variant="outline" className="w-full justify-start gap-3" asChild>
                   <Link to={`/policies/${policy.id}/edit`}>
                     <Edit className="w-4 h-4" />
                     Edit Policy
                   </Link>
-                </Button>
+                </Button>}
                 <Button variant="outline" className="w-full justify-start gap-3">
                   <Download className="w-4 h-4" />
                   Download Certificate

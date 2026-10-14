@@ -15,6 +15,7 @@ import {
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate } from '../../utils/helpers'
 import { policyService } from '../../services'
+import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -42,6 +43,9 @@ const policyStatuses = [
 ]
 
 export function PolicyList() {
+  const { user } = useAuth()
+  const canCreatePolicy = ['customer', 'employee', 'admin'].includes(user?.role)
+  const canManagePolicies = ['employee', 'admin'].includes(user?.role)
   const [loading, setLoading] = useState(true)
   const [policies, setPolicies] = useState([])
   const [filteredPolicies, setFilteredPolicies] = useState([])
@@ -195,12 +199,9 @@ export function PolicyList() {
           <h1 className="page-title">Policies</h1>
           <p className="page-subtitle">Manage and view all insurance policies</p>
         </div>
-        <Link to="/policies/new">
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            New Policy
-          </Button>
-        </Link>
+        {canCreatePolicy && <Link to="/policies/new">
+          <Button><Plus className="w-4 h-4 mr-2" />New Policy</Button>
+        </Link>}
       </div>
 
       {error && (
@@ -266,7 +267,7 @@ export function PolicyList() {
                       <TableHead onClick={() => handleSort('premium')} className="cursor-pointer">
                         Premium {sortConfig.key === 'premium' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
+                          <TableHead className="w-24">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -293,16 +294,11 @@ export function PolicyList() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Link to={`/policies/${policy.id}`} className="text-primary hover:underline text-sm">View</Link>
-                            <button
-                              onClick={() => {
-                                setDeleteError('')
-                                setDeleteTarget(policy)
-                              }}
-                              className="text-red-600 hover:text-red-700 p-1"
+                            {canManagePolicies && <button
+                              onClick={() => { setDeleteError(''); setDeleteTarget(policy) }}
+                              className="p-1 text-red-600 hover:text-red-700"
                               title="Delete policy"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            ><Trash2 className="h-4 w-4" /></button>}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -323,7 +319,7 @@ export function PolicyList() {
                 icon={<FileText className="w-12 h-12" />}
                 title="No policies found"
                 description={search || typeFilter || statusFilter ? 'Try adjusting your search or filters' : 'No policies have been created yet'}
-                action={<Link to="/policies/new"><Button variant="primary">Create Policy</Button></Link>}
+                action={canCreatePolicy ? <Link to="/policies/new"><Button variant="primary">Create Policy</Button></Link> : undefined}
               />
             )}
           </div>

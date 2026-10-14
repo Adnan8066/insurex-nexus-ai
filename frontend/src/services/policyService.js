@@ -6,6 +6,11 @@ export const policyService = {
     return response.data
   },
 
+  async getPolicyFormOptions(params = {}) {
+    const response = await api.get('/policies/form-options/', { params })
+    return response.data
+  },
+
   async getPolicy(id) {
     const response = await api.get(`/policies/${id}/`)
     return response.data

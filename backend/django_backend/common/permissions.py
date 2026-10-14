@@ -32,6 +32,20 @@ class IsEmployee(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role in ['employee', 'admin']
 
+class CanIssuePolicy(permissions.BasePermission):
+    """Customers can issue records for themselves; employees/admins can act for a customer."""
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role in ['customer', 'employee', 'admin']
+
+class CanManageRepairJob(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role in ['employee', 'admin', 'repair']
+
+    def has_object_permission(self, request, view, obj):
+        if request.user.role in ['employee', 'admin']:
+            return True
+        return request.user.role == 'repair' and obj.repair_shop.email.casefold() == request.user.email.casefold()
+
 class IsInvestigator(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role in ['investigator', 'admin']

@@ -60,6 +60,13 @@ export const claimService = {
     return response.data
   },
 
+  async assignAdjuster(claimId, adjusterId) {
+    const response = await api.post(`/claims/${claimId}/assign-adjuster/`, {
+      adjuster_id: adjusterId,
+    })
+    return response.data
+  },
+
   async assignRepairShop(claimId, repairShopId) {
     const response = await api.post(`/claims/${claimId}/assign-repair-shop/`, {
       repair_shop_id: repairShopId,

@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
+from apps.accounts.models import Role
 
 from .models import Customer, CustomerDocument
 from .serializers import (
@@ -32,9 +33,13 @@ class CustomerViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff_member:
+        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
             return self.queryset
-        return self.queryset.filter(user=user)
+        if user.role == Role.INVESTIGATOR:
+            return self.queryset.filter(user__claims__assigned_investigator=user).distinct()
+        if user.role == Role.CUSTOMER:
+            return self.queryset.filter(user=user)
+        return self.queryset.none()
     
     def get_permissions(self):
         if self.action in ['create']:

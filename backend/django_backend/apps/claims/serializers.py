@@ -99,16 +99,20 @@ class ClaimCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         policy = attrs.get('policy')
         vehicle = attrs.get('vehicle')
-        customer = self.context['request'].user
+        request_user = self.context['request'].user
+        customer = policy.customer if policy else request_user
         
-        if policy.customer != customer and not customer.is_staff_member:
+        if request_user.role == 'customer' and policy.customer_id != request_user.id:
             raise serializers.ValidationError('Policy does not belong to the current user.')
-        
-        if vehicle.customer != customer and not customer.is_staff_member:
-            raise serializers.ValidationError('Vehicle does not belong to the current user.')
+
+        if vehicle.customer_id != customer.id or policy.customer_id != vehicle.customer_id:
+            raise serializers.ValidationError('The selected vehicle and policy must belong to the same customer.')
         
         if vehicle.policy_id and vehicle.policy_id != policy.id:
             raise serializers.ValidationError('Vehicle is not covered by the selected policy.')
+
+        if policy.vehicle_id and policy.vehicle_id != vehicle.id:
+            raise serializers.ValidationError('The selected vehicle does not match the vehicle linked to this policy.')
         
         return attrs
 

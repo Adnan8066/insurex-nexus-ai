@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
+from apps.accounts.models import Role
 
 from .models import Investigation, InvestigationEvidence, InvestigationNote, FraudAlert
 from .serializers import (
@@ -11,7 +12,7 @@ from .serializers import (
     InvestigationEvidenceSerializer, InvestigationNoteSerializer,
     FraudAlertSerializer, FraudAlertUpdateSerializer
 )
-from common.permissions import IsStaffMember, IsInvestigator
+from common.permissions import IsStaffMember
 
 
 class InvestigationViewSet(viewsets.ModelViewSet):
@@ -19,7 +20,7 @@ class InvestigationViewSet(viewsets.ModelViewSet):
         'claim', 'claim__customer', 'investigator', 'fraud_alert'
     ).prefetch_related('evidence', 'notes')
     serializer_class = InvestigationSerializer
-    permission_classes = [IsAuthenticated, IsInvestigator]
+    permission_classes = [IsAuthenticated, IsStaffMember]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'priority']
     search_fields = ['case_number', 'claim__claim_number', 'claim__customer__email']
@@ -35,9 +36,11 @@ class InvestigationViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff_member:
+        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
             return self.queryset
-        return self.queryset.filter(investigator=user)
+        if user.role == Role.INVESTIGATOR:
+            return self.queryset.filter(investigator=user)
+        return self.queryset.none()
     
     def perform_create(self, serializer):
         import uuid
@@ -112,6 +115,14 @@ class FraudAlertViewSet(viewsets.ModelViewSet):
         if self.action in ['update', 'partial_update']:
             return FraudAlertUpdateSerializer
         return FraudAlertSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
+            return self.queryset
+        if user.role == Role.INVESTIGATOR:
+            return self.queryset.filter(assigned_investigator=user)
+        return self.queryset.none()
     
     @action(detail=True, methods=['post'], url_path='review')
     def review(self, request, pk=None):

@@ -4,25 +4,40 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
+from apps.accounts.models import Role
 
 from .models import RepairShop, RepairJob, RepairEstimate, RepairShopDocument
 from .serializers import (
     RepairShopSerializer, RepairShopCreateSerializer, RepairShopUpdateSerializer,
     RepairJobSerializer, RepairJobCreateSerializer, RepairJobUpdateSerializer,
+    RepairJobPartnerUpdateSerializer,
     RepairEstimateSerializer, RepairShopDocumentSerializer
 )
-from common.permissions import IsStaffMember, IsRepairShop
+from common.permissions import IsEmployee, CanManageRepairJob
 
 
 class RepairShopViewSet(viewsets.ModelViewSet):
     queryset = RepairShop.objects.prefetch_related('documents', 'jobs').all()
     serializer_class = RepairShopSerializer
-    permission_classes = [IsAuthenticated, IsStaffMember]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'city', 'state']
     search_fields = ['name', 'license_number', 'email', 'city']
     ordering_fields = ['created_at', 'name', 'rating']
     ordering = ['-created_at']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
+            return self.queryset
+        if user.role == Role.REPAIR:
+            return self.queryset.filter(email__iexact=user.email)
+        return self.queryset.none()
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'approve', 'suspend']:
+            return [IsAuthenticated(), IsEmployee()]
+        return [IsAuthenticated()]
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -98,22 +113,28 @@ class RepairJobViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return RepairJobCreateSerializer
         elif self.action in ['update', 'partial_update']:
+            if self.request.user.role == Role.REPAIR:
+                return RepairJobPartnerUpdateSerializer
             return RepairJobUpdateSerializer
         return RepairJobSerializer
     
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff_member:
+        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
             return self.queryset
+        if user.role == Role.INVESTIGATOR:
+            return self.queryset.filter(claim__assigned_investigator=user)
         if user.role == 'repair':
-            return self.queryset.filter(repair_shop__contact_person=user.email)
-        return self.queryset.filter(claim__customer=user)
+            return self.queryset.filter(repair_shop__email__iexact=user.email)
+        if user.role == Role.CUSTOMER:
+            return self.queryset.filter(claim__customer=user)
+        return self.queryset.none()
     
     def get_permissions(self):
-        if self.action in ['create']:
-            return [IsAuthenticated(), IsStaffMember()]
-        elif self.action in ['update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), IsStaffMember()]
+        if self.action in ['create', 'destroy']:
+            return [IsAuthenticated(), IsEmployee()]
+        if self.action in ['update', 'partial_update', 'start_job', 'complete_job', 'add_estimate']:
+            return [IsAuthenticated(), CanManageRepairJob()]
         return [IsAuthenticated()]
     
     def perform_create(self, serializer):

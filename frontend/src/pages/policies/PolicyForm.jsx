@@ -1,186 +1,244 @@
-﻿import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, FileText, Save, X, Car, Home, Building2 } from 'lucide-react'
+import { ArrowLeft, Save } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
-import { Input, Select, Textarea } from '../../components/forms/FormFields'
-import { policyService } from '../../services'
+import { Input, Select } from '../../components/forms/FormFields'
+import { policyService, vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
+
+const today = () => new Date().toISOString().slice(0, 10)
+const nextYear = () => new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10)
 
 export function PolicyForm() {
   const navigate = useNavigate()
   const { id } = useParams()
   const { user } = useAuth()
-  const isEdit = !!id
-
+  const isEdit = Boolean(id)
+  const canAssignCustomer = ['admin', 'employee'].includes(user?.role)
+  const [customers, setCustomers] = useState([])
+  const [agents, setAgents] = useState([])
+  const [vehicles, setVehicles] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [formData, setFormData] = useState({
+    customer: '',
+    agent: user?.role === 'employee' ? String(user.id) : '',
+    vehicle: '',
     type: 'auto_comprehensive',
     status: 'pending',
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+    startDate: today(),
+    endDate: nextYear(),
     premium: '',
     deductible: '500',
     paymentFrequency: 'annual',
     autoRenew: true,
-    agent: '',
+    propertyAddress: '',
+    propertyType: '',
+    propertyYearBuilt: '',
+    propertySquareFootage: '',
   })
 
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const selectedCustomer = canAssignCustomer ? formData.customer : user?.id
+  const isAutoPolicy = formData.type.startsWith('auto_')
+  const customerOptions = useMemo(
+    () => customers.map((customer) => ({ value: String(customer.id), label: `${customer.name} (${customer.email})` })),
+    [customers],
+  )
+  const agentOptions = useMemo(
+    () => agents.map((agent) => ({ value: String(agent.id), label: `${agent.name} (${agent.email})` })),
+    [agents],
+  )
+  const vehicleOptions = useMemo(
+    () => vehicles.map((vehicle) => ({ value: String(vehicle.id), label: vehicle.label || `${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.license_plate})` })),
+    [vehicles],
+  )
 
   useEffect(() => {
-    if (!id) return
     let active = true
-    policyService.getPolicy(id).then((policy) => {
-      if (active) setFormData((current) => ({ ...current, ...policy, startDate: policy.start_date, endDate: policy.end_date, paymentFrequency: policy.payment_frequency, autoRenew: policy.auto_renew }))
-    }).catch(() => { if (active) setError('Unable to load this policy.') })
+    const loadForm = async () => {
+      try {
+        if (canAssignCustomer) {
+          const options = await policyService.getPolicyFormOptions()
+          if (active) {
+            setCustomers(options.customers || [])
+            setAgents(options.agents || [])
+          }
+        }
+        if (isEdit) {
+          const policy = await policyService.getPolicy(id)
+          if (active) {
+            setFormData((current) => ({
+              ...current,
+              customer: String(policy.customer || ''),
+              agent: String(policy.agent || ''),
+              vehicle: String(policy.vehicle || ''),
+              type: policy.type,
+              status: policy.status,
+              startDate: policy.start_date,
+              endDate: policy.end_date,
+              premium: policy.premium,
+              deductible: policy.deductible,
+              paymentFrequency: policy.payment_frequency,
+              autoRenew: policy.auto_renew,
+              propertyAddress: policy.property_address || '',
+              propertyType: policy.property_type || '',
+              propertyYearBuilt: policy.property_year_built || '',
+              propertySquareFootage: policy.property_square_footage || '',
+            }))
+          }
+        }
+      } catch (err) {
+        if (active) setError(err.response?.data?.detail || 'Unable to load the policy form data.')
+      }
+    }
+    loadForm()
     return () => { active = false }
-  }, [id])
+  }, [canAssignCustomer, id, isEdit])
 
-  // Convert camelCase to snake_case for backend
-  const toSnakeCase = (data) => {
-    const result = {}
-    for (const [key, value] of Object.entries(data)) {
-      const snakeKey = key.replace(/([A-Z])/g, "_$1").toLowerCase()
-      result[snakeKey] = value
+  useEffect(() => {
+    let active = true
+    const loadVehicles = async () => {
+      setVehicles([])
+      if (!selectedCustomer) return
+      try {
+        let rows
+        if (canAssignCustomer) {
+          const options = await policyService.getPolicyFormOptions({ customer: selectedCustomer, ...(isEdit ? { policy: id } : {}) })
+          rows = options.vehicles || []
+        } else {
+          const response = await vehicleService.getVehicles()
+          rows = (Array.isArray(response) ? response : response.results || []).map((vehicle) => ({
+            id: vehicle.id,
+            label: `${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.license_plate})`,
+          }))
+        }
+        if (active) setVehicles(rows)
+      } catch (err) {
+        if (active) setError(err.response?.data?.detail || 'Unable to load vehicles for this customer.')
+      }
     }
-    return result
+    loadVehicles()
+    return () => { active = false }
+  }, [canAssignCustomer, id, isEdit, selectedCustomer])
+
+  const handleChange = (event) => {
+    const { name, value, type, checked } = event.target
+    setFormData((current) => ({
+      ...current,
+      [name]: type === 'checkbox' ? checked : value,
+      ...(name === 'customer' && !isEdit ? { vehicle: '' } : {}),
+    }))
   }
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target
-    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value })
-  }
-
-  const buildPayload = () => {
-    const payload = {
-      customer: user?.id || null,
-      agent: null,
-      type: formData.type,
-      status: formData.status,
-      start_date: formData.startDate,
-      end_date: formData.endDate,
-      premium: Number(formData.premium),
-      deductible: Number(formData.deductible),
-      payment_frequency: formData.paymentFrequency,
-      auto_renew: formData.autoRenew,
-      property_address: formData.propertyAddress || '',
-      property_type: formData.propertyType || '',
-      property_year_built: Number(formData.propertyYearBuilt) || null,
-      property_square_footage: Number(formData.propertySquareFootage) || null,
-    }
-    return payload
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleSubmit = async (event) => {
+    event.preventDefault()
     setLoading(true)
     setError('')
-
     try {
-      const payload = buildPayload()
-      if (isEdit) {
-        await policyService.updatePolicy(id, payload)
-      } else {
-        await policyService.createPolicy(payload)
+      const payload = {
+        ...(canAssignCustomer ? { customer: Number(formData.customer) } : { customer: user.id }),
+        agent: formData.agent ? Number(formData.agent) : null,
+        vehicle: formData.vehicle ? Number(formData.vehicle) : null,
+        type: formData.type,
+        status: formData.status,
+        start_date: formData.startDate,
+        end_date: formData.endDate,
+        premium: Number(formData.premium),
+        deductible: Number(formData.deductible),
+        payment_frequency: formData.paymentFrequency,
+        auto_renew: formData.autoRenew,
+        property_address: formData.propertyAddress,
+        property_type: formData.propertyType,
+        property_year_built: Number(formData.propertyYearBuilt) || null,
+        property_square_footage: Number(formData.propertySquareFootage) || null,
       }
+      if (isEdit) await policyService.updatePolicy(id, payload)
+      else await policyService.createPolicy(payload)
       navigate('/policies')
     } catch (err) {
       const details = err.response?.data
-      if (details && typeof details === 'object') {
-        const messages = Object.entries(details)
-          .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
-          .join('; ')
-        setError(messages || 'Failed to save policy')
-      } else {
-        setError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to save policy')
-      }
+      setError(typeof details === 'object'
+        ? Object.entries(details).map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`).join('; ')
+        : details?.detail || 'Failed to save policy.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className='page max-w-3xl'>
-      <div className='page-header'>
+    <div className="page max-w-3xl">
+      <div className="page-header">
         <div>
-          <Link to='/policies' className='inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-2'>
-            <ArrowLeft className='w-4 h-4' />
-            Back to Policies
+          <Link to="/policies" className="mb-2 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700">
+            <ArrowLeft className="h-4 w-4" /> Back to Policies
           </Link>
-          <h1 className='page-title'>{isEdit ? 'Edit Policy' : 'Create Policy'}</h1>
-          <p className='page-subtitle'>{isEdit ? 'Update policy details' : 'Issue a new insurance policy'}</p>
+          <h1 className="page-title">{isEdit ? 'Edit Policy' : 'Create Policy'}</h1>
+          <p className="page-subtitle">The policy, customer, assigned agent, and covered vehicle are saved as linked records.</p>
         </div>
       </div>
 
-      {error && (
-        <div className='mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
-          {error}
-        </div>
-      )}
+      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
-      <form onSubmit={handleSubmit} className='space-y-6'>
-        <div className='card'>
-          <div className='card-header'><h3 className='card-title'>Policy Details</h3></div>
-          <div className='card-content grid grid-cols-1 md:grid-cols-2 gap-4'>
-            <Select label='Policy Type' name='type' value={formData.type} onChange={handleChange}
-              options={[
-                {value:'auto_comprehensive',label:'Comprehensive Auto'},
-                {value:'auto_collision',label:'Collision Auto'},
-                {value:'auto_liability',label:'Liability Auto'},
-                {value:'homeowners',label:'Homeowners'},
-                {value:'renters',label:'Renters'},
-                {value:'umbrella',label:'Umbrella'},
-              ]} />
-            <Select label="Status" name="status" value={formData.status} onChange={handleChange}
-              options={[{value:'active',label:'Active'},{value:'pending',label:'Pending'},{value:'expired',label:'Expired'},{value:'cancelled',label:'Cancelled'}]} />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <section className="card">
+          <div className="card-header"><h2 className="card-title">Policy Details</h2></div>
+          <div className="card-content grid grid-cols-1 gap-4 md:grid-cols-2">
+            {canAssignCustomer && (
+              <Select label="Customer" name="customer" value={formData.customer} onChange={handleChange} options={customerOptions} placeholder="Select customer" required />
+            )}
+            {canAssignCustomer && (
+              <Select label="Assigned Agent" name="agent" value={formData.agent} onChange={handleChange} options={agentOptions} placeholder="Select agent (optional)" />
+            )}
+            <Select label="Policy Type" name="type" value={formData.type} onChange={handleChange} options={[
+              { value: 'auto_comprehensive', label: 'Comprehensive Auto' },
+              { value: 'auto_collision', label: 'Collision Auto' },
+              { value: 'auto_liability', label: 'Liability Auto' },
+              { value: 'homeowners', label: 'Homeowners' },
+              { value: 'renters', label: 'Renters' },
+              { value: 'umbrella', label: 'Umbrella' },
+            ]} />
+            <Select label="Status" name="status" value={formData.status} onChange={handleChange} options={[
+              { value: 'pending', label: 'Pending' }, { value: 'active', label: 'Active' },
+              { value: 'suspended', label: 'Suspended' }, { value: 'expired', label: 'Expired' }, { value: 'cancelled', label: 'Cancelled' },
+            ]} />
             <Input label="Start Date" name="startDate" type="date" value={formData.startDate} onChange={handleChange} required />
             <Input label="End Date" name="endDate" type="date" value={formData.endDate} onChange={handleChange} required />
-            <Input label="Annual Premium" name="premium" type="number" value={formData.premium} onChange={handleChange} placeholder="e.g., 1250" required />
-            <Input label="Deductible" name="deductible" type="number" value={formData.deductible} onChange={handleChange} placeholder="e.g., 500" required />
-            <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange}
-              options={[{value:'annual',label:'Annual'},{value:'semi_annual',label:'Semi-Annual'},{value:'quarterly',label:'Quarterly'},{value:'monthly',label:'Monthly'}]} />
-            <Input label="Agent" name="agent" value={formData.agent} onChange={handleChange} placeholder="Agent name" />
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="autoRenew" name="autoRenew" checked={formData.autoRenew} onChange={handleChange} className="w-4 h-4" />
-              <label htmlFor="autoRenew" className="text-sm text-gray-700">Auto Renew</label>
+            <Input label="Premium" name="premium" type="number" min="0" step="0.01" value={formData.premium} onChange={handleChange} required />
+            <Input label="Deductible" name="deductible" type="number" min="0" step="0.01" value={formData.deductible} onChange={handleChange} required />
+            <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange} options={[
+              { value: 'annual', label: 'Annual' }, { value: 'semi_annual', label: 'Semi-Annual' },
+              { value: 'quarterly', label: 'Quarterly' }, { value: 'monthly', label: 'Monthly' },
+            ]} />
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="autoRenew" checked={formData.autoRenew} onChange={handleChange} className="h-4 w-4" /> Auto renew
+            </label>
+          </div>
+        </section>
+
+        {isAutoPolicy ? (
+          <section className="card">
+            <div className="card-header"><h2 className="card-title">Covered Vehicle</h2></div>
+            <div className="card-content">
+              <Select label="Vehicle belonging to this customer" name="vehicle" value={formData.vehicle} onChange={handleChange} options={vehicleOptions} placeholder={selectedCustomer ? 'Select an unassigned vehicle' : 'Choose a customer first'} required />
+              {selectedCustomer && vehicleOptions.length === 0 && <p className="mt-2 text-sm text-amber-700">This customer has no unassigned vehicles. Add a vehicle to the customer before issuing an auto policy.</p>}
             </div>
-          </div>
-        </div>
+          </section>
+        ) : ['homeowners', 'renters'].includes(formData.type) ? (
+          <section className="card">
+            <div className="card-header"><h2 className="card-title">Insured Property</h2></div>
+            <div className="card-content grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Input label="Property Address" name="propertyAddress" value={formData.propertyAddress} onChange={handleChange} />
+              <Input label="Property Type" name="propertyType" value={formData.propertyType} onChange={handleChange} placeholder="Single-family home, apartment…" />
+              <Input label="Year Built" name="propertyYearBuilt" type="number" value={formData.propertyYearBuilt} onChange={handleChange} />
+              <Input label="Square Footage" name="propertySquareFootage" type="number" value={formData.propertySquareFootage} onChange={handleChange} />
+            </div>
+          </section>
+        ) : null}
 
-        <div className="card">
-          <div className="card-header"><h3 className="card-title">Property Details (if applicable)</h3></div>
-          <div className="card-content grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Property Address" name="propertyAddress" value={formData.propertyAddress} onChange={handleChange} placeholder="Street address" />
-            <Input label="Property Type" name="propertyType" value={formData.propertyType} onChange={handleChange} placeholder="e.g., Single Family" />
-            <Input label="Year Built" name="propertyYearBuilt" type="number" value={formData.propertyYearBuilt} onChange={handleChange} />
-            <Input label="Square Footage" name="propertySquareFootage" type="number" value={formData.propertySquareFootage} onChange={handleChange} />
-          </div>
-        </div>
-
-        <div className='card'>
-          <div className='card-header'><h3 className='card-title'>Vehicle (for Auto Policies)</h3></div>
-          <div className='card-content grid grid-cols-1 md:grid-cols-2 gap-4'>
-            <Select label='Vehicle' name='vehicle' value={formData.vehicle} onChange={handleChange}
-              options={[]}
-              placeholder='Select a vehicle' />
-          </div>
-        </div>
-
-        <div className='card'>
-          <div className='card-header'><h3 className='card-title'>Property Details (for Home/Renters)</h3></div>
-          <div className='card-content grid grid-cols-1 md:grid-cols-2 gap-4'>
-            <Textarea label='Property Address' name='property_address' value={formData.property_address} onChange={handleChange} rows={2} placeholder='Full property address' />
-            <Input label='Property Type' name='property_type' value={formData.property_type} onChange={handleChange} placeholder='e.g., Single Family Home' />
-            <Input label='Year Built' name='property_year_built' type='number' value={formData.property_year_built} onChange={handleChange} />
-            <Input label='Square Footage' name='property_square_footage' type='number' value={formData.property_square_footage} onChange={handleChange} />
-          </div>
-        </div>
-
-        <div className='flex items-center justify-end gap-3'>
-          <Link to='/policies'><Button variant='ghost'>Cancel</Button></Link>
-          <Button type='submit' disabled={loading}>
-            <Save className='w-4 h-4 mr-2' />
-            {loading ? 'Saving...' : (isEdit ? 'Update Policy' : 'Create Policy')}
+        <div className="flex justify-end gap-3">
+          <Link to="/policies"><Button type="button" variant="ghost">Cancel</Button></Link>
+          <Button type="submit" disabled={loading || (canAssignCustomer && !formData.customer) || (isAutoPolicy && vehicleOptions.length === 0)}>
+            <Save className="mr-2 h-4 w-4" /> {loading ? 'Saving…' : isEdit ? 'Update Policy' : 'Create Policy'}
           </Button>
         </div>
       </form>
@@ -189,6 +247,3 @@ export function PolicyForm() {
 }
 
 export default PolicyForm
-
-
-

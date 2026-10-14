@@ -34,6 +34,7 @@ const vehicleStatuses = [
 
 export function VehicleList() {
   const { user } = useAuth()
+  const canManageVehicles = ['admin', 'employee', 'customer'].includes(user?.role)
   const [loading, setLoading] = useState(true)
   const [vehicles, setVehicles] = useState([])
   const [filteredVehicles, setFilteredVehicles] = useState([])
@@ -175,12 +176,12 @@ export function VehicleList() {
           <h1 className="page-title">Vehicles</h1>
           <p className="page-subtitle">Manage insured vehicles and their details</p>
         </div>
-        <Link to="/vehicles/new">
+        {canManageVehicles && <Link to="/vehicles/new">
           <Button>
             <Plus className="w-4 h-4 mr-2" />
             Add Vehicle
           </Button>
-        </Link>
+        </Link>}
       </div>
 
       {error && (
@@ -271,7 +272,7 @@ export function VehicleList() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Link to={`/vehicles/${vehicle.id}`} className="text-primary hover:underline text-sm">View</Link>
-                            <button
+                            {canManageVehicles && <button
                               onClick={(event) => {
                                 event.stopPropagation()
                                 setDeleteError('')
@@ -281,7 +282,7 @@ export function VehicleList() {
                               title="Delete vehicle"
                             >
                               <Trash2 className="w-4 h-4" />
-                            </button>
+                            </button>}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -302,7 +303,7 @@ export function VehicleList() {
                 icon={<Car className="w-12 h-12" />}
                 title="No vehicles found"
                 description={search || statusFilter ? 'Try adjusting your search or filters' : 'No vehicles have been added yet'}
-                action={<Link to="/vehicles/new"><Button variant="primary">Add Vehicle</Button></Link>}
+                action={canManageVehicles ? <Link to="/vehicles/new"><Button variant="primary">Add Vehicle</Button></Link> : undefined}
               />
             )}
           </div>

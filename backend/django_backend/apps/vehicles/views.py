@@ -3,13 +3,15 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from apps.accounts.models import Role
+from apps.policies.models import Policy
 
 from .models import Vehicle, VehicleDocument, VehicleHistory
 from .serializers import (
     VehicleSerializer, VehicleCreateSerializer, VehicleUpdateSerializer,
     VehicleDocumentSerializer, VehicleHistorySerializer
 )
-from common.permissions import IsOwnerOrAdmin
+from common.permissions import IsOwnerOrAdmin, CanIssuePolicy
 
 
 class VehicleViewSet(viewsets.ModelViewSet):
@@ -17,7 +19,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
     serializer_class = VehicleSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'fuel_type', 'transmission', 'year']
+    filterset_fields = ['status', 'fuel_type', 'transmission', 'year', 'customer']
     search_fields = ['vin', 'license_plate', 'make', 'model', 'customer__email', 'customer__first_name', 'customer__last_name']
     ordering_fields = ['created_at', 'year', 'make', 'model', 'current_mileage']
     ordering = ['-created_at']
@@ -31,13 +33,19 @@ class VehicleViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff_member:
+        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
             return self.queryset
-        return self.queryset.filter(customer=user)
+        if user.role == Role.INVESTIGATOR:
+            return self.queryset.filter(claims__assigned_investigator=user).distinct()
+        if user.role == Role.REPAIR:
+            return self.queryset.filter(claims__assigned_repair_shop__email__iexact=user.email).distinct()
+        if user.role == Role.CUSTOMER:
+            return self.queryset.filter(customer=user)
+        return self.queryset.none()
     
     def get_permissions(self):
         if self.action in ['create']:
-            return [IsAuthenticated()]
+            return [IsAuthenticated(), CanIssuePolicy()]
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsOwnerOrAdmin()]
         return [IsAuthenticated()]
@@ -59,11 +67,22 @@ class VehicleViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         user = self.request.user
-        if user.is_staff_member:
+        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
             customer = serializer.validated_data.get('customer') or user
         else:
             customer = user
-        serializer.save(customer=customer)
+        vehicle = serializer.save(customer=customer)
+        if vehicle.policy_id:
+            Policy.objects.filter(pk=vehicle.policy_id).update(vehicle=vehicle)
+
+    def perform_update(self, serializer):
+        vehicle = self.get_object()
+        previous_policy_id = vehicle.policy_id
+        updated = serializer.save()
+        if previous_policy_id and previous_policy_id != updated.policy_id:
+            Policy.objects.filter(pk=previous_policy_id, vehicle=updated).update(vehicle=None)
+        if updated.policy_id:
+            Policy.objects.filter(pk=updated.policy_id).update(vehicle=updated)
     
     @action(detail=True, methods=['post'], url_path='documents')
     def upload_document(self, request, pk=None):
