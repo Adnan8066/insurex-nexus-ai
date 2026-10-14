@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from apps.accounts.models import Role
 from .models import Vehicle, VehicleDocument, VehicleHistory
 from apps.policies.models import Policy
 
@@ -36,7 +37,10 @@ class VehicleSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 class VehicleCreateSerializer(serializers.ModelSerializer):
-    customer = serializers.PrimaryKeyRelatedField(required=False, allow_null=True, queryset=User.objects.all())
+    customer = serializers.PrimaryKeyRelatedField(
+        required=False, allow_null=True,
+        queryset=User.objects.filter(role=Role.CUSTOMER, is_active=True),
+    )
     license_state = serializers.CharField(required=False, default='IL')
 
     class Meta:
@@ -48,11 +52,19 @@ class VehicleCreateSerializer(serializers.ModelSerializer):
             'transmission', 'status', 'engine_size', 'body_style', 'features'
         ]
 
-    def validate_policy(self, policy):
-        user = self.context['request'].user
-        if policy and not user.is_staff_member and policy.customer_id != user.id:
-            raise serializers.ValidationError('Select a policy from your account.')
-        return policy
+    def validate(self, attrs):
+        request_user = self.context['request'].user
+        customer = attrs.get('customer') or request_user
+        policy = attrs.get('policy')
+        if request_user.role in [Role.EMPLOYEE, Role.ADMIN] and not attrs.get('customer'):
+            raise serializers.ValidationError({'customer': 'Choose the customer who owns this vehicle.'})
+        if request_user.role == Role.CUSTOMER and customer.pk != request_user.pk:
+            raise serializers.ValidationError({'customer': 'You can only register a vehicle for your own account.'})
+        if policy and policy.customer_id != customer.pk:
+            raise serializers.ValidationError({'policy': 'The selected policy does not belong to this customer.'})
+        if policy and policy.vehicle_id:
+            raise serializers.ValidationError({'policy': 'The selected policy is already linked to another vehicle.'})
+        return attrs
 
 class VehicleUpdateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -63,3 +75,11 @@ class VehicleUpdateSerializer(serializers.ModelSerializer):
             'current_mileage', 'fuel_type', 'transmission', 'status',
             'engine_size', 'body_style', 'features'
         ]
+
+    def validate(self, attrs):
+        policy = attrs.get('policy')
+        if policy and policy.customer_id != self.instance.customer_id:
+            raise serializers.ValidationError({'policy': 'The selected policy does not belong to this vehicle customer.'})
+        if policy and policy.vehicle_id and policy.vehicle_id != self.instance.pk:
+            raise serializers.ValidationError({'policy': 'The selected policy is already linked to another vehicle.'})
+        return attrs
