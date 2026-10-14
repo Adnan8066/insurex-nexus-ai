@@ -59,7 +59,7 @@ export default function AppRoutes() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<RoleBasedDashboard />} />
         <Route path="policies" element={<PolicyList />} />
-        <Route path="policies/new" element={<PolicyForm />} />
+        <Route path="policies/new" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
         <Route path="policies/:id" element={<PolicyDetails />} />
         <Route path="policies/:id/edit" element={<PolicyForm />} />
         <Route path="vehicles" element={<VehicleList />} />

@@ -23,6 +23,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePag
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { useAuth } from '../../context/useAuth'
 
 const policyTypes = [
   { value: '', label: 'All Types' },
@@ -42,6 +43,8 @@ const policyStatuses = [
 ]
 
 export function PolicyList() {
+  const { hasRole } = useAuth()
+  const canCreatePolicy = hasRole('admin')
   const [loading, setLoading] = useState(true)
   const [policies, setPolicies] = useState([])
   const [filteredPolicies, setFilteredPolicies] = useState([])
@@ -195,12 +198,14 @@ export function PolicyList() {
           <h1 className="page-title">Policies</h1>
           <p className="page-subtitle">Manage and view all insurance policies</p>
         </div>
-        <Link to="/policies/new">
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            New Policy
-          </Button>
-        </Link>
+        {canCreatePolicy && (
+          <Link to="/policies/new">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              New Policy
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && (
@@ -323,7 +328,7 @@ export function PolicyList() {
                 icon={<FileText className="w-12 h-12" />}
                 title="No policies found"
                 description={search || typeFilter || statusFilter ? 'Try adjusting your search or filters' : 'No policies have been created yet'}
-                action={<Link to="/policies/new"><Button variant="primary">Create Policy</Button></Link>}
+                action={canCreatePolicy && <Link to="/policies/new"><Button variant="primary">Create Policy</Button></Link>}
               />
             )}
           </div>
