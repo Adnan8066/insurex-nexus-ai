@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
@@ -14,15 +13,10 @@ import {
   GitBranch,
   BarChart3,
   Bell,
-  User,
   Settings,
   ChevronLeft,
   ChevronRight,
   Shield,
-  Zap,
-  Scale,
-  Search,
-  FileCheck,
 } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 
@@ -39,31 +33,15 @@ const navigation = [
   { name: 'AI Decision Center', href: '/ai-decision', icon: GitBranch, roles: ['employee', 'admin'] },
   { name: 'Analytics', href: '/analytics', icon: BarChart3, roles: ['employee', 'admin'] },
   { name: 'Notifications', href: '/notifications', icon: Bell, roles: ['customer', 'employee', 'investigator', 'repair', 'admin'] },
-  { name: 'Profile', href: '/profile', icon: User, roles: ['customer', 'employee', 'investigator', 'repair', 'admin'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },
 ]
-
-const roleIcons = {
-  customer: Shield,
-  employee: Zap,
-  investigator: Search,
-  repair: Wrench,
-  admin: FileCheck,
-}
 
 export function Sidebar({ collapsed, onToggle }) {
   const { user, hasRole } = useAuth()
   const location = useLocation()
-  const [hovered, setHovered] = useState(null)
-
   const filteredNav = navigation.filter((item) =>
     user && hasRole(item.roles)
   )
-
-  const getIcon = (item) => {
-    const Icon = item.icon
-    return <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-  }
 
   if (!user) return null
 
@@ -73,8 +51,6 @@ export function Sidebar({ collapsed, onToggle }) {
         'fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out flex flex-col',
         collapsed ? 'w-20' : 'w-72'
       )}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       aria-label="Main navigation"
     >
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
@@ -139,22 +115,6 @@ export function Sidebar({ collapsed, onToggle }) {
         })}
       </nav>
 
-      {!collapsed && user && (
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
-            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-              {(() => {
-                const RoleIcon = roleIcons[user.role] || Shield
-                return <RoleIcon className="w-4 h-4 text-primary" />
-              })()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-              <p className="text-xs text-gray-500 capitalize">{user.role}</p>
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   )
 }
