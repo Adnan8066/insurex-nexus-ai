@@ -1,40 +1,35 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   FileText,
   Briefcase,
   Clock,
   CheckCircle,
-  AlertTriangle,
-  Bell,
-  Car,
+  Headphones,
   DollarSign,
-  TrendingUp,
-  Shield,
   ArrowRight,
-  MoreVertical,
   RefreshCw,
   Download,
   Calendar,
   WifiOff,
+  FilePlus2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
-import { policyService, claimService, vehicleService } from '../../services'
+import { policyService, claimService } from '../../services'
 import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
-import { Badge, StatusBadge } from '../../components/ui/Badge'
+import { StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { ChartCard, MetricChart, AreaChart, DoughnutChart } from '../../components/charts/ChartComponents'
+import { ChartCard, AreaChart, DoughnutChart } from '../../components/charts/ChartComponents'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 
 import ErrorBoundary, {
   ChartErrorFallback,
   DataTableErrorFallback,
 } from '../../components/ui/ErrorBoundary'
 
-import { DashboardSkeleton, ChartSkeleton, TableSkeleton } from '../../components/ui/Skeleton'
+import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/toastHooks'
 import { analyticsService } from '../../services/analyticsService'
 
@@ -58,7 +53,6 @@ const TIMEFRAME_OPTIONS = [
 ]
 
 export function CustomerDashboard() {
-  const navigate = useNavigate()
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const toast = useToast()
@@ -66,13 +60,9 @@ export function CustomerDashboard() {
   const [loading, setLoading] = useState(true)
   const [policies, setPolicies] = useState([])
   const [claims, setClaims] = useState([])
-  const [vehicles, setVehicles] = useState([])
-  const [notifications, setNotifications] = useState([])
   const [timeframe, setTimeframe] = useState(searchParams.get('timeframe') || 'quarter')
-  const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [connectionError, setConnectionError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(new Date())
 
   const mapClaim = (c) => ({
     id: c.id,
@@ -124,50 +114,31 @@ export function CustomerDashboard() {
     createdAt: p.created_at,
   })
 
-  const mapVehicle = (v) => ({
-    id: v.id,
-    make: v.make,
-    model: v.model,
-    year: v.year,
-    vin: v.vin,
-    licensePlate: v.license_plate,
-    color: v.color,
-    fuelType: v.fuel_type,
-    transmission: v.transmission,
-    status: v.status,
-    currentMileage: v.current_mileage,
-  })
-
-  const fetchData = useCallback(async (timeframeParam = timeframe) => {
+  const fetchData = useCallback(async () => {
     setRefreshing(true)
     setConnectionError(null)
     try {
-      const [polRes, clmRes, vehRes] = await Promise.all([
+      const [polRes, clmRes] = await Promise.all([
         policyService.getPolicies().catch(() => ({ results: [] })),
         claimService.getClaims().catch(() => ({ results: [] })),
-        vehicleService.getVehicles().catch(() => ({ results: [] })),
       ])
       const pols = Array.isArray(polRes) ? polRes : (polRes.results || [])
       const clms = Array.isArray(clmRes) ? clmRes : (clmRes.results || [])
-      const vehs = Array.isArray(vehRes) ? vehRes : (vehRes.results || [])
       setPolicies(pols.map(mapPolicy))
       setClaims(clms.map(mapClaim))
-      setVehicles(vehs.map(mapVehicle))
-      setNotifications([])
-      setLastUpdated(new Date())
       setConnectionError(null)
     } catch (err) {
       setConnectionError(err.response?.data?.detail || err.message || 'Backend unreachable')
-      toast.showRetryToast('Connection error. Unable to load dashboard data.', () => fetchData(timeframeParam))
+      toast.showRetryToast('Connection error. Unable to load dashboard data.', () => fetchData())
     } finally {
       setRefreshing(false)
       setLoading(false)
     }
-  }, [timeframe, toast])
+  }, [toast])
 
   useEffect(() => {
-    fetchData(timeframe)
-  }, [fetchData, timeframe])
+    fetchData()
+  }, [fetchData])
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams)
@@ -179,57 +150,84 @@ export function CustomerDashboard() {
     setSearchParams(params, { replace: true })
   }, [timeframe, searchParams, setSearchParams])
 
-  useEffect(() => {
-    let interval
-    if (autoRefresh) {
-      interval = setInterval(() => fetchData(timeframe), 60000)
-    }
-    return () => clearInterval(interval)
-  }, [autoRefresh, timeframe, fetchData])
-
   const activePolicies = policies.filter((p) => p.status === 'active')
-  const activeClaims = claims.filter((c) => !['closed', 'rejected'].includes(c.status))
   const pendingClaims = claims.filter((c) => ['submitted', 'under_review', 'ai_assessment', 'investigation'].includes(c.status))
   const approvedClaims = claims.filter((c) => c.status === 'approved')
-  const totalLossCases = claims.filter((c) => c.incidentSeverity === 'total_loss' || (c.aiAssessment?.totalLossProbability || 0) > 50)
   const recentClaims = [...claims].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 5)
 
-  const claimsByStatus = claims.reduce((acc, claim) => {
-    acc[claim.status] = (acc[claim.status] || 0) + 1
-    return acc
-  }, {})
+  const claimStatusData = useMemo(() => {
+    const claimsByStatus = claims.reduce((acc, claim) => {
+      acc[claim.status] = (acc[claim.status] || 0) + 1
+      return acc
+    }, {})
 
-  const claimStatusData = useMemo(() => ({
-    labels: Object.keys(claimStatusConfig).map((k) => claimStatusConfig[k].label),
-    datasets: [
-      {
-        data: Object.keys(claimStatusConfig).map((k) => claimsByStatus[k] || 0),
-        backgroundColor: [
-          '#3b82f6',
-          '#f59e0b',
-          '#1e3a5f',
-          '#f59e0b',
-          '#10b981',
-          '#ef4444',
-          '#1e3a5f',
-          '#94a3b8',
-        ],
-        borderWidth: 0,
-      },
-    ],
-  }), [claimsByStatus])
+    return {
+      labels: Object.keys(claimStatusConfig).map((k) => claimStatusConfig[k].label),
+      datasets: [
+        {
+          data: Object.keys(claimStatusConfig).map((k) => claimsByStatus[k] || 0),
+          backgroundColor: [
+            '#3b82f6',
+            '#f59e0b',
+            '#1e3a5f',
+            '#f59e0b',
+            '#10b981',
+            '#ef4444',
+            '#1e3a5f',
+            '#94a3b8',
+          ],
+          borderWidth: 0,
+        },
+      ],
+    }
+  }, [claims])
 
   const monthlyClaimsData = useMemo(() => {
-    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    const counts = new Array(12).fill(0)
-    claims.forEach((c) => {
-      if (c.submittedAt) {
-        const m = new Date(c.submittedAt).getMonth()
-        if (m >= 0 && m < 12) counts[m] += 1
+    const today = new Date()
+    const option = TIMEFRAME_OPTIONS.find((item) => item.value === timeframe) || TIMEFRAME_OPTIONS[2]
+    const start = new Date(today)
+    const periodEnd = new Date(today)
+    if (timeframe === 'ytd') start.setMonth(0, 1)
+    else if (timeframe === 'year') {
+      start.setFullYear(today.getFullYear() - 1, 0, 1)
+      periodEnd.setFullYear(today.getFullYear() - 1, 11, 31)
+      periodEnd.setHours(23, 59, 59, 999)
+    } else if (timeframe === 'quarter') {
+      start.setMonth(Math.floor(today.getMonth() / 3) * 3, 1)
+    } else start.setDate(today.getDate() - option.days + 1)
+    start.setHours(0, 0, 0, 0)
+    const daily = timeframe === 'week' || timeframe === 'month'
+    const labels = []
+    const counts = []
+    const bucketDates = []
+    const cursor = new Date(start)
+    while (cursor <= periodEnd) {
+      const bucketDate = new Date(cursor)
+      if (!daily) bucketDate.setDate(1)
+      const key = daily
+        ? `${bucketDate.getFullYear()}-${bucketDate.getMonth()}-${bucketDate.getDate()}`
+        : `${bucketDate.getFullYear()}-${bucketDate.getMonth()}`
+      if (!bucketDates.includes(key)) {
+        bucketDates.push(key)
+        labels.push(daily
+          ? bucketDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+          : bucketDate.toLocaleDateString(undefined, { month: 'short' }))
+        counts.push(0)
       }
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    claims.forEach((claim) => {
+      if (!claim.submittedAt) return
+      const submittedAt = new Date(claim.submittedAt)
+      if (Number.isNaN(submittedAt.getTime()) || submittedAt < start || submittedAt > periodEnd) return
+      const key = daily
+        ? `${submittedAt.getFullYear()}-${submittedAt.getMonth()}-${submittedAt.getDate()}`
+        : `${submittedAt.getFullYear()}-${submittedAt.getMonth()}`
+      const index = bucketDates.indexOf(key)
+      if (index >= 0) counts[index] += 1
     })
     return {
-      labels: monthLabels,
+      labels,
       datasets: [
         {
           label: 'Claims Submitted',
@@ -241,12 +239,10 @@ export function CustomerDashboard() {
         },
       ],
     }
-  }, [claims])
+  }, [claims, timeframe])
 
   const handleTimeframeChange = (newTimeframe) => {
     setTimeframe(newTimeframe)
-    setLoading(true)
-    fetchData(newTimeframe)
   }
 
   const handleExport = async () => {
@@ -302,23 +298,13 @@ export function CustomerDashboard() {
     },
   ]
 
-  const totalLossCards = [
-    {
-      title: 'Total Loss Cases',
-      value: totalLossCases.length,
-      icon: AlertTriangle,
-      iconColor: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      link: '/claims?status=total_loss',
-    },
+  const quickActions = [
+    { label: 'File a Claim', href: '/claims/new', icon: FilePlus2, color: 'bg-blue-50 text-blue-700 hover:bg-blue-100', description: 'Start a new claim' },
+    { label: 'Make a Payment', href: '/settlements', icon: DollarSign, color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', description: 'Review payments and settlements' },
+    { label: 'Get Support', href: '/notifications', icon: Headphones, color: 'bg-violet-50 text-violet-700 hover:bg-violet-100', description: 'View updates about your account' },
   ]
 
-  const quickActions = [
-    { label: 'File New Claim', href: '/claims/new', icon: AlertTriangle, color: 'bg-red-50 text-red-600 hover:bg-red-100' },
-    { label: 'View Policies', href: '/policies', icon: FileText, color: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
-    { label: 'Manage Vehicles', href: '/vehicles', icon: Car, color: 'bg-green-50 text-green-600 hover:bg-green-100' },
-    { label: 'Make Payment', href: '/settlements', icon: DollarSign, color: 'bg-purple-50 text-purple-600 hover:bg-purple-100' },
-  ]
+  const firstName = user?.first_name || user?.firstName || user?.name?.trim().split(/\s+/)[0] || user?.get_full_name?.call(user)?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there'
 
   if (loading) {
     return <DashboardSkeleton />
@@ -329,7 +315,7 @@ export function CustomerDashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Welcome back, {user?.first_name || user?.get_full_name?.call(user) || (user?.email || '').split('@')[0] || 'Customer'}! Here&apos;s an overview of your insurance portfolio.</p>
+          <p className="page-subtitle">Welcome back, {firstName}! Here&apos;s an overview of your insurance portfolio.</p>
           {connectionError && (
             <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
               <WifiOff className="w-4 h-4" />
@@ -337,9 +323,13 @@ export function CustomerDashboard() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3">
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm mb-6">
+        <p className="text-sm text-slate-500">Your coverage and claims, at a glance</p>
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-500" />
+            <Calendar className="w-4 h-4 text-slate-500" />
             <select
               value={timeframe}
               onChange={(e) => handleTimeframeChange(e.target.value)}
@@ -353,24 +343,8 @@ export function CustomerDashboard() {
             </select>
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={clsx(autoRefresh && 'text-primary bg-primary/10')}
-            title={autoRefresh ? 'Auto-refresh ON (60s)' : 'Auto-refresh OFF'}
-          >
-            <RefreshCw className={clsx('w-4 h-4', autoRefresh && 'animate-spin')} />
-            <span className="ml-1">{autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}</span>
-          </Button>
-
-          <Button variant="ghost" size="sm" className="relative" onClick={() => fetchData(timeframe)} loading={refreshing}>
+          <Button variant="ghost" size="sm" className="relative" onClick={() => fetchData()} loading={refreshing} aria-label="Refresh dashboard" title="Refresh dashboard">
             <RefreshCw className="w-4 h-4" />
-          </Button>
-
-          <Button variant="ghost" size="sm" className="relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center">3</span>
           </Button>
 
           <Button variant="primary" size="sm" onClick={handleExport} loading={refreshing}>
@@ -422,26 +396,42 @@ export function CustomerDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2">
-          <ErrorBoundary fallback={({ resetError, retryCount }) => (
-            <ChartErrorFallback title="Claims Overview" resetError={resetError} retryCount={retryCount} />
-          )}>
-            <ChartCard title="Claims Overview" subtitle={`Monthly claims submitted (${TIMEFRAME_OPTIONS.find((t) => t.value === timeframe)?.label})`}>
-              <AreaChart data={monthlyClaimsData} height={300} />
-            </ChartCard>
-          </ErrorBoundary>
+      {claims.length === 0 ? (
+        <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-8 shadow-sm sm:p-10">
+          <div className="mx-auto max-w-xl text-center">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+              <FilePlus2 className="h-7 w-7" aria-hidden="true" />
+            </div>
+            <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-blue-700">Your dashboard is ready</p>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Your claims activity will appear here</h2>
+            <p className="mt-2 text-slate-600">When you file a claim, you can follow its progress and see updates in this space.</p>
+            <Button asChild variant="primary" className="mt-6">
+              <Link to="/claims/new">File a Claim <ArrowRight className="ml-2 h-4 w-4" /></Link>
+            </Button>
+          </div>
+        </section>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-2">
+            <ErrorBoundary fallback={({ resetError, retryCount }) => (
+              <ChartErrorFallback title="Claims Overview" resetError={resetError} retryCount={retryCount} />
+            )}>
+              <ChartCard title="Claims Overview" subtitle={`Claims submitted (${TIMEFRAME_OPTIONS.find((t) => t.value === timeframe)?.label})`}>
+                <AreaChart data={monthlyClaimsData} height={300} options={{ scales: { y: { min: 0, beginAtZero: true } } }} />
+              </ChartCard>
+            </ErrorBoundary>
+          </div>
+          <div>
+            <ErrorBoundary fallback={({ resetError, retryCount }) => (
+              <ChartErrorFallback title="Claim Status Distribution" resetError={resetError} retryCount={retryCount} />
+            )}>
+              <ChartCard title="Claim Status Distribution" subtitle="Current status of your claims">
+                <DoughnutChart data={claimStatusData} height={300} />
+              </ChartCard>
+            </ErrorBoundary>
+          </div>
         </div>
-        <div>
-          <ErrorBoundary fallback={({ resetError, retryCount }) => (
-            <ChartErrorFallback title="Claim Status Distribution" resetError={resetError} retryCount={retryCount} />
-          )}>
-            <ChartCard title="Claim Status Distribution" subtitle="Current status of all your claims">
-              <DoughnutChart data={claimStatusData} height={300} />
-            </ChartCard>
-          </ErrorBoundary>
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2">
@@ -484,8 +474,7 @@ export function CustomerDashboard() {
                 ) : (
                   <EmptyState
                     title="No claims yet"
-                    description="You haven't filed any claims yet. Click 'File Claim' to get started."
-                    action={<Button asChild><Link to="/claims/new">File Claim</Link></Button>}
+                    description="Your recent claim activity will appear here."
                   />
                 )}
               </CardContent>
@@ -544,14 +533,14 @@ export function CustomerDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {quickActions.map((action) => (
+        {quickActions.filter((action) => claims.length > 0 || action.label !== 'File a Claim').map((action) => (
           <Link key={action.label} to={action.href} className="card group">
             <CardContent className="p-6 flex flex-col items-center text-center">
               <div className={clsx('w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-colors', action.color)}>
                 <action.icon className="w-7 h-7" />
               </div>
               <h3 className="font-semibold text-gray-900 group-hover:text-primary transition-colors">{action.label}</h3>
-              <p className="text-sm text-gray-500 mt-1">Click to get started</p>
+              <p className="text-sm text-gray-500 mt-1">{action.description}</p>
             </CardContent>
           </Link>
         ))}

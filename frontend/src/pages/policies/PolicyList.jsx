@@ -199,9 +199,14 @@ export function PolicyList() {
           <h1 className="page-title">Policies</h1>
           <p className="page-subtitle">Manage and view all insurance policies</p>
         </div>
-        {canCreatePolicy && <Link to="/policies/new">
-          <Button><Plus className="w-4 h-4 mr-2" />New Policy</Button>
-        </Link>}
+        {canCreatePolicy && (
+          <Link to="/policies/new">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              New Policy
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && (
@@ -319,7 +324,7 @@ export function PolicyList() {
                 icon={<FileText className="w-12 h-12" />}
                 title="No policies found"
                 description={search || typeFilter || statusFilter ? 'Try adjusting your search or filters' : 'No policies have been created yet'}
-                action={canCreatePolicy ? <Link to="/policies/new"><Button variant="primary">Create Policy</Button></Link> : undefined}
+                action={canCreatePolicy && <Link to="/policies/new"><Button variant="primary">Create Policy</Button></Link>}
               />
             )}
           </div>
