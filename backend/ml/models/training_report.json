@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-10-13T10:11:13.248967+00:00",
+  "trained_at": "2026-10-14T07:17:40.003629+00:00",
   "datasets": {
     "insurance_claims": {
       "file": "insurance_claims.csv",
@@ -12,13 +12,136 @@
   },
   "targets": {
     "repair_cost": "vehicle_claim",
-    "total_loss": "incident_severity equals Total Loss",
+    "total_loss": "incident_severity equals Total Loss (proxy; see data audit)",
     "insurance_fraud": "fraud_reported equals Y",
     "fraud_oracle_fraud": "FraudFound_P equals 1"
   },
+  "data_audit": {
+    "fraud_oracle": {
+      "rows": 15420,
+      "fraud_rows": 923,
+      "non_fraud_rows": 14497,
+      "fraud_rate": 0.0599,
+      "class_imbalance_ratio_nonfraud_to_fraud": 15.71,
+      "missing_cells": 0,
+      "duplicate_rows": 0,
+      "preprocessing": {
+        "numeric": "median imputation followed by standard scaling",
+        "categorical": "most-frequent imputation followed by one-hot encoding; unknown categories ignored"
+      },
+      "target_counts": {
+        "0": 14497,
+        "1": 923
+      },
+      "top_numeric_target_correlations": [
+        {
+          "feature": "Age",
+          "correlation": 0.0297
+        },
+        {
+          "feature": "Year",
+          "correlation": 0.0248
+        },
+        {
+          "feature": "PolicyNumber",
+          "correlation": 0.0203
+        },
+        {
+          "feature": "Deductible",
+          "correlation": 0.0173
+        },
+        {
+          "feature": "WeekOfMonth",
+          "correlation": 0.0119
+        },
+        {
+          "feature": "RepNumber",
+          "correlation": 0.0076
+        },
+        {
+          "feature": "DriverRating",
+          "correlation": 0.0073
+        },
+        {
+          "feature": "WeekOfMonthClaimed",
+          "correlation": 0.0058
+        }
+      ],
+      "numeric_feature_correlations_at_least_0_8": [
+        {
+          "features": [
+            "PolicyNumber",
+            "Year"
+          ],
+          "absolute_correlation": 0.9365
+        }
+      ],
+      "top_categorical_target_associations": [
+        {
+          "feature": "PolicyType",
+          "cramers_v": 0.1684
+        },
+        {
+          "feature": "BasePolicy",
+          "cramers_v": 0.1616
+        },
+        {
+          "feature": "VehicleCategory",
+          "cramers_v": 0.1374
+        },
+        {
+          "feature": "Fault",
+          "cramers_v": 0.1314
+        },
+        {
+          "feature": "AddressChange_Claim",
+          "cramers_v": 0.0824
+        },
+        {
+          "feature": "VehiclePrice",
+          "cramers_v": 0.0663
+        },
+        {
+          "feature": "Make",
+          "cramers_v": 0.0623
+        },
+        {
+          "feature": "PastNumberOfClaims",
+          "cramers_v": 0.0589
+        }
+      ],
+      "excluded_identifier_columns": [
+        "PolicyNumber",
+        "RepNumber"
+      ],
+      "feature_timing_caveat": "Fault, NumberOfSuppliments, Days_Policy_Claim, PoliceReportFiled, and WitnessPresent may be known only after initial claim intake. Confirm their availability at the intended scoring time before production use; this CSV has no field-timing documentation.",
+      "total_loss_label": "Fraud Oracle has no explicit total-loss outcome column."
+    },
+    "insurance_total_loss_audit": {
+      "severity_counts": {
+        "Minor Damage": 354,
+        "Total Loss": 280,
+        "Major Damage": 276,
+        "Trivial Damage": 90
+      },
+      "label_definition": "incident_severity equals Total Loss (proxy label; not independently verified as an insurer total-loss outcome).",
+      "fraud_by_severity": {
+        "total_loss": {
+          "rows": 280,
+          "fraud_rows": 36,
+          "fraud_rate": 0.1286
+        },
+        "other_severity": {
+          "rows": 720,
+          "fraud_rows": 211,
+          "fraud_rate": 0.2931
+        }
+      }
+    }
+  },
   "decision_thresholds": {
     "insurance_fraud": 0.5,
-    "fraud_oracle_fraud": 0.803338
+    "fraud_oracle_fraud": 0.1
   },
   "metrics": [
     {
@@ -60,18 +183,858 @@
     },
     {
       "model": "fraud_oracle_fraud",
-      "accuracy": 0.9403,
+      "threshold": 0.1,
+      "precision": 0.164,
+      "recall": 0.773,
+      "f1": 0.2706,
+      "roc_auc": 0.848,
+      "pr_auc": 0.2471,
+      "log_loss": 0.1762,
+      "confusion_matrix": {
+        "tn": 2170,
+        "fp": 729,
+        "fn": 42,
+        "tp": 143
+      },
+      "alert_rate": 0.2827,
+      "calibration": "sigmoid (3-fold cross-validation)",
+      "imbalance_strategy": {
+        "method": "LightGBM scale_pos_weight",
+        "value": 3.0
+      },
+      "threshold_selection": {
+        "validation_recall_target": 0.75,
+        "precision_must_exceed_dataset_fraud_rate": true,
+        "threshold_range": [
+          0.05,
+          0.5
+        ],
+        "selected_validation_metrics": {
+          "threshold": 0.1,
+          "precision": 0.1634,
+          "recall": 0.7717,
+          "f1": 0.2697,
+          "roc_auc": 0.8395,
+          "pr_auc": 0.2448,
+          "log_loss": 0.1783,
+          "confusion_matrix": {
+            "tn": 2173,
+            "fp": 727,
+            "fn": 42,
+            "tp": 142
+          },
+          "alert_rate": 0.2818
+        },
+        "validation_sweep": [
+          {
+            "threshold": 0.05,
+            "precision": 0.1318,
+            "recall": 0.913,
+            "f1": 0.2303,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 1793,
+              "fp": 1107,
+              "fn": 16,
+              "tp": 168
+            },
+            "alert_rate": 0.4134
+          },
+          {
+            "threshold": 0.06,
+            "precision": 0.1395,
+            "recall": 0.9076,
+            "f1": 0.2419,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 1870,
+              "fp": 1030,
+              "fn": 17,
+              "tp": 167
+            },
+            "alert_rate": 0.3881
+          },
+          {
+            "threshold": 0.07,
+            "precision": 0.1449,
+            "recall": 0.875,
+            "f1": 0.2486,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 1950,
+              "fp": 950,
+              "fn": 23,
+              "tp": 161
+            },
+            "alert_rate": 0.3602
+          },
+          {
+            "threshold": 0.08,
+            "precision": 0.1489,
+            "recall": 0.837,
+            "f1": 0.2529,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2020,
+              "fp": 880,
+              "fn": 30,
+              "tp": 154
+            },
+            "alert_rate": 0.3353
+          },
+          {
+            "threshold": 0.09,
+            "precision": 0.1584,
+            "recall": 0.8207,
+            "f1": 0.2656,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2098,
+              "fp": 802,
+              "fn": 33,
+              "tp": 151
+            },
+            "alert_rate": 0.309
+          },
+          {
+            "threshold": 0.1,
+            "precision": 0.1634,
+            "recall": 0.7717,
+            "f1": 0.2697,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2173,
+              "fp": 727,
+              "fn": 42,
+              "tp": 142
+            },
+            "alert_rate": 0.2818
+          },
+          {
+            "threshold": 0.11,
+            "precision": 0.1714,
+            "recall": 0.7228,
+            "f1": 0.2771,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2257,
+              "fp": 643,
+              "fn": 51,
+              "tp": 133
+            },
+            "alert_rate": 0.2516
+          },
+          {
+            "threshold": 0.12,
+            "precision": 0.1798,
+            "recall": 0.6685,
+            "f1": 0.2834,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2339,
+              "fp": 561,
+              "fn": 61,
+              "tp": 123
+            },
+            "alert_rate": 0.2218
+          },
+          {
+            "threshold": 0.13,
+            "precision": 0.1887,
+            "recall": 0.5978,
+            "f1": 0.2868,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2427,
+              "fp": 473,
+              "fn": 74,
+              "tp": 110
+            },
+            "alert_rate": 0.189
+          },
+          {
+            "threshold": 0.14,
+            "precision": 0.1922,
+            "recall": 0.5109,
+            "f1": 0.2793,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2505,
+              "fp": 395,
+              "fn": 90,
+              "tp": 94
+            },
+            "alert_rate": 0.1586
+          },
+          {
+            "threshold": 0.15,
+            "precision": 0.2005,
+            "recall": 0.4565,
+            "f1": 0.2786,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2565,
+              "fp": 335,
+              "fn": 100,
+              "tp": 84
+            },
+            "alert_rate": 0.1359
+          },
+          {
+            "threshold": 0.16,
+            "precision": 0.203,
+            "recall": 0.3641,
+            "f1": 0.2607,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2637,
+              "fp": 263,
+              "fn": 117,
+              "tp": 67
+            },
+            "alert_rate": 0.107
+          },
+          {
+            "threshold": 0.17,
+            "precision": 0.2186,
+            "recall": 0.3315,
+            "f1": 0.2635,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2682,
+              "fp": 218,
+              "fn": 123,
+              "tp": 61
+            },
+            "alert_rate": 0.0905
+          },
+          {
+            "threshold": 0.18,
+            "precision": 0.2222,
+            "recall": 0.2717,
+            "f1": 0.2445,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2725,
+              "fp": 175,
+              "fn": 134,
+              "tp": 50
+            },
+            "alert_rate": 0.073
+          },
+          {
+            "threshold": 0.19,
+            "precision": 0.2432,
+            "recall": 0.2446,
+            "f1": 0.2439,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2760,
+              "fp": 140,
+              "fn": 139,
+              "tp": 45
+            },
+            "alert_rate": 0.06
+          },
+          {
+            "threshold": 0.2,
+            "precision": 0.2516,
+            "recall": 0.212,
+            "f1": 0.2301,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2784,
+              "fp": 116,
+              "fn": 145,
+              "tp": 39
+            },
+            "alert_rate": 0.0503
+          },
+          {
+            "threshold": 0.21,
+            "precision": 0.2632,
+            "recall": 0.1902,
+            "f1": 0.2208,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2802,
+              "fp": 98,
+              "fn": 149,
+              "tp": 35
+            },
+            "alert_rate": 0.0431
+          },
+          {
+            "threshold": 0.22,
+            "precision": 0.2736,
+            "recall": 0.1576,
+            "f1": 0.2,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2823,
+              "fp": 77,
+              "fn": 155,
+              "tp": 29
+            },
+            "alert_rate": 0.0344
+          },
+          {
+            "threshold": 0.23,
+            "precision": 0.3023,
+            "recall": 0.1413,
+            "f1": 0.1926,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2840,
+              "fp": 60,
+              "fn": 158,
+              "tp": 26
+            },
+            "alert_rate": 0.0279
+          },
+          {
+            "threshold": 0.24,
+            "precision": 0.2917,
+            "recall": 0.1141,
+            "f1": 0.1641,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2849,
+              "fp": 51,
+              "fn": 163,
+              "tp": 21
+            },
+            "alert_rate": 0.0233
+          },
+          {
+            "threshold": 0.25,
+            "precision": 0.3065,
+            "recall": 0.1033,
+            "f1": 0.1545,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2857,
+              "fp": 43,
+              "fn": 165,
+              "tp": 19
+            },
+            "alert_rate": 0.0201
+          },
+          {
+            "threshold": 0.26,
+            "precision": 0.3393,
+            "recall": 0.1033,
+            "f1": 0.1583,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2863,
+              "fp": 37,
+              "fn": 165,
+              "tp": 19
+            },
+            "alert_rate": 0.0182
+          },
+          {
+            "threshold": 0.27,
+            "precision": 0.34,
+            "recall": 0.0924,
+            "f1": 0.1453,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2867,
+              "fp": 33,
+              "fn": 167,
+              "tp": 17
+            },
+            "alert_rate": 0.0162
+          },
+          {
+            "threshold": 0.28,
+            "precision": 0.3721,
+            "recall": 0.087,
+            "f1": 0.141,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2873,
+              "fp": 27,
+              "fn": 168,
+              "tp": 16
+            },
+            "alert_rate": 0.0139
+          },
+          {
+            "threshold": 0.29,
+            "precision": 0.4,
+            "recall": 0.0761,
+            "f1": 0.1279,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2879,
+              "fp": 21,
+              "fn": 170,
+              "tp": 14
+            },
+            "alert_rate": 0.0113
+          },
+          {
+            "threshold": 0.3,
+            "precision": 0.4194,
+            "recall": 0.0707,
+            "f1": 0.1209,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2882,
+              "fp": 18,
+              "fn": 171,
+              "tp": 13
+            },
+            "alert_rate": 0.0101
+          },
+          {
+            "threshold": 0.31,
+            "precision": 0.4583,
+            "recall": 0.0598,
+            "f1": 0.1058,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2887,
+              "fp": 13,
+              "fn": 173,
+              "tp": 11
+            },
+            "alert_rate": 0.0078
+          },
+          {
+            "threshold": 0.32,
+            "precision": 0.5238,
+            "recall": 0.0598,
+            "f1": 0.1073,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2890,
+              "fp": 10,
+              "fn": 173,
+              "tp": 11
+            },
+            "alert_rate": 0.0068
+          },
+          {
+            "threshold": 0.33,
+            "precision": 0.5556,
+            "recall": 0.0543,
+            "f1": 0.099,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2892,
+              "fp": 8,
+              "fn": 174,
+              "tp": 10
+            },
+            "alert_rate": 0.0058
+          },
+          {
+            "threshold": 0.34,
+            "precision": 0.6154,
+            "recall": 0.0435,
+            "f1": 0.0812,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2895,
+              "fp": 5,
+              "fn": 176,
+              "tp": 8
+            },
+            "alert_rate": 0.0042
+          },
+          {
+            "threshold": 0.35,
+            "precision": 0.6154,
+            "recall": 0.0435,
+            "f1": 0.0812,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2895,
+              "fp": 5,
+              "fn": 176,
+              "tp": 8
+            },
+            "alert_rate": 0.0042
+          },
+          {
+            "threshold": 0.36,
+            "precision": 0.6667,
+            "recall": 0.0435,
+            "f1": 0.0816,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2896,
+              "fp": 4,
+              "fn": 176,
+              "tp": 8
+            },
+            "alert_rate": 0.0039
+          },
+          {
+            "threshold": 0.37,
+            "precision": 0.6667,
+            "recall": 0.0435,
+            "f1": 0.0816,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2896,
+              "fp": 4,
+              "fn": 176,
+              "tp": 8
+            },
+            "alert_rate": 0.0039
+          },
+          {
+            "threshold": 0.38,
+            "precision": 0.6667,
+            "recall": 0.0435,
+            "f1": 0.0816,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2896,
+              "fp": 4,
+              "fn": 176,
+              "tp": 8
+            },
+            "alert_rate": 0.0039
+          },
+          {
+            "threshold": 0.39,
+            "precision": 0.8,
+            "recall": 0.0435,
+            "f1": 0.0825,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2898,
+              "fp": 2,
+              "fn": 176,
+              "tp": 8
+            },
+            "alert_rate": 0.0032
+          },
+          {
+            "threshold": 0.4,
+            "precision": 0.8,
+            "recall": 0.0435,
+            "f1": 0.0825,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2898,
+              "fp": 2,
+              "fn": 176,
+              "tp": 8
+            },
+            "alert_rate": 0.0032
+          },
+          {
+            "threshold": 0.41,
+            "precision": 0.8,
+            "recall": 0.0435,
+            "f1": 0.0825,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2898,
+              "fp": 2,
+              "fn": 176,
+              "tp": 8
+            },
+            "alert_rate": 0.0032
+          },
+          {
+            "threshold": 0.42,
+            "precision": 0.8889,
+            "recall": 0.0435,
+            "f1": 0.0829,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2899,
+              "fp": 1,
+              "fn": 176,
+              "tp": 8
+            },
+            "alert_rate": 0.0029
+          },
+          {
+            "threshold": 0.43,
+            "precision": 1.0,
+            "recall": 0.038,
+            "f1": 0.0733,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2900,
+              "fp": 0,
+              "fn": 177,
+              "tp": 7
+            },
+            "alert_rate": 0.0023
+          },
+          {
+            "threshold": 0.44,
+            "precision": 1.0,
+            "recall": 0.038,
+            "f1": 0.0733,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2900,
+              "fp": 0,
+              "fn": 177,
+              "tp": 7
+            },
+            "alert_rate": 0.0023
+          },
+          {
+            "threshold": 0.45,
+            "precision": 1.0,
+            "recall": 0.038,
+            "f1": 0.0733,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2900,
+              "fp": 0,
+              "fn": 177,
+              "tp": 7
+            },
+            "alert_rate": 0.0023
+          },
+          {
+            "threshold": 0.46,
+            "precision": 1.0,
+            "recall": 0.038,
+            "f1": 0.0733,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2900,
+              "fp": 0,
+              "fn": 177,
+              "tp": 7
+            },
+            "alert_rate": 0.0023
+          },
+          {
+            "threshold": 0.47,
+            "precision": 1.0,
+            "recall": 0.038,
+            "f1": 0.0733,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2900,
+              "fp": 0,
+              "fn": 177,
+              "tp": 7
+            },
+            "alert_rate": 0.0023
+          },
+          {
+            "threshold": 0.48,
+            "precision": 1.0,
+            "recall": 0.0326,
+            "f1": 0.0632,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2900,
+              "fp": 0,
+              "fn": 178,
+              "tp": 6
+            },
+            "alert_rate": 0.0019
+          },
+          {
+            "threshold": 0.49,
+            "precision": 1.0,
+            "recall": 0.0326,
+            "f1": 0.0632,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2900,
+              "fp": 0,
+              "fn": 178,
+              "tp": 6
+            },
+            "alert_rate": 0.0019
+          },
+          {
+            "threshold": 0.5,
+            "precision": 1.0,
+            "recall": 0.0326,
+            "f1": 0.0632,
+            "roc_auc": 0.8395,
+            "pr_auc": 0.2448,
+            "log_loss": 0.1783,
+            "confusion_matrix": {
+              "tn": 2900,
+              "fp": 0,
+              "fn": 178,
+              "tp": 6
+            },
+            "alert_rate": 0.0019
+          }
+        ]
+      },
+      "previous_pipeline_test_metrics": {
+        "threshold": 0.803338,
+        "precision": 1.0,
+        "recall": 0.0054,
+        "f1": 0.0108,
+        "roc_auc": 0.8221,
+        "pr_auc": 0.1923,
+        "log_loss": 0.3678,
+        "confusion_matrix": {
+          "tn": 2899,
+          "fp": 0,
+          "fn": 184,
+          "tp": 1
+        },
+        "alert_rate": 0.0003
+      },
+      "tuned_model_default_threshold_test_metrics": {
+        "threshold": 0.5,
+        "precision": 1.0,
+        "recall": 0.0216,
+        "f1": 0.0423,
+        "roc_auc": 0.848,
+        "pr_auc": 0.2471,
+        "log_loss": 0.1762,
+        "confusion_matrix": {
+          "tn": 2899,
+          "fp": 0,
+          "fn": 181,
+          "tp": 4
+        },
+        "alert_rate": 0.0013
+      },
+      "test_rows": 3084,
+      "test_fraud_rows": 185,
+      "test_non_fraud_rows": 2899,
+      "threshold_source": "selected on validation split; test split used once for final metrics",
+      "evaluation_chart": "fraud_oracle_evaluation.png"
+    }
+  ],
+  "fraud_oracle_comparison": {
+    "previous_pipeline": {
+      "threshold": 0.803338,
       "precision": 1.0,
       "recall": 0.0054,
       "f1": 0.0108,
       "roc_auc": 0.8221,
-      "decision_threshold": 0.803338,
-      "holdout_rows": 3084,
-      "calibration_rows": 3084,
-      "class_counts": {
-        "0": 14497,
-        "1": 923
-      }
+      "pr_auc": 0.1923,
+      "log_loss": 0.3678,
+      "confusion_matrix": {
+        "tn": 2899,
+        "fp": 0,
+        "fn": 184,
+        "tp": 1
+      },
+      "alert_rate": 0.0003
+    },
+    "tuned_pipeline": {
+      "threshold": 0.1,
+      "precision": 0.164,
+      "recall": 0.773,
+      "f1": 0.2706,
+      "roc_auc": 0.848,
+      "pr_auc": 0.2471,
+      "log_loss": 0.1762,
+      "confusion_matrix": {
+        "tn": 2170,
+        "fp": 729,
+        "fn": 42,
+        "tp": 143
+      },
+      "alert_rate": 0.2827
     }
-  ]
+  }
 }

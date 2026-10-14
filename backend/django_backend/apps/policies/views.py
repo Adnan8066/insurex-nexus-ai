@@ -2,16 +2,23 @@
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework import permissions
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.contrib.auth import get_user_model
 
 from .models import Policy, PolicyCoverage, PolicyDocument, PremiumHistory, PolicyStatus
+from apps.accounts.models import Role
+from apps.vehicles.models import Vehicle
+from apps.repair_shops.models import RepairShop
 from .serializers import (
     PolicySerializer, PolicyCreateSerializer, PolicyUpdateSerializer,
     PolicyCoverageSerializer, PolicyDocumentSerializer, PremiumHistorySerializer
 )
-from common.permissions import IsOwnerOrAdmin
+from common.permissions import IsEmployee, IsAdmin
+
+User = get_user_model()
 
 
 class PolicyViewSet(viewsets.ModelViewSet):
@@ -44,15 +51,23 @@ class PolicyViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff_member:
+        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
             return self.queryset
-        return self.queryset.filter(customer=user)
+        if user.role == Role.INVESTIGATOR:
+            return self.queryset.filter(claims__assigned_investigator=user).distinct()
+        if user.role == Role.REPAIR:
+            return self.queryset.filter(vehicle__claims__assigned_repair_shop__email__iexact=user.email).distinct()
+        if user.role == Role.CUSTOMER:
+            return self.queryset.filter(customer=user)
+        return self.queryset.none()
     
     def get_permissions(self):
-        if self.action in ['create']:
-            return [IsAuthenticated()]
-        elif self.action in ['update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), IsOwnerOrAdmin()]
+        if self.action == 'create':
+            return [IsAuthenticated(), IsAdmin()]
+        if self.action == 'form_options':
+            return [IsAuthenticated(), IsEmployee()]
+        if self.action in ['update', 'partial_update', 'destroy', 'upload_document', 'update_coverage', 'add_premium_payment']:
+            return [IsAuthenticated(), IsAdmin()]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -68,9 +83,79 @@ class PolicyViewSet(viewsets.ModelViewSet):
         import uuid
         policy_number = f'POL-{uuid.uuid4().hex[:8].upper()}'
         customer = serializer.validated_data.get('customer') or user
-        if not user.is_staff_member:
-            customer = user
-        serializer.save(policy_number=policy_number, customer=customer)
+        policy = serializer.save(policy_number=policy_number, customer=customer)
+        if policy.vehicle_id:
+            Vehicle.objects.filter(pk=policy.vehicle_id).update(policy=policy)
+
+    def perform_update(self, serializer):
+        policy = self.get_object()
+        previous_vehicle_id = policy.vehicle_id
+        previous_customer_id = policy.customer_id
+        updated = serializer.save()
+        if previous_vehicle_id and previous_vehicle_id != updated.vehicle_id:
+            Vehicle.objects.filter(pk=previous_vehicle_id, policy=updated).update(policy=None)
+        if updated.vehicle_id:
+            vehicle_update = {'policy': updated}
+            if previous_vehicle_id == updated.vehicle_id and previous_customer_id != updated.customer_id:
+                vehicle_update['customer_id'] = updated.customer_id
+            Vehicle.objects.filter(pk=updated.vehicle_id).update(**vehicle_update)
+        from apps.claims.models import Claim
+        Claim.objects.filter(policy=updated).exclude(customer=updated.customer).update(customer=updated.customer)
+
+    @action(detail=False, methods=['get'], url_path='form-options', permission_classes=[permissions.IsAuthenticated, IsEmployee])
+    def form_options(self, request):
+        customer_id = request.query_params.get('customer')
+        policy_id = request.query_params.get('policy')
+        customers = User.objects.filter(role=Role.CUSTOMER, is_active=True).order_by('last_name', 'first_name', 'email')
+        agents = User.objects.filter(role__in=[Role.EMPLOYEE, Role.ADMIN], is_active=True).order_by('last_name', 'first_name', 'email')
+        investigators = User.objects.filter(role=Role.INVESTIGATOR, is_active=True).order_by('last_name', 'first_name', 'email')
+        vehicles = Vehicle.objects.none()
+        policies = Policy.objects.none()
+        if customer_id:
+            if not customers.filter(pk=customer_id).exists():
+                return Response({'detail': 'Select an active customer account.'}, status=status.HTTP_400_BAD_REQUEST)
+            current_vehicle_id = None
+            if policy_id:
+                current_vehicle_id = Policy.objects.filter(pk=policy_id).values_list('vehicle_id', flat=True).first()
+            vehicle_scope = Q(customer_id=customer_id)
+            if current_vehicle_id:
+                vehicle_scope |= Q(pk=current_vehicle_id)
+            vehicles = Vehicle.objects.filter(vehicle_scope).filter(
+                Q(policy__isnull=True) | Q(policy_id=policy_id) if policy_id else Q(policy__isnull=True)
+            ).order_by('year', 'make', 'model')
+            available_policies = Q(vehicle__isnull=True)
+            if policy_id:
+                available_policies |= Q(pk=policy_id)
+            policies = Policy.objects.filter(customer_id=customer_id).filter(available_policies).order_by('-created_at')
+        shops = RepairShop.objects.filter(status='approved').order_by('name')
+
+        def account_option(user):
+            return {
+                'id': user.pk,
+                'name': user.get_full_name().strip() or user.email,
+                'email': user.email,
+                'role': user.role,
+            }
+
+        return Response({
+            'customers': [account_option(user) for user in customers],
+            'agents': [account_option(user) for user in agents],
+            'investigators': [account_option(user) for user in investigators],
+            'vehicles': [{
+                'id': vehicle.pk,
+                'label': f'{vehicle.year} {vehicle.make} {vehicle.model} ({vehicle.license_plate})',
+                'policy': vehicle.policy_id,
+            } for vehicle in vehicles],
+            'policies': [{
+                'id': policy.pk,
+                'label': f'{policy.policy_number} — {policy.get_type_display()} ({policy.status})',
+            } for policy in policies],
+            'repair_shops': [{
+                'id': shop.pk,
+                'name': shop.name,
+                'email': shop.email,
+            } for shop in shops],
+        })
     
     @action(detail=True, methods=['post'], url_path='documents')
     def upload_document(self, request, pk=None):

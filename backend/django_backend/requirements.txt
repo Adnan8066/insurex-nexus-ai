@@ -28,7 +28,8 @@ numpy>=1.26.0
 # Machine learning inference and dataset training
 scikit-learn>=1.5.2
 joblib>=1.4.0
-# lightgbm==4.3.0
+matplotlib>=3.8.4
+lightgbm>=4.3.0
 
 # ML Experiment Tracking - comment out for now
 # mlflow==2.13.1

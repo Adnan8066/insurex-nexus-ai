@@ -62,6 +62,16 @@ class RepairJobUpdateSerializer(serializers.ModelSerializer):
             'customer_satisfaction', 'notes'
         ]
 
+class RepairJobPartnerUpdateSerializer(serializers.ModelSerializer):
+    """Fields a linked repair shop may update without changing ownership or claim pricing."""
+    class Meta:
+        model = RepairJob
+        fields = [
+            'status', 'repair_stage', 'actual_cost', 'assigned_bay',
+            'started_at', 'estimated_completion', 'actual_completion',
+            'parts', 'labor_hours', 'quality_score', 'customer_satisfaction', 'notes',
+        ]
+
 class RepairShopSerializer(serializers.ModelSerializer):
     documents = RepairShopDocumentSerializer(many=True, read_only=True)
     active_jobs_count = serializers.SerializerMethodField()

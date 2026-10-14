@@ -15,6 +15,7 @@ import {
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate } from '../../utils/helpers'
 import { policyService } from '../../services'
+import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -23,7 +24,6 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePag
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
-import { useAuth } from '../../context/useAuth'
 
 const policyTypes = [
   { value: '', label: 'All Types' },
@@ -43,8 +43,9 @@ const policyStatuses = [
 ]
 
 export function PolicyList() {
-  const { hasRole } = useAuth()
-  const canCreatePolicy = hasRole('admin')
+  const { user } = useAuth()
+  const canCreatePolicy = user?.role === 'admin'
+  const canManagePolicies = user?.role === 'admin'
   const [loading, setLoading] = useState(true)
   const [policies, setPolicies] = useState([])
   const [filteredPolicies, setFilteredPolicies] = useState([])
@@ -271,7 +272,7 @@ export function PolicyList() {
                       <TableHead onClick={() => handleSort('premium')} className="cursor-pointer">
                         Premium {sortConfig.key === 'premium' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
+                          <TableHead className="w-24">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -298,16 +299,11 @@ export function PolicyList() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Link to={`/policies/${policy.id}`} className="text-primary hover:underline text-sm">View</Link>
-                            <button
-                              onClick={() => {
-                                setDeleteError('')
-                                setDeleteTarget(policy)
-                              }}
-                              className="text-red-600 hover:text-red-700 p-1"
+                            {canManagePolicies && <button
+                              onClick={() => { setDeleteError(''); setDeleteTarget(policy) }}
+                              className="p-1 text-red-600 hover:text-red-700"
                               title="Delete policy"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            ><Trash2 className="h-4 w-4" /></button>}
                           </div>
                         </TableCell>
                       </TableRow>

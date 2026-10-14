@@ -18,6 +18,7 @@ import { clsx } from 'clsx'
 import { claimService } from '../../services/claimService'
 import { policyService } from '../../services/policyService'
 import { vehicleService } from '../../services/vehicleService'
+import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/forms/FormFields'
@@ -38,6 +39,8 @@ const severityOptions = [
 
 export function SubmitClaim() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canSelectCustomer = ['admin', 'employee'].includes(user?.role)
   const [searchParams] = useSearchParams()
   const preselectedPolicy = searchParams.get('policy')
   const preselectedVehicle = searchParams.get('vehicle')
@@ -52,10 +55,12 @@ export function SubmitClaim() {
   const [successClaim, setSuccessClaim] = useState(null)
   const [policies, setPolicies] = useState([])
   const [vehicles, setVehicles] = useState([])
+  const [customers, setCustomers] = useState([])
 
   const [formData, setFormData] = useState({
     policyId: preselectedPolicy || '',
     vehicleId: preselectedVehicle || '',
+    customerId: canSelectCustomer ? '' : String(user?.id || ''),
     incidentDate: new Date().toISOString().split('T')[0],
     incidentTime: '14:30',
     incidentType: 'collision',
@@ -77,42 +82,50 @@ export function SubmitClaim() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [polRes, vehRes] = await Promise.all([
+        const [polRes, vehRes, formOptions] = await Promise.all([
           policyService.getPolicies(),
           vehicleService.getVehicles(),
+          canSelectCustomer ? policyService.getPolicyFormOptions() : Promise.resolve({ customers: [] }),
         ])
         const pols = Array.isArray(polRes) ? polRes : (polRes.results || [])
         const vehs = Array.isArray(vehRes) ? vehRes : (vehRes.results || [])
         setPolicies(pols)
         setVehicles(vehs)
+        setCustomers(formOptions.customers || [])
         const requestedPolicy = preselectedPolicy && pols.some((policy) => String(policy.id) === String(preselectedPolicy))
           ? String(preselectedPolicy)
           : ''
+        const requestedPolicyData = pols.find((policy) => String(policy.id) === requestedPolicy)
         const requestedVehicle = preselectedVehicle && vehs.find((vehicle) => String(vehicle.id) === String(preselectedVehicle))
-        const defaultVehicle = (requestedVehicle && (!requestedPolicy || !requestedVehicle.policy || String(requestedVehicle.policy) === requestedPolicy)
+        const initialCustomer = canSelectCustomer
+          ? String(requestedPolicyData?.customer || requestedVehicle?.customer || '')
+          : String(user?.id || '')
+        const initialPolicies = pols.filter((policy) => String(policy.customer) === initialCustomer)
+        const initialVehicles = vehs.filter((vehicle) => String(vehicle.customer) === initialCustomer)
+        const defaultVehicle = (requestedVehicle && String(requestedVehicle.customer) === initialCustomer && (!requestedPolicy || !requestedVehicle.policy || String(requestedVehicle.policy) === requestedPolicy)
           ? requestedVehicle
           : null)
-          || vehs.find((vehicle) => !requestedPolicy || !vehicle.policy || String(vehicle.policy) === requestedPolicy)
-          || vehs[0]
+          || initialVehicles.find((vehicle) => !requestedPolicy || !vehicle.policy || String(vehicle.policy) === requestedPolicy)
         const selectedPolicy = requestedPolicy
-          || (defaultVehicle?.policy ? String(defaultVehicle.policy) : String(pols[0]?.id || ''))
+          || (defaultVehicle?.policy ? String(defaultVehicle.policy) : String(initialPolicies[0]?.id || ''))
         setFormData((prev) => ({
           ...prev,
+          customerId: initialCustomer,
           policyId: requestedPolicy || selectedPolicy || prev.policyId,
-          vehicleId: defaultVehicle ? String(defaultVehicle.id) : prev.vehicleId,
+          vehicleId: defaultVehicle ? String(defaultVehicle.id) : '',
         }))
       } catch (err) {
         setError('Failed to load your policies and vehicles. Please add a policy and vehicle first.')
       }
     }
     fetchData()
-  }, [preselectedPolicy, preselectedVehicle])
+  }, [preselectedPolicy, preselectedVehicle, canSelectCustomer, user?.id])
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     setError('')
     if (name === 'vehicleId') {
-      const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(value))
+      const selectedVehicle = customerVehicles.find((vehicle) => String(vehicle.id) === String(value))
       setFormData((prev) => ({
         ...prev,
         vehicleId: value,
@@ -120,11 +133,24 @@ export function SubmitClaim() {
       }))
       return
     }
+    if (name === 'customerId') {
+      const customerPolicies = policies.filter((policy) => String(policy.customer) === String(value))
+      const customerVehicles = vehicles.filter((vehicle) => String(vehicle.customer) === String(value))
+      const firstPolicy = customerPolicies[0]
+      const firstVehicle = customerVehicles.find((vehicle) => !firstPolicy || !vehicle.policy || String(vehicle.policy) === String(firstPolicy.id))
+      setFormData((prev) => ({
+        ...prev,
+        customerId: value,
+        policyId: firstPolicy ? String(firstPolicy.id) : '',
+        vehicleId: firstVehicle ? String(firstVehicle.id) : '',
+      }))
+      return
+    }
     if (name === 'policyId') {
-      const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(formData.vehicleId))
+      const selectedVehicle = customerVehicles.find((vehicle) => String(vehicle.id) === String(formData.vehicleId))
       const selectedPolicyId = value
       const compatibleVehicle = selectedVehicle?.policy && String(selectedVehicle.policy) !== selectedPolicyId
-        ? vehicles.find((vehicle) => !vehicle.policy || String(vehicle.policy) === selectedPolicyId)
+        ? customerVehicles.find((vehicle) => !vehicle.policy || String(vehicle.policy) === selectedPolicyId)
         : selectedVehicle
       setFormData((prev) => ({
         ...prev,
@@ -264,6 +290,13 @@ export function SubmitClaim() {
     { number: 4, label: 'Amount & Evidence' },
   ]
 
+  const customerPolicies = canSelectCustomer
+    ? policies.filter((policy) => String(policy.customer) === String(formData.customerId))
+    : policies
+  const customerVehicles = canSelectCustomer
+    ? vehicles.filter((vehicle) => String(vehicle.customer) === String(formData.customerId))
+    : vehicles
+
   return (
     <div className="page max-w-4xl mx-auto">
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -304,12 +337,21 @@ export function SubmitClaim() {
               <div className="space-y-5">
                 <h2 className="text-lg font-bold text-gray-900 border-b pb-2">Step 1: Select Policy & Vehicle</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {canSelectCustomer && <Select
+                    label="Customer who owns this claim"
+                    name="customerId"
+                    value={formData.customerId}
+                    onChange={handleChange}
+                    options={customers.map((customer) => ({ value: String(customer.id), label: `${customer.name} (${customer.email})` }))}
+                    placeholder="Select a customer"
+                    required
+                  />}
                   <Select
                     label="Associated Policy"
                     name="policyId"
                     value={formData.policyId}
                     onChange={handleChange}
-                    options={policies
+                    options={customerPolicies
                       .filter((policy) => {
                         const vehicle = vehicles.find((item) => String(item.id) === String(formData.vehicleId))
                         return !vehicle?.policy || String(vehicle.policy) === String(policy.id)
@@ -323,7 +365,7 @@ export function SubmitClaim() {
                     name="vehicleId"
                     value={formData.vehicleId}
                     onChange={handleChange}
-                    options={vehicles.map((v) => ({
+                    options={customerVehicles.map((v) => ({
                       value: String(v.id),
                       label: `${v.year} ${v.make} ${v.model} (${v.license_plate})`,
                     }))}

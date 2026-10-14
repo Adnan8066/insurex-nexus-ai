@@ -21,12 +21,15 @@ import {
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
 import { claimService } from '../../services'
+import { policyService } from '../../services/policyService'
+import { useAuth } from '../../context/useAuth'
 import { claimStatusWorkflow } from '../../data/claims'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
+import { Select } from '../../components/forms/FormFields'
 
 const mapClaim = (c) => ({
   id: c.id,
@@ -65,8 +68,11 @@ const mapClaim = (c) => ({
   status: c.status,
   priority: c.priority,
   assignedAdjuster: c.assigned_adjuster_name,
+  assignedAdjusterId: c.assigned_adjuster,
   assignedInvestigator: c.assigned_investigator_name,
+  assignedInvestigatorId: c.assigned_investigator,
   assignedRepairShop: c.assigned_repair_shop_name,
+  assignedRepairShopId: c.assigned_repair_shop,
   aiAssessment: c.ai_assessment ? {
     ...c.ai_assessment,
     predictedRepairCost: c.ai_assessment.predicted_repair_cost,
@@ -106,12 +112,36 @@ const mapClaim = (c) => ({
 
 export function ClaimDetails() {
   const { id } = useParams()
+  const { user } = useAuth()
+  const canManageAssignments = ['admin', 'employee'].includes(user?.role)
   const [claim, setClaim] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [assignmentOptions, setAssignmentOptions] = useState({ agents: [], investigators: [], repair_shops: [] })
+  const [assignmentForm, setAssignmentForm] = useState({ adjuster: '', investigator: '', repairShop: '' })
+  const [savingAssignment, setSavingAssignment] = useState(false)
+
+  const refreshClaim = async () => {
+    const result = mapClaim(await claimService.getClaim(id))
+    setClaim(result)
+    setAssignmentForm({
+      adjuster: String(result.assignedAdjusterId || ''),
+      investigator: String(result.assignedInvestigatorId || ''),
+      repairShop: String(result.assignedRepairShopId || ''),
+    })
+  }
+
+  useEffect(() => {
+    if (!canManageAssignments) return
+    let active = true
+    policyService.getPolicyFormOptions().then((options) => {
+      if (active) setAssignmentOptions(options)
+    }).catch(() => {})
+    return () => { active = false }
+  }, [canManageAssignments])
 
   useEffect(() => {
     let cancelled = false
@@ -119,8 +149,11 @@ export function ClaimDetails() {
       setLoading(true)
       setError('')
       try {
-        const res = await claimService.getClaim(id)
-        if (!cancelled) setClaim(mapClaim(res))
+        const res = mapClaim(await claimService.getClaim(id))
+        if (!cancelled) {
+          setClaim(res)
+          setAssignmentForm({ adjuster: String(res.assignedAdjusterId || ''), investigator: String(res.assignedInvestigatorId || ''), repairShop: String(res.assignedRepairShopId || '') })
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err.response?.data?.detail || 'Failed to load claim')
@@ -133,6 +166,21 @@ export function ClaimDetails() {
     fetchClaim()
     return () => { cancelled = true }
   }, [id])
+
+  const saveAssignment = async (kind) => {
+    setSavingAssignment(true)
+    setError('')
+    try {
+      if (kind === 'adjuster') await claimService.assignAdjuster(id, Number(assignmentForm.adjuster))
+      if (kind === 'investigator') await claimService.assignInvestigator(id, Number(assignmentForm.investigator))
+      if (kind === 'repairShop') await claimService.assignRepairShop(id, Number(assignmentForm.repairShop))
+      await refreshClaim()
+    } catch (err) {
+      setError(err.response?.data?.error || err.response?.data?.detail || 'Unable to update claim assignment.')
+    } finally {
+      setSavingAssignment(false)
+    }
+  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -365,6 +413,20 @@ export function ClaimDetails() {
                       </span>
                     </div>
                   </div>
+                  {canManageAssignments && (
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-5">
+                      {[
+                        { key: 'adjuster', label: 'Assign Adjuster', options: assignmentOptions.agents || [] },
+                        { key: 'investigator', label: 'Assign Investigator', options: assignmentOptions.investigators || [] },
+                        { key: 'repairShop', label: 'Assign Repair Facility', options: (assignmentOptions.repair_shops || []).map((shop) => ({ id: shop.id, name: shop.name, email: shop.email })) },
+                      ].map(({ key, label, options }) => (
+                        <div key={key} className="space-y-2">
+                          <Select label={label} value={assignmentForm[key]} onChange={(event) => setAssignmentForm((current) => ({ ...current, [key]: event.target.value }))} options={options.map((item) => ({ value: String(item.id), label: item.name || item.email }))} placeholder={`Select ${label.toLowerCase()}`} />
+                          <Button size="sm" disabled={!assignmentForm[key] || savingAssignment} onClick={() => saveAssignment(key)}>Save</Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </>

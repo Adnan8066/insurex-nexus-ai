@@ -15,6 +15,7 @@ import {
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
 import { claimService } from '../../services'
+import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -46,6 +47,8 @@ const statusOptions = [
 const PENDING_STATUSES = ['submitted', 'under_review', 'ai_assessment', 'investigation']
 
 export function ClaimList() {
+  const { user } = useAuth()
+  const canSubmitClaim = ['customer', 'employee', 'admin'].includes(user?.role)
   const [searchParams] = useSearchParams()
   const statusParam = searchParams.get('status')
 
@@ -225,12 +228,12 @@ export function ClaimList() {
           <p className="page-subtitle">Track, review, and manage all auto insurance claims across their full lifecycle</p>
         </div>
         <div className="flex gap-2">
-          <Link to="/claims/new">
+          {canSubmitClaim && <Link to="/claims/new">
             <Button variant="primary">
               <Plus className="w-4 h-4 mr-2" />
               Submit Claim
             </Button>
-          </Link>
+          </Link>}
         </div>
       </div>
 
@@ -432,7 +435,7 @@ export function ClaimList() {
                 icon={<Briefcase className="w-12 h-12" />}
                 title="No claims match your criteria"
                 description={search || typeFilter || statusFilter ? 'Try clearing your search or filter filters.' : 'No claims have been submitted yet.'}
-                action={<Button asChild><Link to="/claims/new">Submit a New Claim</Link></Button>}
+                action={canSubmitClaim ? <Button asChild><Link to="/claims/new">Submit a New Claim</Link></Button> : undefined}
               />
             )}
           </div>
