@@ -56,7 +56,7 @@ export function useDebounce(value, delay) {
   return debouncedValue
 }
 
-export function useAsync(asyncFn, deps = []) {
+export function useAsync(asyncFn) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -74,7 +74,7 @@ export function useAsync(asyncFn, deps = []) {
     } finally {
       setLoading(false)
     }
-  }, deps)
+  }, [asyncFn])
 
   useEffect(() => {
     execute()

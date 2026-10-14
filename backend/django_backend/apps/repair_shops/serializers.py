@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import RepairShop, RepairJob, RepairEstimate, RepairShopDocument
 
 class RepairShopDocumentSerializer(serializers.ModelSerializer):
@@ -77,6 +78,7 @@ class RepairShopSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'approved_by', 'approved_at']
     
+    @extend_schema_field(serializers.IntegerField())
     def get_active_jobs_count(self, obj):
         return obj.jobs.exclude(status__in=['completed', 'delivered', 'cancelled']).count()
 

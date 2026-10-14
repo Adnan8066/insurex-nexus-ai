@@ -1,4 +1,4 @@
-from rest_framework import status, viewsets, serializers
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -16,7 +16,8 @@ from .models import User, UserProfile, Role
 from .serializers import (
     UserSerializer, UserRegistrationSerializer, UserLoginSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer,
-    PasswordResetConfirmSerializer, UserUpdateSerializer
+    PasswordResetConfirmSerializer, UserUpdateSerializer,
+    RefreshTokenRequestSerializer, LogoutRequestSerializer
 )
 
 User = get_user_model()
@@ -32,9 +33,9 @@ class AuthViewSet(viewsets.GenericViewSet):
         elif self.action == 'login':
             return UserLoginSerializer
         elif self.action == 'logout':
-            return serializers.Serializer
+            return LogoutRequestSerializer
         elif self.action == 'refresh':
-            return serializers.Serializer
+            return RefreshTokenRequestSerializer
         elif self.action == 'me':
             return UserSerializer
         elif self.action == 'update_profile':
@@ -107,8 +108,10 @@ class AuthViewSet(viewsets.GenericViewSet):
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def logout(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         try:
-            refresh_token = request.data.get('refresh')
+            refresh_token = serializer.validated_data.get('refresh')
             if refresh_token:
                 token = RefreshToken(refresh_token)
                 token.blacklist()
@@ -119,12 +122,9 @@ class AuthViewSet(viewsets.GenericViewSet):
     
     @action(detail=False, methods=['post'])
     def refresh(self, request):
-        refresh_token = request.data.get('refresh')
-        if not refresh_token:
-            return Response({
-                'success': False,
-                'error': {'code': 400, 'message': 'Refresh token required'}
-            }, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refresh_token = serializer.validated_data['refresh']
         
         try:
             token = RefreshToken(refresh_token)

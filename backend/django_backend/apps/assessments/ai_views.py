@@ -4,10 +4,12 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 
 from apps.claims.models import Claim
 from .models import ClaimAssessment, AgentOutput, DecisionFlow, AssessmentType, AssessmentStatus
-from .serializers import ClaimAssessmentSerializer
+from .serializers import ClaimAssessmentSerializer, DecisionFlowSerializer
 from ml_service import (
     detect_fraud_ml,
     predict_repair_cost_ml,
@@ -15,6 +17,7 @@ from ml_service import (
 )
 
 
+@extend_schema(request=OpenApiTypes.OBJECT, responses=ClaimAssessmentSerializer)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def assess_claim(request):
@@ -151,6 +154,7 @@ def calculate_confidence(assessment):
     return 85.0
 
 
+@extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def predict_repair_cost(request):
@@ -163,6 +167,7 @@ def predict_repair_cost(request):
     return Response(result)
 
 
+@extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def detect_fraud(request):
@@ -175,6 +180,7 @@ def detect_fraud(request):
     return Response(result)
 
 
+@extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def predict_total_loss(request):
@@ -187,6 +193,7 @@ def predict_total_loss(request):
     return Response(result)
 
 
+@extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def run_agent(request, agent_type):
@@ -239,6 +246,7 @@ def run_agent(request, agent_type):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema(responses=DecisionFlowSerializer)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_decision_flow(request, claim_id):

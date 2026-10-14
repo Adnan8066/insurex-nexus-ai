@@ -21,7 +21,7 @@ import {
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
 import { policyService, claimService, vehicleService } from '../../services'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -35,7 +35,7 @@ import ErrorBoundary, {
 } from '../../components/ui/ErrorBoundary'
 
 import { DashboardSkeleton, ChartSkeleton, TableSkeleton } from '../../components/ui/Skeleton'
-import { useToast } from '../../components/ui/Toast'
+import { useToast } from '../../components/ui/toastHooks'
 import { analyticsService } from '../../services/analyticsService'
 
 const claimStatusConfig = {
@@ -167,7 +167,7 @@ export function CustomerDashboard() {
 
   useEffect(() => {
     fetchData(timeframe)
-  }, [])
+  }, [fetchData, timeframe])
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams)
@@ -177,7 +177,7 @@ export function CustomerDashboard() {
       params.delete('timeframe')
     }
     setSearchParams(params, { replace: true })
-  }, [timeframe, setSearchParams])
+  }, [timeframe, searchParams, setSearchParams])
 
   useEffect(() => {
     let interval

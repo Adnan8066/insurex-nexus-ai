@@ -28,7 +28,7 @@ import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
 import { policyService, claimService, vehicleService, settlementService } from '../../services'
 import api from '../../services/api'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -38,7 +38,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
 import ErrorBoundary, { ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
 import { DashboardSkeleton, ChartSkeleton, TableSkeleton, SkeletonCard } from '../../components/ui/Skeleton'
-import { useToast } from '../../components/ui/Toast'
+import { useToast } from '../../components/ui/toastHooks'
 import { useAnalytics, useAutoRefresh } from '../../hooks/useAnalytics'
 import { analyticsService } from '../../services/analyticsService'
 
@@ -176,7 +176,7 @@ export function EmployeeDashboard() {
 
   useEffect(() => {
     fetchData(timeframe)
-  }, [])
+  }, [fetchData, timeframe])
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams)
@@ -186,7 +186,7 @@ export function EmployeeDashboard() {
       params.delete('timeframe')
     }
     setSearchParams(params, { replace: true })
-  }, [timeframe, setSearchParams])
+  }, [timeframe, searchParams, setSearchParams])
 
   useAutoRefresh(autoRefresh, 60000, () => fetchData(timeframe))
 

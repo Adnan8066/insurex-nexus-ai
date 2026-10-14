@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from .models import Claim, ClaimDocument, ClaimStatusHistory, ClaimTimeline, ClaimNote, ClaimStatus, ClaimPriority
 
 class ClaimDocumentSerializer(serializers.ModelSerializer):
@@ -70,6 +72,7 @@ class ClaimSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'claim_number', 'submitted_at', 'updated_at', 'closed_at']
     
+    @extend_schema_field(OpenApiTypes.OBJECT)
     def get_vehicle_info(self, obj):
         if obj.vehicle:
             return {

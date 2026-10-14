@@ -13,7 +13,7 @@ import {
   Moon,
   Sun,
 } from 'lucide-react'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 
 export function Navbar({ sidebarCollapsed, onToggleSidebar }) {
   const { user, logout } = useAuth()

@@ -4,7 +4,7 @@ import { ArrowLeft, FileText, Save, X, Car, Home, Building2 } from 'lucide-react
 import { Button } from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/forms/FormFields'
 import { policyService } from '../../services'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 
 export function PolicyForm() {
   const navigate = useNavigate()

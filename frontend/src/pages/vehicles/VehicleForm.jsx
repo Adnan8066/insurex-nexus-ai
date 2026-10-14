@@ -4,7 +4,7 @@ import { ArrowLeft, Car, Save, X } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { vehicleService } from '../../services'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/useAuth'
 
 export function VehicleForm() {
   const navigate = useNavigate()

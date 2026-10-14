@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { analyticsService } from '../services/analyticsService'
 
 export function useAnalytics(timeframe = 'quarter', autoRefresh = false, refreshInterval = 60000) {
   const [data, setData] = useState(null)
@@ -11,8 +12,6 @@ export function useAnalytics(timeframe = 'quarter', autoRefresh = false, refresh
     setLoading(true)
     setError(null)
     try {
-      const { analyticsService } = await import('../services/analyticsService')
-      
       const [summary, trend, fraudRisk] = await Promise.all([
         analyticsService.getDashboardSummary(timeframe),
         analyticsService.getClaimsTrend(getDaysFromTimeframe(timeframe)),

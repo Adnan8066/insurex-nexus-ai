@@ -148,6 +148,15 @@ class InvestigationNote(models.Model):
     def __str__(self):
         return f"Note on {self.investigation} by {self.author}"
 
+FRAUD_ALERT_STATUS_CHOICES = [
+    ('new', _('New')),
+    ('investigation', _('Investigation')),
+    ('reviewed', _('Reviewed')),
+    ('dismissed', _('Dismissed')),
+    ('escalated', _('Escalated')),
+]
+
+
 class FraudAlert(models.Model):
     RISK_LEVELS = [
         ('low', _('Low')),
@@ -173,13 +182,7 @@ class FraudAlert(models.Model):
         blank=True,
         related_name='assigned_fraud_alerts'
     )
-    status = models.CharField(_('status'), max_length=20, choices=[
-        ('new', _('New')),
-        ('investigation', _('Investigation')),
-        ('reviewed', _('Reviewed')),
-        ('dismissed', _('Dismissed')),
-        ('escalated', _('Escalated')),
-    ], default='new')
+    status = models.CharField(_('status'), max_length=20, choices=FRAUD_ALERT_STATUS_CHOICES, default='new')
     investigator_notes = models.TextField(_('investigator notes'), blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

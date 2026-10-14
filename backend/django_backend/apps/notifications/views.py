@@ -18,6 +18,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-sent_at']
     
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Notification.objects.none()
         return Notification.objects.filter(recipient=self.request.user)
     
     @action(detail=True, methods=['post'], url_path='mark-read')
@@ -56,6 +58,8 @@ class NotificationPreferenceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return NotificationPreference.objects.none()
         return NotificationPreference.objects.filter(user=self.request.user)
     
     def get_object(self):

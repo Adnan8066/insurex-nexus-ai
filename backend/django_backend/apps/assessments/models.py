@@ -112,6 +112,14 @@ class ClaimAssessment(models.Model):
     def __str__(self):
         return f"Assessment for {self.claim} ({self.get_status_display()})"
 
+AGENT_OUTPUT_STATUS_CHOICES = [
+    ('pending', _('Pending')),
+    ('running', _('Running')),
+    ('completed', _('Completed')),
+    ('failed', _('Failed')),
+]
+
+
 class AgentOutput(models.Model):
     AGENT_TYPES = [
         ('claim_agent', _('Claim Agent')),
@@ -124,12 +132,7 @@ class AgentOutput(models.Model):
     
     claim = models.ForeignKey('claims.Claim', on_delete=models.CASCADE, related_name='agent_outputs')
     agent_type = models.CharField(_('agent type'), max_length=20, choices=AGENT_TYPES)
-    status = models.CharField(_('status'), max_length=20, choices=[
-        ('pending', _('Pending')),
-        ('running', _('Running')),
-        ('completed', _('Completed')),
-        ('failed', _('Failed')),
-    ], default='pending')
+    status = models.CharField(_('status'), max_length=20, choices=AGENT_OUTPUT_STATUS_CHOICES, default='pending')
     input_data = models.JSONField(_('input data'), default=dict)
     output_data = models.JSONField(_('output data'), default=dict)
     confidence = models.DecimalField(_('confidence'), max_digits=5, decimal_places=2, blank=True, null=True)

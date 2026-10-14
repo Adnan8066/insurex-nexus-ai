@@ -1,9 +1,9 @@
-import { useState, useCallback, createContext, useContext, useEffect } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Button } from './Button'
 
-const ToastContext = createContext(null)
+import { ToastContext } from './toastContext'
 
 const toastIcons = {
   success: CheckCircle,
@@ -96,6 +96,10 @@ function ToastContainer({ position = 'top-right', toasts, onClose }) {
 export function ToastProvider({ children, position = 'top-right', maxToasts = 5 }) {
   const [toasts, setToasts] = useState([])
 
+  const removeToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
   const addToast = useCallback((toast) => {
     const id = Date.now() + Math.random()
     const newToast = {
@@ -120,24 +124,20 @@ export function ToastProvider({ children, position = 'top-right', maxToasts = 5 
     }
 
     return id
-  }, [maxToasts])
-
-  const removeToast = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
+  }, [maxToasts, removeToast])
 
   const clearAll = useCallback(() => {
     setToasts([])
   }, [])
 
-  const toastMethods = {
+  const toastMethods = useMemo(() => ({
     success: (message, options = {}) => addToast({ type: 'success', message, ...options }),
     error: (message, options = {}) => addToast({ type: 'error', message, persistent: true, ...options }),
     warning: (message, options = {}) => addToast({ type: 'warning', message, ...options }),
     info: (message, options = {}) => addToast({ type: 'info', message, ...options }),
     dismiss: removeToast,
     clear: clearAll,
-  }
+  }), [addToast, removeToast, clearAll])
 
   return (
     <ToastContext.Provider value={toastMethods}>
@@ -145,39 +145,6 @@ export function ToastProvider({ children, position = 'top-right', maxToasts = 5 
       <ToastContainer position={position} toasts={toasts} onClose={removeToast} />
     </ToastContext.Provider>
   )
-}
-
-export function useToast() {
-  const context = useContext(ToastContext)
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider')
-  }
-  return context
-}
-
-export function useToastActions() {
-  const { success, error, warning, info, dismiss, clear } = useToast()
-  
-  return {
-    showSuccess: (message, options) => success(message, options),
-    showError: (message, options) => error(message, options),
-    showWarning: (message, options) => warning(message, options),
-    showInfo: (message, options) => info(message, options),
-    dismiss,
-    clear,
-    showRetryToast: (message, onRetry, options = {}) => 
-      error(message, {
-        persistent: true,
-        action: {
-          label: 'Retry',
-          onClick: onRetry,
-          icon: <span className="w-4 h-4">↻</span>,
-          persist: false,
-          ...options.action,
-        },
-        ...options,
-      }),
-  }
 }
 
 export default ToastProvider

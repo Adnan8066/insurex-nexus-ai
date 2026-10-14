@@ -1,7 +1,9 @@
-from rest_framework import viewsets, status, filters
+from rest_framework import viewsets, status, filters, serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Sum, Avg, Q
 from django.utils import timezone
@@ -18,6 +20,12 @@ from apps.claims.models import Claim
 from apps.policies.models import Policy
 from apps.settlements.models import Settlement
 from apps.investigations.models import FraudAlert
+
+
+class ClaimTrendResponseSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    count = serializers.IntegerField()
+    total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, allow_null=True)
 
 
 class DashboardMetricViewSet(viewsets.ModelViewSet):
@@ -118,6 +126,7 @@ class ReportExecutionViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-started_at']
 
 
+@extend_schema(responses=OpenApiTypes.OBJECT)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard_summary(request):
@@ -183,6 +192,7 @@ def dashboard_summary(request):
     return Response(summary)
 
 
+@extend_schema(responses=OpenApiTypes.OBJECT)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def fraud_risk(request):
@@ -197,18 +207,21 @@ def fraud_risk(request):
     })
 
 
+@extend_schema(responses=OpenApiTypes.OBJECT)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def overview(request):
     return dashboard_summary(request)
 
 
+@extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def export_report(request):
     return Response({'detail': 'Export is not configured in this environment.'}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
 
+@extend_schema(responses={200: ClaimTrendResponseSerializer(many=True)})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def claims_trend(request):

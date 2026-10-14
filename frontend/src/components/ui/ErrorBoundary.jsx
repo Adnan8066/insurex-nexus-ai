@@ -95,16 +95,6 @@ class ErrorBoundary extends Component {
   }
 }
 
-export function withErrorBoundary(Component, errorBoundaryProps = {}) {
-  return function WrappedComponent(props) {
-    return (
-      <ErrorBoundary {...errorBoundaryProps}>
-        <Component {...props} />
-      </ErrorBoundary>
-    )
-  }
-}
-
 export function DashboardErrorFallback({ error, errorInfo, resetError, retryCount }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

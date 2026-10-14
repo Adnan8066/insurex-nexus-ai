@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth import get_user_model
 from .models import Policy, PolicyCoverage, PolicyDocument, PremiumHistory
 
@@ -54,6 +56,7 @@ class PolicySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'policy_number', 'created_at', 'updated_at']
     
+    @extend_schema_field(OpenApiTypes.OBJECT)
     def get_vehicle_info(self, obj):
         if obj.vehicle:
             return {

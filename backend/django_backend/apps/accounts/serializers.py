@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from drf_spectacular.utils import extend_schema_field
 from .models import User, UserProfile, Role
 
 User = get_user_model()
@@ -29,9 +30,11 @@ class UserSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'date_joined', 'is_verified', 'is_active']
     
+    @extend_schema_field(serializers.CharField())
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
 
+    @extend_schema_field(serializers.CharField())
     def get_name(self, obj):
         return self.get_full_name(obj)
 
@@ -76,6 +79,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class UserLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+
+class RefreshTokenRequestSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+class LogoutRequestSerializer(serializers.Serializer):
+    refresh = serializers.CharField(required=False, allow_blank=True)
 
 class PasswordChangeSerializer(serializers.Serializer):
     current_password = serializers.CharField(required=True)

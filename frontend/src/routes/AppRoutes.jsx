@@ -1,32 +1,34 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { Login } from '../pages/auth/Login'
-import { Register } from '../pages/auth/Register'
-import { ForgotPassword } from '../pages/auth/ForgotPassword'
-import { MainLayout } from '../layouts/MainLayout'
-import { CustomerDashboard } from '../pages/dashboard/CustomerDashboard'
-import { EmployeeDashboard } from '../pages/dashboard/EmployeeDashboard'
-import { PolicyList } from '../pages/policies/PolicyList'
-import { PolicyDetails } from '../pages/policies/PolicyDetails'
-import { PolicyForm } from '../pages/policies/PolicyForm'
-import { VehicleList } from '../pages/vehicles/VehicleList'
-import { VehicleDetails } from '../pages/vehicles/VehicleDetails'
-import { VehicleForm } from '../pages/vehicles/VehicleForm'
-import { ClaimList } from '../pages/claims/ClaimList'
-import { ClaimDetails } from '../pages/claims/ClaimDetails'
-import { SubmitClaim } from '../pages/claims/SubmitClaim'
-import { ClaimTracking } from '../pages/claims/ClaimTracking'
-import { AIAssessment } from '../pages/ai/AIAssessment'
-import { FraudDashboard } from '../pages/fraud/FraudDashboard'
-import { InvestigatorDashboard } from '../pages/investigator/InvestigatorDashboard'
-import { RepairDashboard } from '../pages/repair/RepairDashboard'
-import { SettlementDashboard } from '../pages/settlement/SettlementDashboard'
-import { AdminDashboard } from '../pages/admin/AdminDashboard'
-import { AIDecisionCenter } from '../pages/decision/AIDecisionCenter'
-import { AIOperations } from '../pages/operations/AIOperations'
-import { Notifications } from '../pages/notifications/Notifications'
-import { Profile } from '../pages/profile/Profile'
-import { Settings } from '../pages/settings/Settings'
+import { useAuth } from '../context/useAuth'
+
+const Login = lazy(() => import('../pages/auth/Login').then((module) => ({ default: module.Login })))
+const Register = lazy(() => import('../pages/auth/Register').then((module) => ({ default: module.Register })))
+const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword').then((module) => ({ default: module.ForgotPassword })))
+const MainLayout = lazy(() => import('../layouts/MainLayout').then((module) => ({ default: module.MainLayout })))
+const CustomerDashboard = lazy(() => import('../pages/dashboard/CustomerDashboard').then((module) => ({ default: module.CustomerDashboard })))
+const EmployeeDashboard = lazy(() => import('../pages/dashboard/EmployeeDashboard').then((module) => ({ default: module.EmployeeDashboard })))
+const PolicyList = lazy(() => import('../pages/policies/PolicyList').then((module) => ({ default: module.PolicyList })))
+const PolicyDetails = lazy(() => import('../pages/policies/PolicyDetails').then((module) => ({ default: module.PolicyDetails })))
+const PolicyForm = lazy(() => import('../pages/policies/PolicyForm').then((module) => ({ default: module.PolicyForm })))
+const VehicleList = lazy(() => import('../pages/vehicles/VehicleList').then((module) => ({ default: module.VehicleList })))
+const VehicleDetails = lazy(() => import('../pages/vehicles/VehicleDetails').then((module) => ({ default: module.VehicleDetails })))
+const VehicleForm = lazy(() => import('../pages/vehicles/VehicleForm').then((module) => ({ default: module.VehicleForm })))
+const ClaimList = lazy(() => import('../pages/claims/ClaimList').then((module) => ({ default: module.ClaimList })))
+const ClaimDetails = lazy(() => import('../pages/claims/ClaimDetails').then((module) => ({ default: module.ClaimDetails })))
+const SubmitClaim = lazy(() => import('../pages/claims/SubmitClaim').then((module) => ({ default: module.SubmitClaim })))
+const ClaimTracking = lazy(() => import('../pages/claims/ClaimTracking').then((module) => ({ default: module.ClaimTracking })))
+const AIAssessment = lazy(() => import('../pages/ai/AIAssessment').then((module) => ({ default: module.AIAssessment })))
+const FraudDashboard = lazy(() => import('../pages/fraud/FraudDashboard').then((module) => ({ default: module.FraudDashboard })))
+const InvestigatorDashboard = lazy(() => import('../pages/investigator/InvestigatorDashboard').then((module) => ({ default: module.InvestigatorDashboard })))
+const RepairDashboard = lazy(() => import('../pages/repair/RepairDashboard').then((module) => ({ default: module.RepairDashboard })))
+const SettlementDashboard = lazy(() => import('../pages/settlement/SettlementDashboard').then((module) => ({ default: module.SettlementDashboard })))
+const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })))
+const AIDecisionCenter = lazy(() => import('../pages/decision/AIDecisionCenter').then((module) => ({ default: module.AIDecisionCenter })))
+const AIOperations = lazy(() => import('../pages/operations/AIOperations').then((module) => ({ default: module.AIOperations })))
+const Notifications = lazy(() => import('../pages/notifications/Notifications').then((module) => ({ default: module.Notifications })))
+const Profile = lazy(() => import('../pages/profile/Profile').then((module) => ({ default: module.Profile })))
+const Settings = lazy(() => import('../pages/settings/Settings').then((module) => ({ default: module.Settings })))
 
 function ProtectedRoute({ children, roles }) {
   const { isAuthenticated, user, hasRole } = useAuth()
@@ -47,6 +49,7 @@ function RoleBasedDashboard() {
 
 export default function AppRoutes() {
   return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500" role="status">Loading page…</div>}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
@@ -83,5 +86,6 @@ export default function AppRoutes() {
       {/* Fallback route */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </Suspense>
   )
 }
