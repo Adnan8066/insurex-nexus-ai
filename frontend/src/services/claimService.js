@@ -32,9 +32,7 @@ export const claimService = {
   },
 
   async uploadClaimDocument(claimId, formData) {
-    const response = await api.post(`/claims/${claimId}/documents/`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    const response = await api.post(`/claims/${claimId}/documents/`, formData)
     return response.data
   },
 

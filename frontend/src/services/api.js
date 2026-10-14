@@ -5,9 +5,6 @@ const API_BASE_URL = configuredApiBase.replace(/\/api\/?$/, '/api/v1').replace(/
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
   timeout: 30000,
 })
 

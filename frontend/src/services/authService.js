@@ -29,25 +29,14 @@ export const authService = {
 
       // Network error / backend down - graceful mock fallback
       const emailLower = credentials.email?.toLowerCase().trim()
-      let user = demoUsers[emailLower]
-
+      const user = demoUsers[emailLower]
       if (!user) {
-        // Match by role or default to customer
-        if (emailLower.includes('investigat')) {
-          user = demoUsers['investigator@demo.com']
-        } else if (emailLower.includes('repair')) {
-          user = demoUsers['repair@demo.com']
-        } else if (emailLower.includes('emp') || emailLower.includes('staff')) {
-          user = demoUsers['employee@demo.com']
-        } else {
-          user = {
-            id: 1,
-            name: credentials.email.split('@')[0].replace('.', ' ') || 'Demo User',
-            email: credentials.email,
-            role: 'customer',
-            phone: '+1 (555) 123-4567',
-            department: 'Policyholder'
-          }
+        throw {
+          response: {
+            data: {
+              detail: 'Authentication service is unavailable. Start the backend and try again.',
+            },
+          },
         }
       }
 

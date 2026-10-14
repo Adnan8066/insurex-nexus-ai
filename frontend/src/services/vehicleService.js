@@ -37,9 +37,7 @@ export const vehicleService = {
   },
 
   async uploadVehicleDocument(vehicleId, formData) {
-    const response = await api.post(`/vehicles/${vehicleId}/documents/`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    const response = await api.post(`/vehicles/${vehicleId}/documents/`, formData)
     return response.data
   },
 }

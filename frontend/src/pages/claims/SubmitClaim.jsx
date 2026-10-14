@@ -45,6 +45,10 @@ export function SubmitClaim() {
   const [currentStep, setCurrentStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [uploadWarning, setUploadWarning] = useState('')
+  const [attachments, setAttachments] = useState([])
+  const [attachmentType, setAttachmentType] = useState('photos')
+  const [attachmentError, setAttachmentError] = useState('')
   const [successClaim, setSuccessClaim] = useState(null)
   const [policies, setPolicies] = useState([])
   const [vehicles, setVehicles] = useState([])
@@ -106,6 +110,7 @@ export function SubmitClaim() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
+    setError('')
     if (name === 'vehicleId') {
       const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(value))
       setFormData((prev) => ({
@@ -155,25 +160,71 @@ export function SubmitClaim() {
     description: formData.description,
   })
 
+  const validateCurrentStep = () => {
+    let message = ''
+    if (currentStep === 1) {
+      if (policies.length === 0) {
+        message = 'You need a policy on your account before you can submit a claim. Contact your insurer if you believe a policy is missing.'
+      } else if (!formData.policyId) {
+        message = 'Select the policy covering this incident.'
+      } else if (!formData.vehicleId) {
+        message = 'Select an insured vehicle, or add it to your account first.'
+      }
+    } else if (currentStep === 2) {
+      if (!formData.incidentDate || !formData.incidentTime || !formData.location.trim()) {
+        message = 'Enter the incident date, time, and location to continue.'
+      } else if (Number(formData.numberOfVehicles) < 1) {
+        message = 'Enter at least one vehicle involved in the incident.'
+      }
+    } else if (currentStep === 4) {
+      if (!(Number(formData.claimAmount) > 0) || !formData.description.trim()) {
+        message = 'Enter a claim amount greater than zero and describe what happened.'
+      }
+    }
+
+    setError(message)
+    return !message
+  }
+
+  const handleNextStep = () => {
+    if (!validateCurrentStep()) return
+    setCurrentStep((step) => step + 1)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!validateCurrentStep()) return
     setSubmitting(true)
     setError('')
 
     try {
       const payload = buildPayload()
       const response = await claimService.createClaim(payload)
+      if (attachments.length > 0) {
+        const uploads = await Promise.allSettled(attachments.map(({ file, documentType }) => {
+          const uploadData = new FormData()
+          uploadData.append('file', file)
+          uploadData.append('document_type', documentType)
+          uploadData.append('original_name', file.name)
+          uploadData.append('description', '')
+          return claimService.uploadClaimDocument(response.id, uploadData)
+        }))
+        const failedFiles = uploads.flatMap((upload, index) => upload.status === 'rejected' ? [attachments[index].file.name] : [])
+        if (failedFiles.length > 0) {
+          setUploadWarning(`Your claim was submitted, but these files could not be uploaded: ${failedFiles.join(', ')}. Open the claim to retry.`)
+        }
+      }
       setSuccessClaim(response)
       setTimeout(() => navigate('/claims'), 4000)
     } catch (err) {
       const details = err.response?.data
       if (details && typeof details === 'object') {
         const messages = Object.entries(details)
-          .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+          .flatMap(([field, msgs]) => (Array.isArray(msgs) ? msgs : [msgs]).map((message) => `${field}: ${message}`))
           .join('; ')
         setError(messages || 'Failed to submit claim')
       } else {
-        setError(err.response?.data?.detail || 'Failed to submit claim')
+        setError(err.response?.data?.detail || (err.response ? 'Failed to submit claim. Check the entered details and try again.' : 'Could not reach the claims service. Check that the backend is running and try again.'))
       }
     } finally {
       setSubmitting(false)
@@ -190,6 +241,7 @@ export function SubmitClaim() {
         <p className="text-gray-600 mb-4">
           Your claim reference is <span className="font-mono font-bold text-gray-900">{successClaim.claim_number || successClaim.id}</span>. It has entered the automated intake queue.
         </p>
+        {uploadWarning && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">{uploadWarning}</p>}
         <div className="flex justify-center gap-3">
           <Button variant="secondary" onClick={() => navigate('/claims')}>
             View All Claims
@@ -224,6 +276,8 @@ export function SubmitClaim() {
           <p className="page-subtitle">Complete the guided intake form to begin claim processing and AI assessment</p>
         </div>
       </div>
+
+      {error && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">{error}</div>}
 
       {/* Stepper Header */}
       <div className="mb-8">
@@ -277,6 +331,15 @@ export function SubmitClaim() {
                     required
                   />
                 </div>
+                {vehicles.length === 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p className="font-medium">No vehicle is linked to your account yet.</p>
+                    <Link to="/vehicles/new" className="mt-2 inline-flex font-semibold text-primary hover:underline">Add a vehicle</Link>
+                  </div>
+                )}
+                {policies.length === 0 && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">A policy is required to submit a claim. Contact your insurer if your policy is not listed.</p>
+                )}
                 <div className="p-4 bg-blue-50/60 rounded-xl text-sm text-blue-800 flex items-start gap-3">
                   <Shield className="w-5 h-5 flex-shrink-0 text-primary mt-0.5" />
                   <div>
@@ -475,10 +538,64 @@ export function SubmitClaim() {
                   required
                 />
 
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-primary transition">
-                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="font-medium text-gray-800 text-sm">Upload Photos & Estimates (Simulated)</p>
-                  <p className="text-xs text-gray-500 mt-1">PNG, JPG, PDF up to 25MB (Damage photos, police report, repair quotes)</p>
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-5 hover:border-primary transition">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Upload className="w-6 h-6 text-primary" aria-hidden="true" />
+                    <div>
+                      <p className="font-medium text-gray-800 text-sm">Attach supporting documents</p>
+                      <p className="text-xs text-gray-500">PNG, JPG, or PDF up to 25 MB per file</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Select
+                      label="Document type"
+                      name="attachmentType"
+                      value={attachmentType}
+                      onChange={(event) => setAttachmentType(event.target.value)}
+                      options={[
+                        { value: 'photos', label: 'Damage photos' },
+                        { value: 'estimate', label: 'Repair estimate' },
+                        { value: 'police_report', label: 'Police report' },
+                        { value: 'medical', label: 'Medical records' },
+                        { value: 'other', label: 'Other document' },
+                      ]}
+                    />
+                    <div>
+                      <label htmlFor="claim-attachments" className="mb-1 block text-sm font-medium text-gray-700">Choose files</label>
+                      <input
+                        id="claim-attachments"
+                        type="file"
+                        accept="image/png,image/jpeg,application/pdf"
+                        multiple
+                        className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:font-medium file:text-blue-700 hover:file:bg-blue-100"
+                        onChange={(event) => {
+                          const selectedFiles = Array.from(event.target.files || [])
+                          const oversized = selectedFiles.some((file) => file.size > 25 * 1024 * 1024)
+                          if (oversized) {
+                            setAttachmentError('Each file must be 25 MB or smaller.')
+                          } else {
+                            setAttachmentError('')
+                            setAttachments((current) => [
+                              ...current,
+                              ...selectedFiles.map((file) => ({ file, documentType: attachmentType })),
+                            ])
+                          }
+                          event.target.value = ''
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {attachmentError && <p className="mt-2 text-sm text-red-600" role="alert">{attachmentError}</p>}
+                  {attachments.length > 0 && (
+                    <ul className="mt-4 space-y-2">
+                      {attachments.map(({ file, documentType }, index) => (
+                        <li key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm">
+                          <span className="min-w-0 truncate text-gray-700">{file.name} <span className="text-gray-400">({(file.size / (1024 * 1024)).toFixed(1)} MB · {documentType.replace(/_/g, ' ')})</span></span>
+                          <button type="button" className="shrink-0 text-red-600 hover:text-red-700" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${file.name}`}>Remove</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             )}
@@ -495,7 +612,7 @@ export function SubmitClaim() {
               )}
 
               {currentStep < 4 ? (
-                <Button variant="primary" type="button" onClick={() => setCurrentStep((prev) => prev + 1)}>
+                <Button variant="primary" type="button" onClick={handleNextStep}>
                   Next Step
                   <ArrowRight className="w-4 h-4 ml-1.5" />
                 </Button>

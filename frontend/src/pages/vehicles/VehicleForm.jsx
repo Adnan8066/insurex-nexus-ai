@@ -4,6 +4,7 @@ import { ArrowLeft, Car, Save, X } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { vehicleService } from '../../services'
+import { policyService } from '../../services/policyService'
 import { useAuth } from '../../context/useAuth'
 
 export function VehicleForm() {
@@ -32,6 +33,18 @@ export function VehicleForm() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [policies, setPolicies] = useState([])
+
+  useEffect(() => {
+    let active = true
+    policyService.getPolicies().then((response) => {
+      const results = Array.isArray(response) ? response : (response.results || [])
+      if (active) setPolicies(results)
+    }).catch(() => {
+      if (active) setPolicies([])
+    })
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     if (!id) return
@@ -59,6 +72,7 @@ export function VehicleForm() {
   const buildPayload = () => {
     const payload = {
       customer: user?.id || null,
+      ...(!isEdit && { policy: formData.policy || null }),
       make: formData.make,
       model: formData.model,
       year: Number(formData.year),
@@ -98,7 +112,7 @@ export function VehicleForm() {
           .join('; ')
         setError(messages || 'Failed to save vehicle')
       } else {
-        setError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to save vehicle')
+        setError(err.response?.data?.detail || err.response?.data?.error?.message || (err.response ? 'Failed to save vehicle. Check the entered details and try again.' : 'Could not reach the vehicle service. Check that the backend is running and try again.'))
       }
     } finally {
       setLoading(false)
@@ -134,6 +148,19 @@ export function VehicleForm() {
             <Input label="VIN" name="vin" value={formData.vin} onChange={handleChange} placeholder="17-character VIN" required />
             <Input label="License Plate" name="licensePlate" value={formData.licensePlate} onChange={handleChange} required />
             <Input label="Color" name="color" value={formData.color} onChange={handleChange} required />
+            {!isEdit && policies.length > 0 && (
+              <Select
+                label="Link to a policy (optional)"
+                name="policy"
+                value={formData.policy}
+                onChange={handleChange}
+                placeholder="No policy selected"
+                options={policies.map((policy) => ({
+                  value: String(policy.id),
+                  label: `${policy.policy_number} - ${(policy.type || '').replace(/_/g, ' ')}`,
+                }))}
+              />
+            )}
             <Select label="Fuel Type" name="fuelType" value={formData.fuelType} onChange={handleChange}
               options={[{value:'gasoline',label:'Gasoline'},{value:'diesel',label:'Diesel'},{value:'hybrid',label:'Hybrid'},{value:'electric',label:'Electric'}]} />
             <Select label="Transmission" name="transmission" value={formData.transmission} onChange={handleChange}

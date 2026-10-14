@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Vehicle, VehicleDocument, VehicleHistory
+from apps.policies.models import Policy
 
 User = get_user_model()
 
@@ -46,6 +47,12 @@ class VehicleCreateSerializer(serializers.ModelSerializer):
             'purchase_date', 'purchase_price', 'current_mileage', 'fuel_type',
             'transmission', 'status', 'engine_size', 'body_style', 'features'
         ]
+
+    def validate_policy(self, policy):
+        user = self.context['request'].user
+        if policy and not user.is_staff_member and policy.customer_id != user.id:
+            raise serializers.ValidationError('Select a policy from your account.')
+        return policy
 
 class VehicleUpdateSerializer(serializers.ModelSerializer):
     class Meta:
