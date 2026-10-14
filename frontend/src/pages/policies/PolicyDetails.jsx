@@ -60,7 +60,8 @@ const mapPolicy = (p) => ({
 export function PolicyDetails() {
   const { id } = useParams()
   const { user } = useAuth()
-  const canEditPolicy = ['admin', 'employee'].includes(user?.role)
+  const canEditPolicy = user?.role === 'admin'
+  const canFileClaim = ['customer', 'employee', 'admin'].includes(user?.role)
   const [loading, setLoading] = useState(true)
   const [policy, setPolicy] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
@@ -381,12 +382,12 @@ export function PolicyDetails() {
                   <Calendar className="w-4 h-4" />
                   View Payment Schedule
                 </Button>
-                <Button variant="outline" className="w-full justify-start gap-3" asChild>
+                {canFileClaim && <Button variant="outline" className="w-full justify-start gap-3" asChild>
                   <Link to={`/claims/new?policy=${policy.id}`}>
                     <Shield className="w-4 h-4" />
                     File a Claim
                   </Link>
-                </Button>
+                </Button>}
               </div>
             </CardContent>
           </Card>

@@ -16,7 +16,7 @@ from .serializers import (
     PolicySerializer, PolicyCreateSerializer, PolicyUpdateSerializer,
     PolicyCoverageSerializer, PolicyDocumentSerializer, PremiumHistorySerializer
 )
-from common.permissions import IsEmployee, CanIssuePolicy
+from common.permissions import IsEmployee, IsAdmin
 
 User = get_user_model()
 
@@ -63,11 +63,11 @@ class PolicyViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action == 'create':
-            return [IsAuthenticated(), CanIssuePolicy()]
+            return [IsAuthenticated(), IsAdmin()]
         if self.action == 'form_options':
             return [IsAuthenticated(), IsEmployee()]
-        if self.action in ['update', 'partial_update', 'destroy', 'update_coverage', 'add_premium_payment']:
-            return [IsAuthenticated(), IsEmployee()]
+        if self.action in ['update', 'partial_update', 'destroy', 'upload_document', 'update_coverage', 'add_premium_payment']:
+            return [IsAuthenticated(), IsAdmin()]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -99,6 +99,8 @@ class PolicyViewSet(viewsets.ModelViewSet):
             if previous_vehicle_id == updated.vehicle_id and previous_customer_id != updated.customer_id:
                 vehicle_update['customer_id'] = updated.customer_id
             Vehicle.objects.filter(pk=updated.vehicle_id).update(**vehicle_update)
+        from apps.claims.models import Claim
+        Claim.objects.filter(policy=updated).exclude(customer=updated.customer).update(customer=updated.customer)
 
     @action(detail=False, methods=['get'], url_path='form-options', permission_classes=[permissions.IsAuthenticated, IsEmployee])
     def form_options(self, request):

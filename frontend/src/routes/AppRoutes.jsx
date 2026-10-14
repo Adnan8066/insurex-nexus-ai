@@ -61,7 +61,7 @@ export default function AppRoutes() {
         <Route path="policies" element={<PolicyList />} />
         <Route path="policies/new" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
         <Route path="policies/:id" element={<PolicyDetails />} />
-        <Route path="policies/:id/edit" element={<PolicyForm />} />
+        <Route path="policies/:id/edit" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
         <Route path="vehicles" element={<VehicleList />} />
         <Route path="vehicles/new" element={<VehicleForm />} />
         <Route path="vehicles/:id" element={<VehicleDetails />} />

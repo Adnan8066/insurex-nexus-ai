@@ -44,8 +44,8 @@ const policyStatuses = [
 
 export function PolicyList() {
   const { user } = useAuth()
-  const canCreatePolicy = ['customer', 'employee', 'admin'].includes(user?.role)
-  const canManagePolicies = ['employee', 'admin'].includes(user?.role)
+  const canCreatePolicy = user?.role === 'admin'
+  const canManagePolicies = user?.role === 'admin'
   const [loading, setLoading] = useState(true)
   const [policies, setPolicies] = useState([])
   const [filteredPolicies, setFilteredPolicies] = useState([])
