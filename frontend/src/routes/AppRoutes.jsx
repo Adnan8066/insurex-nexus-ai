@@ -25,6 +25,7 @@ const InvestigatorDashboard = lazy(() => import('../pages/investigator/Investiga
 const RepairDashboard = lazy(() => import('../pages/repair/RepairDashboard').then((module) => ({ default: module.RepairDashboard })))
 const SettlementDashboard = lazy(() => import('../pages/settlement/SettlementDashboard').then((module) => ({ default: module.SettlementDashboard })))
 const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })))
+const UserManagement = lazy(() => import('../pages/admin/UserManagement').then((module) => ({ default: module.UserManagement })))
 const AIDecisionCenter = lazy(() => import('../pages/decision/AIDecisionCenter').then((module) => ({ default: module.AIDecisionCenter })))
 const AIOperations = lazy(() => import('../pages/operations/AIOperations').then((module) => ({ default: module.AIOperations })))
 const Notifications = lazy(() => import('../pages/notifications/Notifications').then((module) => ({ default: module.Notifications })))
@@ -78,6 +79,7 @@ export default function AppRoutes() {
         <Route path="repair-shops" element={<RepairDashboard />} />
         <Route path="settlements" element={<ProtectedRoute roles={['employee', 'admin']}><SettlementDashboard /></ProtectedRoute>} />
         <Route path="analytics" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AdminDashboard /></ProtectedRoute>} />
+        <Route path="admin/users" element={<ProtectedRoute roles={['admin']}><UserManagement /></ProtectedRoute>} />
         <Route path="ai-decision" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><ErrorBoundary><AIDecisionCenter /></ErrorBoundary></ProtectedRoute>} />
         <Route path="operations" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIOperations /></ProtectedRoute>} />
         <Route path="notifications" element={<Notifications />} />

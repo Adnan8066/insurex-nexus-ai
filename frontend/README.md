@@ -7,7 +7,7 @@ React and Vite client for the InsureX insurance claims application.
 1. Install Node.js and Python dependencies.
 2. In `frontend`, copy `.env.example` to `.env.local`, run `npm install`, and then `npm run dev`.
 3. In `backend/django_backend`, copy `.env.example` to `.env`, run `python manage.py migrate`, and start Django with `python manage.py runserver`.
-4. Open <http://localhost:3000>. The frontend calls the API at <http://localhost:8000/api/v1> by default. Override it with `VITE_API_BASE_URL` in `frontend/.env.local` when needed.
+4. Open <http://localhost:3000>. The frontend calls the API at <http://127.0.0.1:8000/api/v1> by default. Override it with `VITE_API_BASE_URL` in `frontend/.env.local` when needed.
 
 The local database is intentionally empty after setup. To load the bundled demo scenarios, run `python manage.py import_project_datasets` from `backend/django_backend`.
 

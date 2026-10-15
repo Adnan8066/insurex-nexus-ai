@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const configuredApiBase = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '')
+const configuredApiBase = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '')
 const API_BASE_URL = /\/api\/v1$/.test(configuredApiBase)
   ? configuredApiBase
   : /\/api$/.test(configuredApiBase)

@@ -37,7 +37,8 @@ const mapPolicy = (p) => ({
   deductible: p.deductible,
   paymentFrequency: p.payment_frequency,
   autoRenew: p.auto_renew,
-  coverage: p.coverage_details || p.coverage || {},
+  policyPlan: p.coverage?.policy_plan || null,
+  coverage: p.coverage_details || {},
   vehicle: p.vehicle_info || (p.vehicle ? {
     id: p.vehicle.id,
     make: p.vehicle.make,
@@ -149,7 +150,7 @@ export function PolicyDetails() {
             <h1 className="page-title">{policy.policyNumber || ''}</h1>
             <StatusBadge status={policy.status} />
           </div>
-          <p className="page-subtitle">{policy.type || ''} • {policy.customerName || ''}</p>
+          <p className="page-subtitle">{policy.policyPlan?.name || policy.type || ''} • {policy.customerName || ''}</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm">
@@ -186,6 +187,22 @@ export function PolicyDetails() {
         <div className="lg:col-span-2 space-y-6">
           {activeTab === 'overview' && (
             <>
+              {policy.policyPlan && (
+                <Card>
+                  <CardHeader title="Selected Policy Tier" subtitle={`${policy.policyPlan.id} · ${policy.policyPlan.category}`} />
+                  <CardContent>
+                    <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      The tier details and base premium are user-provided estimates, not a verified insurer quote or policy offer.
+                    </p>
+                    <dl className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div><dt className="text-sm font-medium text-gray-500">Coverage sections</dt><dd className="mt-1 text-gray-900">{(policy.policyPlan.coverage_sections || []).join('; ') || 'None listed'}</dd></div>
+                      <div><dt className="text-sm font-medium text-gray-500">Mandatory covers</dt><dd className="mt-1 text-gray-900">{(policy.policyPlan.mandatory_covers || []).join('; ') || 'None listed'}</dd></div>
+                      <div><dt className="text-sm font-medium text-gray-500">Available add-ons</dt><dd className="mt-1 text-gray-900">{(policy.policyPlan.addons || []).join(', ') || 'None listed'}</dd></div>
+                      <div><dt className="text-sm font-medium text-gray-500">Base premium estimate</dt><dd className="mt-1 text-gray-900">{formatCurrency(policy.policyPlan.base_premium_estimate_inr, 'INR', 'en-IN')} per year</dd></div>
+                    </dl>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardHeader title="Policy Information" />
                 <CardContent>
@@ -196,7 +213,7 @@ export function PolicyDetails() {
                         <span className={clsx('text-gray-400', (policy.type || '').toLowerCase().includes('auto') && 'text-blue-500')}>
                           {(policy.type || '').toLowerCase().includes('auto') ? <Car className="w-4 h-4" /> : <Home className="w-4 h-4" />}
                         </span>
-                        {policy.type || ''}
+                        {policy.policyPlan?.name || policy.type || ''}
                       </dd>
                     </div>
                     <div>
@@ -236,16 +253,16 @@ export function PolicyDetails() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Annual Premium</dt>
-                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.premium)}</dd>
+                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.premium, policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}</dd>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Deductible</dt>
-                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.deductible)}</dd>
+                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.deductible, policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}</dd>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Payment per Period</dt>
                       <dd className="mt-1 text-2xl font-bold text-gray-900">
-                        {formatCurrency((policy.paymentFrequency === 'monthly' ? (Number(policy.premium) || 0) / 12 : (Number(policy.premium) || 0)))}
+                        {formatCurrency((policy.paymentFrequency === 'monthly' ? (Number(policy.premium) || 0) / 12 : (Number(policy.premium) || 0)), policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}
                       </dd>
                     </div>
                   </div>

@@ -24,6 +24,7 @@ class PaymentFrequency(models.TextChoices):
     SEMI_ANNUAL = 'semi_annual', _('Semi-Annual')
     ANNUAL = 'annual', _('Annual')
 
+
 class Policy(models.Model):
     policy_number = models.CharField(_('policy number'), max_length=20, unique=True)
     customer = models.ForeignKey(

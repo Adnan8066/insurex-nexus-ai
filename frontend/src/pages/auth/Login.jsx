@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
@@ -50,9 +50,7 @@ export function Login() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-              <Shield className="w-7 h-7 text-white" />
-            </div>
+            <img src="/insurex-nexus-ai-logo.jpg" alt="" className="w-12 h-12 rounded-xl object-cover" />
             <span className="text-2xl font-bold text-gray-900">InsureX Nexus AI</span>
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">Welcome back</h1>
