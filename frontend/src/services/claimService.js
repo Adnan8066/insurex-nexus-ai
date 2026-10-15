@@ -47,7 +47,7 @@ export const claimService = {
   },
 
   async updateClaimStatus(claimId, status) {
-    const response = await api.patch(`/claims/${claimId}/status/`, { status })
+    const response = await api.patch(`/claims/${claimId}/update-status/`, { status })
     return response.data
   },
 

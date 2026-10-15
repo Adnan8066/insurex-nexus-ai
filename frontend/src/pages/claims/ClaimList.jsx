@@ -48,6 +48,7 @@ const PENDING_STATUSES = ['submitted', 'under_review', 'ai_assessment', 'investi
 
 export function ClaimList() {
   const { user } = useAuth()
+  const canViewAI = ['admin', 'employee', 'investigator'].includes(user?.role)
   const canSubmitClaim = ['customer', 'employee', 'admin'].includes(user?.role)
   const [searchParams] = useSearchParams()
   const statusParam = searchParams.get('status')
@@ -57,7 +58,7 @@ export function ClaimList() {
   const [filteredClaims, setFilteredClaims] = useState([])
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState(statusParam || '')
+  const [statusFilter, setStatusFilter] = useState(statusParam === 'ai_assessment' && !canViewAI ? 'under_review' : (statusParam || ''))
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [sortConfig, setSortConfig] = useState({ key: 'submittedAt', direction: 'desc' })
@@ -100,7 +101,7 @@ export function ClaimList() {
         policeReport: c.police_report,
         claimAmount: c.claim_amount,
         description: c.description,
-        status: c.status,
+        status: !canViewAI && c.status === 'ai_assessment' ? 'under_review' : c.status,
         priority: c.priority,
         assignedAdjuster: c.assigned_adjuster_name,
         assignedInvestigator: c.assigned_investigator_name,
@@ -305,7 +306,7 @@ export function ClaimList() {
                 className="w-44"
               />
               <Select
-                options={statusOptions}
+                options={canViewAI ? statusOptions : statusOptions.filter((option) => option.value !== 'ai_assessment')}
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 placeholder="Status"

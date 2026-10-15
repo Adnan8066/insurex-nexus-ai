@@ -71,6 +71,15 @@ class ClaimSerializer(serializers.ModelSerializer):
             'documents', 'status_history', 'timeline', 'notes'
         ]
         read_only_fields = ['id', 'claim_number', 'submitted_at', 'updated_at', 'closed_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.role == 'customer':
+            data.pop('ai_assessment', None)
+            data.pop('fraud_risk_score', None)
+            data.pop('total_loss_probability', None)
+        return data
     
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_vehicle_info(self, obj):

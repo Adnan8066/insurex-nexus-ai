@@ -76,7 +76,7 @@ export function AIAssessment() {
       }
     } catch (err) {
       console.error('Failed to load AI assessment data:', err)
-      setError(err.message || 'Failed to load assessments. Please try again.')
+      setError(err.response?.data?.error || err.response?.data?.detail || err.message || 'Failed to load assessments. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -109,7 +109,7 @@ export function AIAssessment() {
       setAssessments(Array.isArray(assessmentsRes) ? assessmentsRes : assessmentsRes.results || [])
     } catch (err) {
       console.error('Failed to run AI assessment:', err)
-      setError(err.response?.data?.detail || err.message || 'Failed to run AI assessment.')
+      setError(err.response?.data?.error || err.response?.data?.detail || err.message || 'Failed to run AI assessment.')
     } finally {
       setAnalyzing(false)
     }

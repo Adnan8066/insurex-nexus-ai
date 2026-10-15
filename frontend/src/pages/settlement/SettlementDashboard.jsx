@@ -277,7 +277,7 @@ export function SettlementDashboard() {
           </div>
           <h1 className="page-title">Settlement Management Dashboard</h1>
           <p className="page-subtitle">
-            Authorize financial claim settlements, calculate deductibles, and execute electronic disbursements
+            Review approved claim settlements, calculate deductibles, and record payment status. InsureX does not transfer funds.
           </p>
         </div>
 

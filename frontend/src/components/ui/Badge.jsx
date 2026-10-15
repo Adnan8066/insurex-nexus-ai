@@ -1,4 +1,5 @@
 import { clsx } from 'clsx'
+import { CheckCircle2 } from 'lucide-react'
 
 export function Badge({
   children,
@@ -58,7 +59,10 @@ export function StatusBadge({ status, ...props }) {
   const normalized = typeof status === 'string' ? status.replace(/_/g, '-') : status
   const config = statusConfig[status] || statusConfig[normalized] || { label: status, variant: 'neutral' }
 
-  return <Badge variant={config.variant} {...props}>{config.label}</Badge>
+  return <Badge variant={config.variant} {...props}>
+    {normalized === 'active' && <CheckCircle2 className="w-3.5 h-3.5 mr-1" aria-hidden="true" />}
+    {config.label}
+  </Badge>
 }
 
 export default { Badge, StatusBadge }

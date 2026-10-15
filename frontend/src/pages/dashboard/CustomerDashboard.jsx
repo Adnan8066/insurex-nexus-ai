@@ -36,7 +36,6 @@ import { analyticsService } from '../../services/analyticsService'
 const claimStatusConfig = {
   submitted: { label: 'Submitted', color: 'info' },
   under_review: { label: 'Under Review', color: 'warning' },
-  ai_assessment: { label: 'AI Assessment', color: 'primary' },
   investigation: { label: 'Investigation', color: 'warning' },
   approved: { label: 'Approved', color: 'success' },
   rejected: { label: 'Rejected', color: 'danger' },
@@ -81,7 +80,7 @@ export function CustomerDashboard() {
     incidentSeverity: c.incident_severity,
     location: c.location,
     claimAmount: c.claim_amount,
-    status: c.status,
+    status: c.status === 'ai_assessment' ? 'under_review' : c.status,
     priority: c.priority,
     submittedAt: c.submitted_at,
     aiAssessment: c.ai_assessment ? {

@@ -15,6 +15,7 @@ _MODEL_FILES = {
 }
 _models = {name: None for name in _MODEL_FILES}
 _model_mtimes = {}
+_model_load_errors = {}
 
 
 class MLModelUnavailable(RuntimeError):
@@ -47,11 +48,40 @@ def load_models():
         except FileNotFoundError:
             _models[name] = None
             _model_mtimes.pop(name, None)
+            _model_load_errors.pop(name, None)
+            continue
+        except PermissionError:
+            _models[name] = None
+            _model_mtimes.pop(name, None)
+            _model_load_errors[name] = f"The backend cannot read the trained model file '{filename}'. Grant the backend process read access to the model artifacts."
             continue
         if _model_mtimes.get(name) != modified:
-            _models[name] = joblib.load(path)
-            _model_mtimes[name] = modified
+            try:
+                _models[name] = _configure_inference_model(joblib.load(path))
+                _model_mtimes[name] = modified
+                _model_load_errors.pop(name, None)
+            except PermissionError:
+                _models[name] = None
+                _model_mtimes.pop(name, None)
+                _model_load_errors[name] = f"The backend cannot read the trained model file '{filename}'. Grant the backend process read access to the model artifacts."
     return _models
+
+
+def _unavailable_model_message(name, default_message):
+    return _model_load_errors.get(name, default_message)
+
+
+def _configure_inference_model(model):
+    """Avoid joblib worker-pipe creation in restricted Windows environments."""
+    if hasattr(model, "get_params") and hasattr(model, "set_params"):
+        single_threaded = {
+            name: 1
+            for name, value in model.get_params(deep=True).items()
+            if name.endswith("n_jobs") and value not in (None, 1)
+        }
+        if single_threaded:
+            model.set_params(**single_threaded)
+    return model
 
 
 def _input_frame(claim_data, feature_names):
@@ -89,7 +119,7 @@ def predict_repair_cost_ml(claim_data):
     if claim_data.get("_source_dataset") == "fraud_oracle":
         raise MLModelUnavailable("Repair-cost predictions are not supported for Fraud Oracle records; that dataset has no repair-cost labels.")
     if model is None:
-        raise MLModelUnavailable("The trained repair-cost model is not available. Train the project models before assessing this claim.")
+        raise MLModelUnavailable(_unavailable_model_message("repair_cost", "The trained repair-cost model is not available. Train the project models before assessing this claim."))
     try:
         prediction = max(0.0, float(model.predict(_input_frame(claim_data, _INSURANCE_FEATURES))[0]))
         return {
@@ -108,7 +138,8 @@ def detect_fraud_ml(claim_data):
     oracle = claim_data.get("_source_dataset") == "fraud_oracle"
     model = models["fraud_oracle_fraud"] if oracle else models["fraud_risk"]
     if model is None:
-        raise MLModelUnavailable("The trained fraud model for this claim type is not available. Train the project models before assessing this claim.")
+        model_name = "fraud_oracle_fraud" if oracle else "fraud_risk"
+        raise MLModelUnavailable(_unavailable_model_message(model_name, "The trained fraud model for this claim type is not available. Train the project models before assessing this claim."))
     features = _ORACLE_FEATURES if oracle else _INSURANCE_FEATURES
     try:
         score = _fraud_probability(model, _input_frame(claim_data, features)) * 100
@@ -132,7 +163,7 @@ def predict_total_loss_ml(claim_data):
     if claim_data.get("_source_dataset") == "fraud_oracle":
         raise MLModelUnavailable("Total-loss prediction is not supported for Fraud Oracle records; that dataset has no total-loss outcome label.")
     if model is None:
-        raise MLModelUnavailable("The trained total-loss model is not available. Train the project models before assessing this claim.")
+        raise MLModelUnavailable(_unavailable_model_message("total_loss", "The trained total-loss model is not available. Train the project models before assessing this claim."))
     try:
         probability = _fraud_probability(model, _input_frame(claim_data, _INSURANCE_FEATURES)) * 100
         return {"probability": round(min(max(probability, 0), 100), 2)}
@@ -156,5 +187,6 @@ def get_model_status():
         "fraud_risk_model": models["fraud_risk"] is not None,
         "fraud_oracle_model": models["fraud_oracle_fraud"] is not None,
         "total_loss_model": models["total_loss"] is not None,
+        "model_load_errors": dict(_model_load_errors),
         "training_report": report,
     }

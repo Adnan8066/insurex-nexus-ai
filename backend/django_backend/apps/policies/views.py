@@ -97,6 +97,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
         policy = self.get_object()
         previous_vehicle_id = policy.vehicle_id
         previous_customer_id = policy.customer_id
+        previous_status = policy.status
         updated = serializer.save()
         if previous_vehicle_id and previous_vehicle_id != updated.vehicle_id:
             Vehicle.objects.filter(pk=previous_vehicle_id, policy=updated).update(policy=None)
@@ -107,6 +108,18 @@ class PolicyViewSet(viewsets.ModelViewSet):
             Vehicle.objects.filter(pk=updated.vehicle_id).update(**vehicle_update)
         from apps.claims.models import Claim
         Claim.objects.filter(policy=updated).exclude(customer=updated.customer).update(customer=updated.customer)
+        if previous_status != PolicyStatus.ACTIVE and updated.status == PolicyStatus.ACTIVE:
+            from apps.notifications.services import create_in_app_notification
+            create_in_app_notification(
+                updated.customer,
+                'policy',
+                'Policy approved and active',
+                f'Your policy {updated.policy_number} has been approved and is now active.',
+                link=f'/policies/{updated.policy_number}',
+                related_object_type='policy',
+                related_object_id=updated.policy_number,
+                priority='high',
+            )
 
     @action(detail=False, methods=['get'], url_path='form-options', permission_classes=[permissions.IsAuthenticated, IsEmployee])
     def form_options(self, request):

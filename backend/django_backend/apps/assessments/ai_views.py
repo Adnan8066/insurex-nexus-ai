@@ -16,20 +16,18 @@ from ml_service import (
     predict_total_loss_ml,
     MLModelUnavailable,
 )
+from common.permissions import IsStaffMember
 
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses=ClaimAssessmentSerializer)
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsStaffMember])
 def assess_claim(request):
     claim_id = request.data.get('claim_id')
     if not claim_id:
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     claim = get_object_or_404(Claim, id=claim_id)
-    
-    if not request.user.is_staff_member and claim.customer != request.user:
-        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
     
     assessment, created = ClaimAssessment.objects.get_or_create(
         claim=claim,
@@ -160,15 +158,13 @@ def calculate_confidence(assessment):
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsStaffMember])
 def predict_repair_cost(request):
     claim_id = request.data.get('claim_id')
     if not claim_id:
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     claim = get_object_or_404(Claim, id=claim_id)
-    if not request.user.is_staff_member and claim.customer_id != request.user.id:
-        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
     try:
         result = predict_repair_cost_internal(claim)
     except MLModelUnavailable as exc:
@@ -178,15 +174,13 @@ def predict_repair_cost(request):
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsStaffMember])
 def detect_fraud(request):
     claim_id = request.data.get('claim_id')
     if not claim_id:
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     claim = get_object_or_404(Claim, id=claim_id)
-    if not request.user.is_staff_member and claim.customer_id != request.user.id:
-        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
     try:
         result = detect_fraud_internal(claim)
     except MLModelUnavailable as exc:
@@ -196,15 +190,13 @@ def detect_fraud(request):
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsStaffMember])
 def predict_total_loss(request):
     claim_id = request.data.get('claim_id')
     if not claim_id:
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     claim = get_object_or_404(Claim, id=claim_id)
-    if not request.user.is_staff_member and claim.customer_id != request.user.id:
-        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
     try:
         result = predict_total_loss_internal(claim)
     except MLModelUnavailable as exc:
@@ -214,7 +206,7 @@ def predict_total_loss(request):
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsStaffMember])
 def run_agent(request, agent_type):
     claim_id = request.data.get('claim_id')
     input_data = request.data.get('input_data', {})
@@ -231,9 +223,6 @@ def run_agent(request, agent_type):
     
     claim = get_object_or_404(Claim, id=claim_id)
 
-    if not request.user.is_staff_member and claim.customer_id != request.user.id:
-        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
-    
     agent_output, created = AgentOutput.objects.get_or_create(
         claim=claim,
         agent_type=agent_type,
@@ -330,11 +319,9 @@ def run_agent(request, agent_type):
 
 @extend_schema(responses=DecisionFlowSerializer)
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsStaffMember])
 def get_decision_flow(request, claim_id):
     claim = get_object_or_404(Claim, id=claim_id)
-    if not request.user.is_staff_member and claim.customer_id != request.user.id:
-        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
     
     decision_flow, created = DecisionFlow.objects.get_or_create(
         claim=claim,

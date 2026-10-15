@@ -306,7 +306,7 @@ export function SubmitClaim() {
             Back to claims
           </Link>
           <h1 className="page-title">Submit Insurance Claim</h1>
-          <p className="page-subtitle">Complete the guided intake form to begin claim processing and AI assessment</p>
+          <p className="page-subtitle">Complete the guided intake form to begin claim processing</p>
         </div>
       </div>
 
@@ -351,12 +351,10 @@ export function SubmitClaim() {
                     name="policyId"
                     value={formData.policyId}
                     onChange={handleChange}
-                    options={customerPolicies
-                      .filter((policy) => {
-                        const vehicle = vehicles.find((item) => String(item.id) === String(formData.vehicleId))
-                        return !vehicle?.policy || String(vehicle.policy) === String(policy.id)
-                      })
-                      .map((p) => ({ value: String(p.id), label: `${p.policy_number} - ${(p.type || '').replace(/_/g, ' ')}` }))}
+                    options={customerPolicies.map((p) => ({
+                      value: String(p.id),
+                      label: `${p.policy_number} - ${(p.type || '').replace(/_/g, ' ')}`,
+                    }))}
                     placeholder="Select a policy"
                     required
                   />

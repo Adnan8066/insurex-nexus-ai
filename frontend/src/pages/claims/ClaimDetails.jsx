@@ -110,11 +110,25 @@ const mapClaim = (c) => ({
   notes: c.notes || [],
 })
 
+const claimStatusOptions = [
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'under_review', label: 'Under Review' },
+  { value: 'ai_assessment', label: 'AI Assessment' },
+  { value: 'investigation', label: 'Investigation' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'repair_settlement', label: 'Repair/Settlement' },
+  { value: 'closed', label: 'Closed' },
+]
+
 export function ClaimDetails() {
   const { id } = useParams()
   const { user } = useAuth()
+  const canViewAI = ['admin', 'employee', 'investigator'].includes(user?.role)
   const canManageAssignments = ['admin', 'employee'].includes(user?.role)
   const [claim, setClaim] = useState(null)
+  const [statusDraft, setStatusDraft] = useState('')
+  const [savingStatus, setSavingStatus] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
@@ -127,6 +141,7 @@ export function ClaimDetails() {
   const refreshClaim = async () => {
     const result = mapClaim(await claimService.getClaim(id))
     setClaim(result)
+    setStatusDraft(result.status)
     setAssignmentForm({
       adjuster: String(result.assignedAdjusterId || ''),
       investigator: String(result.assignedInvestigatorId || ''),
@@ -152,6 +167,7 @@ export function ClaimDetails() {
         const res = mapClaim(await claimService.getClaim(id))
         if (!cancelled) {
           setClaim(res)
+          setStatusDraft(res.status)
           setAssignmentForm({ adjuster: String(res.assignedAdjusterId || ''), investigator: String(res.assignedInvestigatorId || ''), repairShop: String(res.assignedRepairShopId || '') })
         }
       } catch (err) {
@@ -179,6 +195,22 @@ export function ClaimDetails() {
       setError(err.response?.data?.error || err.response?.data?.detail || 'Unable to update claim assignment.')
     } finally {
       setSavingAssignment(false)
+    }
+  }
+
+  const saveStatus = async () => {
+    if (!claim || !statusDraft || statusDraft === claim.status) return
+    setSavingStatus(true)
+    setError('')
+    try {
+      const updated = mapClaim(await claimService.updateClaimStatus(claim.id, statusDraft))
+      setClaim(updated)
+      setStatusDraft(updated.status)
+    } catch (err) {
+      const message = err.response?.data?.detail || err.response?.data?.error?.details || err.response?.data?.error
+      setError(typeof message === 'string' ? message : 'Unable to update claim status.')
+    } finally {
+      setSavingStatus(false)
     }
   }
 
@@ -233,7 +265,7 @@ export function ClaimDetails() {
   const tabs = [
     { id: 'overview', label: 'Claim Overview', icon: Briefcase },
     { id: 'incident', label: 'Incident & Damage Details', icon: AlertTriangle },
-    { id: 'ai', label: 'AI Risk & Assessment', icon: Brain },
+    ...(canViewAI ? [{ id: 'ai', label: 'AI Risk & Assessment', icon: Brain }] : []),
     { id: 'documents', label: `Documents (${claim.documents?.length || 0})`, icon: FileText },
     { id: 'timeline', label: 'Activity Timeline', icon: Activity },
   ]
@@ -251,8 +283,8 @@ export function ClaimDetails() {
           </Link>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="page-title">{claim.claimNumber}</h1>
-            <StatusBadge status={claim.status} />
-            {claim.aiAssessment?.claimPriority && (
+            <StatusBadge status={!canViewAI && claim.status === 'ai_assessment' ? 'under_review' : claim.status} />
+            {canViewAI && claim.aiAssessment?.claimPriority && (
               <Badge variant={claim.aiAssessment.claimPriority === 'high' || claim.aiAssessment.claimPriority === 'critical' ? 'danger' : claim.aiAssessment.claimPriority === 'medium' ? 'warning' : 'success'}>
                 {claim.aiAssessment.claimPriority.charAt(0).toUpperCase() + claim.aiAssessment.claimPriority.slice(1)} Priority
               </Badge>
@@ -270,17 +302,32 @@ export function ClaimDetails() {
               Live Workflow Tracking
             </Button>
           </Link>
-          <Link to={`/ai-assessment?claim=${claim.id}`}>
+          {canViewAI && <Link to={`/ai-assessment?claim=${claim.id}`}>
             <Button variant="primary">
               <Brain className="w-4 h-4 mr-2" />
               AI Assessment Center
             </Button>
-          </Link>
+          </Link>}
           <Button variant="ghost" onClick={() => setDeleteOpen(true)} className="text-red-600 hover:text-red-700">
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
       </div>
+
+      {canManageAssignments && (
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
+          <Select
+            label="Claim status"
+            name="claimStatus"
+            value={statusDraft}
+            onChange={(event) => setStatusDraft(event.target.value)}
+            options={claimStatusOptions}
+          />
+          <Button variant="primary" onClick={saveStatus} loading={savingStatus} disabled={savingStatus || statusDraft === claim.status}>
+            Update Status
+          </Button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
@@ -498,7 +545,7 @@ export function ClaimDetails() {
             </Card>
           )}
 
-          {activeTab === 'ai' && (
+          {canViewAI && activeTab === 'ai' && (
             <Card>
               <CardHeader
                 title="AI Assessment Summary"

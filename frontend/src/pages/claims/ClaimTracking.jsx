@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { claimService } from '../../services/claimService'
+import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
@@ -71,6 +72,8 @@ const workflowStages = [
 
 export function ClaimTracking() {
   const { id } = useParams()
+  const { user } = useAuth()
+  const canViewAI = ['admin', 'employee', 'investigator'].includes(user?.role)
   const [claim, setClaim] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -147,7 +150,12 @@ export function ClaimTracking() {
 
   // Normalize status to kebab-case to match workflow stage ids
   const normalizedStatus = (claim.status || '').replace(/_/g, '-')
-  const currentStageIndex = Math.max(0, workflowStages.findIndex((s) => s.id === normalizedStatus))
+  const visibleWorkflowStages = canViewAI
+    ? workflowStages
+    : workflowStages.map((stage) => stage.id === 'ai-assessment'
+      ? { ...stage, name: '3. Claim Review', desc: 'A claims specialist is reviewing the claim and supporting information.', role: 'Claims Team' }
+      : stage)
+  const currentStageIndex = Math.max(0, visibleWorkflowStages.findIndex((s) => s.id === normalizedStatus))
 
   return (
     <div className="page max-w-5xl mx-auto">
@@ -159,7 +167,7 @@ export function ClaimTracking() {
           </Link>
           <div className="flex items-center gap-3">
             <h1 className="page-title">Lifecycle & Workflow Tracker</h1>
-            <StatusBadge status={claim.status} />
+            <StatusBadge status={!canViewAI && claim.status === 'ai_assessment' ? 'under_review' : claim.status} />
           </div>
           <p className="page-subtitle">
             Tracking Claim <span className="font-mono font-semibold text-gray-800">{claim.claimNumber}</span> • Customer: {claim.customerName}
@@ -170,12 +178,12 @@ export function ClaimTracking() {
           <Link to={`/claims/${claim.id}`}>
             <Button variant="secondary">View Full Details</Button>
           </Link>
-          <Link to="/ai-decision">
+          {canViewAI && <Link to="/ai-decision">
             <Button variant="primary">
               <Brain className="w-4 h-4 mr-2" />
               AI Decision Center
             </Button>
-          </Link>
+          </Link>}
         </div>
       </div>
 
@@ -186,12 +194,12 @@ export function ClaimTracking() {
             <div>
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Overall Workflow Progress</span>
               <h3 className="text-lg font-bold text-gray-900 mt-0.5">
-                Stage {currentStageIndex + 1} of 7: {workflowStages[currentStageIndex]?.name.replace(/^\d+\.\s*/, '')}
+                Stage {currentStageIndex + 1} of {visibleWorkflowStages.length}: {visibleWorkflowStages[currentStageIndex]?.name.replace(/^\d+\.\s*/, '')}
               </h3>
             </div>
             <div className="text-right">
               <span className="text-2xl font-black text-primary">
-                {Math.round(((currentStageIndex + 1) / 7) * 100)}%
+                {Math.round(((currentStageIndex + 1) / visibleWorkflowStages.length) * 100)}%
               </span>
               <span className="text-xs text-gray-500 block">Workflow Completion</span>
             </div>
@@ -201,13 +209,13 @@ export function ClaimTracking() {
           <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
             <div
               className="bg-primary h-3 rounded-full transition-all duration-500"
-              style={{ width: `${Math.round(((currentStageIndex + 1) / 7) * 100)}%` }}
+              style={{ width: `${Math.round(((currentStageIndex + 1) / visibleWorkflowStages.length) * 100)}%` }}
             />
           </div>
 
           {/* Workflow stages visual pills */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mt-6">
-            {workflowStages.map((stage, idx) => {
+            {visibleWorkflowStages.map((stage, idx) => {
               const isPast = idx < currentStageIndex
               const isCurrent = idx === currentStageIndex
               return (
@@ -235,7 +243,7 @@ export function ClaimTracking() {
 
       {/* Vertical Stages Details */}
       <div className="space-y-4">
-        {workflowStages.map((stage, idx) => {
+        {visibleWorkflowStages.map((stage, idx) => {
           const isPast = idx < currentStageIndex
           const isCurrent = idx === currentStageIndex
           const isFuture = idx > currentStageIndex
@@ -304,7 +312,7 @@ export function ClaimTracking() {
                     <div>
                       <span className="font-bold text-gray-800 block">Current Action Required:</span>
                       <span className="text-gray-600">
-                        {stage.id === 'ai-assessment' && 'Awaiting automated cross-verification of damage photo embeddings.'}
+                        {stage.id === 'ai-assessment' && (canViewAI ? 'AI results are available for staff review.' : 'Your claim is being reviewed by our claims team.')}
                         {stage.id === 'under-review' && 'Adjuster Sarah Mitchell reviewing submitted documentation.'}
                         {stage.id === 'investigation' && 'Investigator assigned to review conflicting timeline notes.'}
                         {stage.id === 'approved' && 'Finance team preparing digital settlement agreement.'}
@@ -313,13 +321,13 @@ export function ClaimTracking() {
                         {stage.id === 'closed' && 'Claim archive completed.'}
                       </span>
                     </div>
-                    <Button
+                    {canViewAI && <Button
                       variant="primary"
                       size="sm"
                       onClick={() => alert(`Simulated action triggered for stage: ${stage.name}`)}
                     >
                       Update Stage Note
-                    </Button>
+                    </Button>}
                   </div>
                 </div>
               )}

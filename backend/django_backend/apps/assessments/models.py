@@ -47,7 +47,11 @@ class ClaimAssessment(models.Model):
     )
     cost_breakdown = models.JSONField(_('cost breakdown'), default=dict, blank=True)
     repair_time_estimate_days = models.PositiveIntegerField(_('repair time estimate (days)'), blank=True, null=True)
-    comparable_claims_count = models.PositiveIntegerField(_('comparable claims count'), default=0)
+    comparable_claims_count = models.PositiveIntegerField(
+        _('comparable claims count'),
+        blank=True,
+        null=True,
+    )
     
     # Fraud Risk Assessment
     fraud_risk_score = models.DecimalField(

@@ -14,18 +14,49 @@ import {
   Sun,
 } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
+import { notificationService } from '../../services'
+import { formatRelativeTime } from '../../utils/helpers'
 
 export function Navbar({ sidebarCollapsed, onToggleSidebar }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [notificationError, setNotificationError] = useState('')
   const [darkMode, setDarkMode] = useState(() => {
     const savedTheme = window.localStorage.getItem('theme')
     return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
   })
   const userMenuRef = useRef(null)
   const notificationsRef = useRef(null)
+
+  useEffect(() => {
+    if (!user?.id) return undefined
+    let cancelled = false
+    const loadNotifications = async () => {
+      try {
+        const [listResult, countResult] = await Promise.all([
+          notificationService.getNotifications({ page_size: 5 }),
+          notificationService.getUnreadCount(),
+        ])
+        if (cancelled) return
+        const rows = Array.isArray(listResult) ? listResult : (listResult.results || [])
+        setNotifications(rows.slice(0, 5))
+        setUnreadCount(Number(countResult.unread_count) || 0)
+        setNotificationError('')
+      } catch {
+        if (!cancelled) setNotificationError('Could not load notifications.')
+      }
+    }
+    loadNotifications()
+    const interval = window.setInterval(loadNotifications, 30000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     if (darkMode) {
@@ -51,14 +82,26 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }) {
     navigate('/login')
   }
 
-  const notifications = [
-    { id: 1, title: 'New claim submitted', message: 'Claim #CLM-2024-001234 has been submitted', time: '5 min ago', unread: true },
-    { id: 2, title: 'AI Assessment complete', message: 'Assessment for claim #CLM-2024-001230 is ready for review', time: '1 hour ago', unread: true },
-    { id: 3, title: 'Policy renewal reminder', message: 'Policy #POL-2024-005678 expires in 30 days', time: '2 hours ago', unread: false },
-    { id: 4, title: 'Settlement processed', message: 'Payment for settlement #SET-2024-008901 has been processed', time: 'Yesterday', unread: false },
-  ]
+  const markAllNotificationsRead = async () => {
+    try {
+      await notificationService.markAllRead()
+      setNotifications((current) => current.map((notification) => ({ ...notification, is_read: true })))
+      setUnreadCount(0)
+    } catch {
+      setNotificationError('Could not mark notifications as read.')
+    }
+  }
 
-  const unreadCount = notifications.filter((n) => n.unread).length
+  const markNotificationRead = async (notification) => {
+    if (notification.is_read) return
+    try {
+      await notificationService.markRead(notification.id)
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true } : item))
+      setUnreadCount((count) => Math.max(0, count - 1))
+    } catch {
+      setNotificationError('Could not update this notification.')
+    }
+  }
 
   return (
     <header
@@ -112,24 +155,28 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }) {
                 <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                   <h3 className="font-semibold text-gray-900">Notifications</h3>
                   {unreadCount > 0 && (
-                    <button className="text-sm text-primary hover:underline">Mark all read</button>
+                    <button className="text-sm text-primary hover:underline" onClick={markAllNotificationsRead}>Mark all read</button>
                   )}
                 </div>
                 <div className="max-h-96 overflow-y-auto">
+                  {notificationError && <p className="px-4 py-3 text-sm text-red-600">{notificationError}</p>}
+                  {!notificationError && notifications.length === 0 && <p className="px-4 py-6 text-center text-sm text-gray-500">No notifications yet.</p>}
                   {notifications.map((notification) => (
-                    <div
+                    <Link
                       key={notification.id}
+                      to={notification.link || '/notifications'}
+                      onClick={() => { markNotificationRead(notification); setShowNotifications(false) }}
                       className={clsx(
-                        'px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 transition-colors',
-                        notification.unread && 'bg-blue-50'
+                        'block px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 transition-colors',
+                        !notification.is_read && 'bg-blue-50'
                       )}
                     >
-                      <p className={clsx('text-sm font-medium text-gray-900', notification.unread && 'font-semibold')}>
+                      <p className={clsx('text-sm font-medium text-gray-900', !notification.is_read && 'font-semibold')}>
                         {notification.title}
                       </p>
                       <p className="text-sm text-gray-500 mt-0.5">{notification.message}</p>
-                      <p className="text-xs text-gray-400 mt-1">{notification.time}</p>
-                    </div>
+                      <p className="text-xs text-gray-400 mt-1">{formatRelativeTime(notification.sent_at)}</p>
+                    </Link>
                   ))}
                 </div>
                 <div className="px-4 py-3 border-t border-gray-200">
