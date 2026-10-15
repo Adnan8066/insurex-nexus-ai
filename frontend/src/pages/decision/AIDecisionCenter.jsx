@@ -12,6 +12,7 @@ import {
   Play,
   Check,
   AlertCircle,
+  Info,
   RefreshCw,
 } from 'lucide-react'
 import { clsx } from 'clsx'

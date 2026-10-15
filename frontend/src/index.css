@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+.module-nav-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.module-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.footer-module-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 768px) {
+  .footer-module-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .footer-module-grid {
+    grid-template-columns: minmax(250px, 1.1fr) repeat(var(--footer-group-count, 3), minmax(0, 1fr));
+  }
+}
+
 html.dark {
   color-scheme: dark;
   --color-bg-primary: #0f172a;

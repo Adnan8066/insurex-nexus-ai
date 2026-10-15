@@ -1,24 +1,15 @@
-import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import { Sidebar } from '../components/layout/Sidebar'
 import { Navbar } from '../components/layout/Navbar'
-import { clsx } from 'clsx'
+import { Footer } from '../components/layout/Footer'
 
 export function MainLayout() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div className={clsx('flex-1 transition-all duration-300 min-w-0 flex flex-col', sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72')}>
-        <Navbar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
-        <main
-          className="pt-16 min-h-screen w-full flex-1"
-          role="main"
-        >
+    <div className="flex min-h-screen flex-col bg-gray-50">
+      <Navbar />
+      <main className="w-full flex-1" role="main">
           <Outlet />
-        </main>
-      </div>
+      </main>
+      <Footer />
     </div>
   )
 }
