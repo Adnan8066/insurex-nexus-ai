@@ -6,6 +6,25 @@ import { Input, Select } from '../../components/forms/FormFields'
 import { policyService, vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
 
+function formatApiError(payload) {
+  if (typeof payload === 'string') return payload
+  if (Array.isArray(payload)) return payload.map(formatApiError).filter(Boolean).join(', ')
+  if (!payload || typeof payload !== 'object') return ''
+
+  const message = payload.detail || payload.message
+  if (message && typeof message === 'string') return message
+
+  const errors = payload.error && typeof payload.error === 'object' ? payload.error : payload
+  return Object.entries(errors)
+    .filter(([key]) => key !== 'success')
+    .map(([field, value]) => {
+      const text = formatApiError(value)
+      return text ? `${field.replaceAll('_', ' ')}: ${text}` : ''
+    })
+    .filter(Boolean)
+    .join('; ')
+}
+
 export function VehicleForm() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -135,16 +154,10 @@ export function VehicleForm() {
       else await vehicleService.createVehicle(payload)
       navigate('/vehicles')
     } catch (err) {
-      const details = err.response?.data?.error?.details || err.response?.data
-      if (details && typeof details === 'object') {
-        const messages = Object.entries(details)
-          .filter(([field]) => field !== 'detail')
-          .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
-          .join('; ')
-        setError(messages || err.response?.data?.detail || 'Failed to save vehicle')
-      } else {
-        setError(err.response?.data?.detail || err.response?.data?.error?.message || (err.response ? 'Failed to save vehicle. Check the entered details and try again.' : 'Could not reach the vehicle service. Check that the backend is running and try again.'))
-      }
+      const message = formatApiError(err.response?.data)
+      setError(message || (err.response
+        ? 'Failed to save vehicle. Check the entered details and try again.'
+        : 'Could not reach the vehicle service. Check that the backend is running and try again.'))
     } finally {
       setLoading(false)
     }

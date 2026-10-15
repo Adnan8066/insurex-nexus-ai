@@ -4,7 +4,6 @@ import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
-import { clsx } from 'clsx'
 
 export function Login() {
   const navigate = useNavigate()
@@ -63,7 +62,7 @@ export function Login() {
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" role="alert">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <AlertCircle className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
               <span>{error}</span>
             </div>
           )}
