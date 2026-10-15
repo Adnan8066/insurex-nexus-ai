@@ -57,7 +57,7 @@ class ErrorBoundary extends Component {
             </p>
             
             {import.meta.env.DEV && error && (
-              <details className="text-left mb-4 p-3 bg-gray-100 rounded text-xs text-gray-700 overflow-auto max-h-48">
+              <details open className="text-left mb-4 p-3 bg-gray-100 rounded text-xs text-gray-700 overflow-auto max-h-48">
                 <summary className="font-medium cursor-pointer mb-2">Error Details</summary>
                 <pre>{error.toString()}</pre>
                 {errorInfo && errorInfo.componentStack && (
@@ -70,7 +70,7 @@ class ErrorBoundary extends Component {
               <Button 
                 variant="primary" 
                 onClick={this.handleRetry}
-                loading={retryCount > 0}
+                loading={false}
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />

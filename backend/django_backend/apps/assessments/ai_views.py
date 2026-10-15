@@ -9,7 +9,7 @@ from drf_spectacular.utils import extend_schema
 
 from apps.claims.models import Claim
 from .models import ClaimAssessment, AgentOutput, DecisionFlow, AssessmentType, AssessmentStatus
-from .serializers import ClaimAssessmentSerializer, DecisionFlowSerializer
+from .serializers import AgentOutputSerializer, ClaimAssessmentSerializer, DecisionFlowSerializer
 from ml_service import (
     detect_fraud_ml,
     predict_repair_cost_ml,
@@ -231,6 +231,7 @@ def run_agent(request, agent_type):
     
     agent_output.status = 'running'
     agent_output.input_data = input_data
+    agent_output.error_message = ''
     agent_output.save()
     
     try:
@@ -296,10 +297,9 @@ def run_agent(request, agent_type):
             claim=claim,
             defaults={'rl_recommendation': {'available': False, 'reason': 'No reinforcement-learning optimizer is configured.'}},
         )
-        decision_flow.agents = list(claim.agent_outputs.order_by('created_at').values(
-            'agent_type', 'status', 'input_data', 'output_data', 'confidence',
-            'processing_time_seconds', 'error_message', 'created_at', 'completed_at',
-        ))
+        decision_flow.agents = AgentOutputSerializer(
+            claim.agent_outputs.order_by('created_at'), many=True
+        ).data
         if agent_type == 'decision_agent':
             decision_flow.final_decision = output_data
             decision_flow.decided_by = 'Rules-based review recommendation'
