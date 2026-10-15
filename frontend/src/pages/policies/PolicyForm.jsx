@@ -156,9 +156,9 @@ export function PolicyForm() {
       else await policyService.createPolicy(payload)
       navigate('/policies')
     } catch (err) {
-      const details = err.response?.data
+      const details = err.response?.data?.error?.details || err.response?.data
       setError(typeof details === 'object'
-        ? Object.entries(details).map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`).join('; ')
+        ? Object.entries(details).filter(([field]) => field !== 'detail').map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`).join('; ') || err.response?.data?.detail || 'Failed to save policy.'
         : details?.detail || 'Failed to save policy.')
     } finally {
       setLoading(false)

@@ -6,7 +6,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 import uuid
 
-from .models import Settlement, SettlementTimeline, SettlementPayment
+from .models import (
+    Settlement, SettlementTimeline, SettlementPayment,
+    SettlementStatus, PaymentStatus,
+)
 from .serializers import (
     SettlementSerializer, SettlementCreateSerializer, SettlementUpdateSerializer,
     SettlementApproveSerializer, SettlementPaySerializer,
@@ -20,12 +23,23 @@ class SettlementViewSet(viewsets.ModelViewSet):
         'claim', 'customer', 'approved_by', 'paid_by'
     ).prefetch_related('timeline', 'payments').all()
     serializer_class = SettlementSerializer
-    permission_classes = [IsAuthenticated, IsStaffMember]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'payment_status', 'payment_method']
     search_fields = ['settlement_number', 'claim__claim_number', 'customer__email']
     ordering_fields = ['created_at', 'approved_at', 'paid_at']
     ordering = ['-created_at']
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'my_settlements', 'timeline', 'payments', 'by_claim']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsStaffMember()]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.request.user.is_staff_member:
+            return queryset
+        return queryset.filter(customer=self.request.user)
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -36,7 +50,10 @@ class SettlementViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         settlement_number = f"SET-{uuid.uuid4().hex[:8].upper()}"
-        settlement = serializer.save(settlement_number=settlement_number)
+        settlement = serializer.save(
+            settlement_number=settlement_number,
+            customer=serializer.validated_data['claim'].customer,
+        )
         
         SettlementTimeline.objects.create(
             settlement=settlement,
@@ -46,14 +63,22 @@ class SettlementViewSet(viewsets.ModelViewSet):
             user=self.request.user,
             metadata={'estimated_amount': str(settlement.estimated_amount)}
         )
+        from apps.notifications.services import create_in_app_notification
+        create_in_app_notification(
+            settlement.customer, 'settlement', 'Settlement prepared',
+            f'A settlement record for claim {settlement.claim.claim_number} is ready for review.',
+            link=f'/settlements', related_object_type='settlement', related_object_id=settlement.id,
+        )
     
     @action(detail=True, methods=['post'], url_path='approve')
     def approve(self, request, pk=None):
         settlement = self.get_object()
+        if settlement.status not in [SettlementStatus.CALCULATED, SettlementStatus.UNDER_REVIEW]:
+            return Response({'detail': 'Only calculated settlements can be approved.'}, status=status.HTTP_409_CONFLICT)
         serializer = SettlementApproveSerializer(data=request.data)
         if serializer.is_valid():
             settlement.approved_amount = serializer.validated_data['approved_amount']
-            settlement.status = Settlement.SettlementStatus.APPROVED
+            settlement.status = SettlementStatus.APPROVED
             settlement.approved_by = request.user
             settlement.approved_at = timezone.now()
             settlement.notes = serializer.validated_data.get('notes', settlement.notes)
@@ -69,6 +94,12 @@ class SettlementViewSet(viewsets.ModelViewSet):
                 user=request.user,
                 metadata={'approved_amount': str(settlement.approved_amount)}
             )
+            from apps.notifications.services import create_in_app_notification
+            create_in_app_notification(
+                settlement.customer, 'settlement', 'Settlement approved',
+                f'Settlement {settlement.settlement_number} was approved.',
+                link='/settlements', related_object_type='settlement', related_object_id=settlement.id,
+            )
             
             return Response(self.get_serializer(settlement).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -76,7 +107,9 @@ class SettlementViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='reject')
     def reject(self, request, pk=None):
         settlement = self.get_object()
-        settlement.status = Settlement.SettlementStatus.REJECTED
+        if settlement.status not in [SettlementStatus.CALCULATED, SettlementStatus.UNDER_REVIEW]:
+            return Response({'detail': 'Only calculated settlements can be rejected.'}, status=status.HTTP_409_CONFLICT)
+        settlement.status = SettlementStatus.REJECTED
         settlement.notes = request.data.get('notes', settlement.notes)
         settlement.save(update_fields=['status', 'notes'])
         
@@ -87,6 +120,12 @@ class SettlementViewSet(viewsets.ModelViewSet):
             description=settlement.notes or 'Settlement rejected',
             user=request.user
         )
+        from apps.notifications.services import create_in_app_notification
+        create_in_app_notification(
+            settlement.customer, 'settlement', 'Settlement declined',
+            f'Settlement {settlement.settlement_number} was declined.',
+            link='/settlements', related_object_type='settlement', related_object_id=settlement.id,
+        )
         
         return Response(self.get_serializer(settlement).data)
     
@@ -94,10 +133,16 @@ class SettlementViewSet(viewsets.ModelViewSet):
     def pay(self, request, pk=None):
         settlement = self.get_object()
         
-        if settlement.status != Settlement.SettlementStatus.APPROVED:
+        if settlement.status != SettlementStatus.APPROVED:
             return Response(
                 {'error': 'Settlement must be approved before payment'},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if settlement.payment_status == PaymentStatus.PROCESSING:
+            return Response(
+                {'detail': 'A payout is already in progress for this settlement.'},
+                status=status.HTTP_409_CONFLICT
             )
         
         serializer = SettlementPaySerializer(data=request.data)
@@ -110,12 +155,14 @@ class SettlementViewSet(viewsets.ModelViewSet):
                 amount=settlement.approved_amount,
                 payment_method=serializer.validated_data['payment_method'],
                 payment_reference=serializer.validated_data.get('payment_reference', ''),
-                status=SettlementPayment.PaymentStatus.PROCESSING,
+                status=PaymentStatus.PROCESSING,
                 initiated_by=request.user
             )
             
-            settlement.payment_status = Settlement.PaymentStatus.PROCESSING
-            settlement.save(update_fields=['payment_status'])
+            settlement.payment_status = PaymentStatus.PROCESSING
+            settlement.payment_method = payment.payment_method
+            settlement.payment_reference = payment.payment_reference
+            settlement.save(update_fields=['payment_status', 'payment_method', 'payment_reference'])
             
             SettlementTimeline.objects.create(
                 settlement=settlement,
@@ -125,6 +172,12 @@ class SettlementViewSet(viewsets.ModelViewSet):
                 user=request.user,
                 metadata={'payment_number': payment_number}
             )
+            from apps.notifications.services import create_in_app_notification
+            create_in_app_notification(
+                settlement.customer, 'payment', 'Payout initiated',
+                f'A payout record for settlement {settlement.settlement_number} was initiated. This does not confirm funds transfer.',
+                link='/settlements', related_object_type='settlement', related_object_id=settlement.id,
+            )
             
             return Response(SettlementPaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -132,6 +185,8 @@ class SettlementViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='complete-payment')
     def complete_payment(self, request, pk=None):
         settlement = self.get_object()
+        if settlement.payment_status != PaymentStatus.PROCESSING:
+            return Response({'detail': 'There is no payout in progress for this settlement.'}, status=status.HTTP_409_CONFLICT)
         payment_id = request.data.get('payment_id')
         
         if not payment_id:
@@ -141,16 +196,20 @@ class SettlementViewSet(viewsets.ModelViewSet):
             payment = settlement.payments.get(id=payment_id)
         except SettlementPayment.DoesNotExist:
             return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if payment.status != PaymentStatus.PROCESSING:
+            return Response({'detail': 'This payment is not awaiting completion.'}, status=status.HTTP_409_CONFLICT)
         
-        payment.status = SettlementPayment.PaymentStatus.COMPLETED
+        payment.status = PaymentStatus.COMPLETED
         payment.processed_by = request.user
         payment.processed_at = timezone.now()
         payment.save(update_fields=['status', 'processed_by', 'processed_at'])
         
-        settlement.payment_status = Settlement.PaymentStatus.COMPLETED
+        settlement.payment_status = PaymentStatus.COMPLETED
+        settlement.status = SettlementStatus.PAID
         settlement.paid_by = request.user
         settlement.paid_at = timezone.now()
-        settlement.save(update_fields=['payment_status', 'paid_by', 'paid_at'])
+        settlement.save(update_fields=['payment_status', 'status', 'paid_by', 'paid_at'])
         
         SettlementTimeline.objects.create(
             settlement=settlement,
@@ -159,6 +218,12 @@ class SettlementViewSet(viewsets.ModelViewSet):
             description=f'Payment of ${payment.amount} completed successfully',
             user=request.user,
             metadata={'payment_number': payment.payment_number}
+        )
+        from apps.notifications.services import create_in_app_notification
+        create_in_app_notification(
+            settlement.customer, 'payment', 'Payout marked complete',
+            f'Payment {payment.payment_number} for settlement {settlement.settlement_number} was marked complete by staff.',
+            link='/settlements', related_object_type='settlement', related_object_id=settlement.id,
         )
         
         return Response(self.get_serializer(settlement).data)
@@ -180,8 +245,17 @@ class SettlementViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='my-settlements')
     def my_settlements(self, request):
         if request.user.is_staff_member:
-            return Response({'error': 'Use list endpoint'}, status=status.HTTP_400_BAD_REQUEST)
+            settlements = self.get_queryset()
+            serializer = self.get_serializer(settlements, many=True)
+            return Response(serializer.data)
         
         settlements = self.get_queryset().filter(customer=request.user)
         serializer = self.get_serializer(settlements, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path=r'by-claim/(?P<claim_id>\d+)')
+    def by_claim(self, request, claim_id=None):
+        settlement = self.get_queryset().filter(claim_id=claim_id).first()
+        if settlement is None:
+            return Response({'detail': 'No settlement found for this claim.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self.get_serializer(settlement).data)

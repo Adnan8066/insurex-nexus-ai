@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Settlement, SettlementTimeline, SettlementPayment, SettlementStatus, PaymentStatus, PaymentMethod
+from apps.claims.models import ClaimStatus
 
 class SettlementTimelineSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)
@@ -45,6 +46,10 @@ class SettlementSerializer(serializers.ModelSerializer):
                            'approved_by', 'approved_at', 'paid_by', 'paid_at']
 
 class SettlementCreateSerializer(serializers.ModelSerializer):
+    estimated_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+    deductible = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+    approved_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+
     class Meta:
         model = Settlement
         fields = [
@@ -52,17 +57,23 @@ class SettlementCreateSerializer(serializers.ModelSerializer):
             'payment_method', 'bank_account', 'notes'
         ]
 
+    def validate_claim(self, claim):
+        if claim.status != ClaimStatus.APPROVED:
+            raise serializers.ValidationError('A settlement can only be created for an approved claim.')
+        if Settlement.objects.filter(claim=claim).exists():
+            raise serializers.ValidationError('A settlement already exists for this claim.')
+        return claim
+
 class SettlementUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Settlement
         fields = [
-            'estimated_amount', 'deductible', 'approved_amount', 'status',
-            'payment_status', 'payment_method', 'payment_reference',
+            'estimated_amount', 'deductible', 'approved_amount', 'payment_method', 'payment_reference',
             'bank_account', 'notes'
         ]
 
 class SettlementApproveSerializer(serializers.Serializer):
-    approved_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    approved_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     notes = serializers.CharField(required=False, allow_blank=True)
 
 class SettlementPaySerializer(serializers.Serializer):

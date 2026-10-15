@@ -191,7 +191,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             user.password_reset_token_created = timezone.now()
             user.save(update_fields=['password_reset_token', 'password_reset_token_created'])
             
-            reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+            reset_url = f"{settings.FRONTEND_URL}/forgot-password?token={reset_token}"
             
             send_mail(
                 'Password Reset Request',

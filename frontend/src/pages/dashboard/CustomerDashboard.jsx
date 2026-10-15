@@ -119,8 +119,8 @@ export function CustomerDashboard() {
     setConnectionError(null)
     try {
       const [polRes, clmRes] = await Promise.all([
-        policyService.getPolicies().catch(() => ({ results: [] })),
-        claimService.getClaims().catch(() => ({ results: [] })),
+        policyService.getPolicies(),
+        claimService.getClaims(),
       ])
       const pols = Array.isArray(polRes) ? polRes : (polRes.results || [])
       const clms = Array.isArray(clmRes) ? clmRes : (clmRes.results || [])

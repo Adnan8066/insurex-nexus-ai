@@ -16,6 +16,10 @@ _MODEL_FILES = {
 _models = {name: None for name in _MODEL_FILES}
 _model_mtimes = {}
 
+
+class MLModelUnavailable(RuntimeError):
+    """Raised when a trained model cannot produce a prediction for this input."""
+
 _INSURANCE_FEATURES = [
     "age", "policy_deductable", "policy_annual_premium", "incident_type",
     "incident_severity", "number_of_vehicles_involved", "property_damage",
@@ -79,38 +83,23 @@ def _fraud_result(score, decision_threshold=70):
     }
 
 
-def _fallback_repair_cost(claim_data):
-    amount = float(claim_data.get("claim_amount") or claim_data.get("total_claim_amount") or 0)
-    cost = round(amount * 0.85, 2)
-    return {
-        "cost": cost,
-        "breakdown": {
-            "labor": round(cost * 0.4, 2), "parts": round(cost * 0.35, 2),
-            "materials": round(cost * 0.1, 2), "overhead": round(cost * 0.05, 2),
-        },
-        "time_estimate": 5,
-        "comparable_count": 12,
-    }
-
-
 def predict_repair_cost_ml(claim_data):
     """Predict vehicle repair cost with the model trained on insurance claims."""
     model = load_models()["repair_cost"]
-    if model is None or claim_data.get("_source_dataset") == "fraud_oracle":
-        return _fallback_repair_cost(claim_data)
+    if claim_data.get("_source_dataset") == "fraud_oracle":
+        raise MLModelUnavailable("Repair-cost predictions are not supported for Fraud Oracle records; that dataset has no repair-cost labels.")
+    if model is None:
+        raise MLModelUnavailable("The trained repair-cost model is not available. Train the project models before assessing this claim.")
     try:
         prediction = max(0.0, float(model.predict(_input_frame(claim_data, _INSURANCE_FEATURES))[0]))
         return {
             "cost": round(prediction, 2),
-            "breakdown": {
-                "labor": round(prediction * 0.4, 2), "parts": round(prediction * 0.35, 2),
-                "materials": round(prediction * 0.1, 2), "overhead": round(prediction * 0.05, 2),
-            },
-            "time_estimate": 5,
-            "comparable_count": 1000,
+            "breakdown": {},
+            "time_estimate": None,
+            "comparable_count": None,
         }
-    except (ValueError, TypeError, KeyError):
-        return _fallback_repair_cost(claim_data)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise MLModelUnavailable(f"The repair-cost model could not score this claim: {exc}") from exc
 
 
 def detect_fraud_ml(claim_data):
@@ -119,7 +108,7 @@ def detect_fraud_ml(claim_data):
     oracle = claim_data.get("_source_dataset") == "fraud_oracle"
     model = models["fraud_oracle_fraud"] if oracle else models["fraud_risk"]
     if model is None:
-        return _fraud_result(15.0)
+        raise MLModelUnavailable("The trained fraud model for this claim type is not available. Train the project models before assessing this claim.")
     features = _ORACLE_FEATURES if oracle else _INSURANCE_FEATURES
     try:
         score = _fraud_probability(model, _input_frame(claim_data, features)) * 100
@@ -133,20 +122,22 @@ def detect_fraud_ml(claim_data):
             except (OSError, ValueError, KeyError, TypeError):
                 pass
         return _fraud_result(score, threshold)
-    except (ValueError, TypeError, KeyError):
-        return _fraud_result(15.0)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise MLModelUnavailable(f"The fraud model could not score this claim: {exc}") from exc
 
 
 def predict_total_loss_ml(claim_data):
     """Estimate total-loss probability from the insurance claims model."""
     model = load_models()["total_loss"]
-    if model is None or claim_data.get("_source_dataset") == "fraud_oracle":
-        return {"probability": 10.0}
+    if claim_data.get("_source_dataset") == "fraud_oracle":
+        raise MLModelUnavailable("Total-loss prediction is not supported for Fraud Oracle records; that dataset has no total-loss outcome label.")
+    if model is None:
+        raise MLModelUnavailable("The trained total-loss model is not available. Train the project models before assessing this claim.")
     try:
         probability = _fraud_probability(model, _input_frame(claim_data, _INSURANCE_FEATURES)) * 100
         return {"probability": round(min(max(probability, 0), 100), 2)}
-    except (ValueError, TypeError, KeyError):
-        return {"probability": 10.0}
+    except (ValueError, TypeError, KeyError) as exc:
+        raise MLModelUnavailable(f"The total-loss model could not score this claim: {exc}") from exc
 
 
 def get_model_status():

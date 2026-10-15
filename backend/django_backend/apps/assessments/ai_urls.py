@@ -8,4 +8,5 @@ urlpatterns = [
     path('predict-total-loss/', ai_views.predict_total_loss, name='predict-total-loss'),
     path('run-agent/<str:agent_type>/', ai_views.run_agent, name='run-agent'),
     path('decision-flow/<int:claim_id>/', ai_views.get_decision_flow, name='decision-flow'),
+    path('model-status/', ai_views.model_status, name='model-status'),
 ]

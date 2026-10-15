@@ -135,12 +135,13 @@ export function VehicleForm() {
       else await vehicleService.createVehicle(payload)
       navigate('/vehicles')
     } catch (err) {
-      const details = err.response?.data
+      const details = err.response?.data?.error?.details || err.response?.data
       if (details && typeof details === 'object') {
         const messages = Object.entries(details)
+          .filter(([field]) => field !== 'detail')
           .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
           .join('; ')
-        setError(messages || 'Failed to save vehicle')
+        setError(messages || err.response?.data?.detail || 'Failed to save vehicle')
       } else {
         setError(err.response?.data?.detail || err.response?.data?.error?.message || (err.response ? 'Failed to save vehicle. Check the entered details and try again.' : 'Could not reach the vehicle service. Check that the backend is running and try again.'))
       }

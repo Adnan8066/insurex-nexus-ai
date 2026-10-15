@@ -527,7 +527,7 @@ export function ClaimDetails() {
                       </div>
                       <div className="p-4 bg-emerald-50/70 border border-emerald-100 rounded-xl">
                         <span className="text-xs font-semibold text-emerald-700 uppercase">AI Confidence</span>
-                        <div className="text-2xl font-bold text-emerald-800 mt-1">{claim.aiAssessment.confidence}%</div>
+                        <div className="text-2xl font-bold text-emerald-800 mt-1">{claim.aiAssessment.confidence == null ? 'N/A' : `${claim.aiAssessment.confidence}%`}</div>
                       </div>
                     </div>
 

@@ -83,6 +83,7 @@ export function VehicleList() {
         if (!cancelled) {
           setVehicles([])
           setFilteredVehicles([])
+          setError(err.response?.data?.detail || 'Could not load vehicles. Check your connection and try again.')
         }
       } finally {
         if (!cancelled) setLoading(false)

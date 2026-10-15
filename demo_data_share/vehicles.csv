@@ -1,0 +1,13 @@
+﻿vehicle_id,make,model,year,vin,color,license_plate,license_state,purchase_date,purchase_price,current_mileage,fuel_type,transmission,status,engine_size,body_style,features,registration_expiry,policy_id
+DEMO-VEH-0001,suzuki,baleno,2022,DEMOVIN0001X,Blue,DEMO-0001,IL,2022-02-14,,10,diesel,manual,active,,,{},2026-10-26,
+DEMO-VEH-0002,suzuki,swift,2026,DEMOVIN0002X,Black,DEMO-0002,IL,2022-02-01,,10,diesel,manual,active,,,{},2026-04-04,
+DEMO-VEH-0003,Toyota,Camry,2023,DEMOVIN0003X,Silver,DEMO-0003,CA,2023-06-01,20750,8200,gasoline,automatic,active,2.5,sedan,"{""demo"":true,""safety_package"":false}",2027-10-15,DEMO-POL-0003
+DEMO-VEH-0004,Honda,Civic,2022,DEMOVIN0004X,Blue,DEMO-0004,CA,2022-06-02,23500,16400,gasoline,cvt,active,2,sedan,"{""demo"":true,""safety_package"":true}",2027-10-15,DEMO-POL-0004
+DEMO-VEH-0005,Tesla,Model 3,2024,DEMOVIN0005X,White,DEMO-0005,NY,2024-06-03,26250,24600,electric,automatic,active,,sedan,"{""demo"":true,""safety_package"":false}",2027-10-15,DEMO-POL-0005
+DEMO-VEH-0006,Ford,Escape,2021,DEMOVIN0006X,Black,DEMO-0006,TX,2021-06-04,29000,32800,hybrid,automatic,active,2.5,suv,"{""demo"":true,""safety_package"":true}",2027-10-15,DEMO-POL-0006
+DEMO-VEH-0007,Subaru,Outback,2020,DEMOVIN0007X,Green,DEMO-0007,WA,2020-06-05,31750,41000,gasoline,cvt,active,2.5,wagon,"{""demo"":true,""safety_package"":false}",2027-10-15,DEMO-POL-0007
+DEMO-VEH-0008,Hyundai,Ioniq 5,2024,DEMOVIN0008X,Gray,DEMO-0008,CA,2024-06-06,34500,49200,electric,automatic,active,,suv,"{""demo"":true,""safety_package"":true}",2027-10-15,DEMO-POL-0008
+DEMO-VEH-0009,Chevrolet,Malibu,2019,DEMOVIN0009X,Red,DEMO-0009,FL,2019-06-07,37250,57400,gasoline,automatic,active,1.5,sedan,"{""demo"":true,""safety_package"":false}",2027-10-15,DEMO-POL-0009
+DEMO-VEH-0010,Kia,Sportage,2023,DEMOVIN0010X,White,DEMO-0010,IL,2023-06-08,40000,65600,gasoline,automatic,active,2.5,suv,"{""demo"":true,""safety_package"":true}",2027-10-15,DEMO-POL-0010
+DEMO-VEH-0011,Nissan,Leaf,2022,DEMOVIN0011X,Blue,DEMO-0011,OR,2022-06-09,42750,73800,electric,automatic,active,,hatchback,"{""demo"":true,""safety_package"":false}",2027-10-15,DEMO-POL-0011
+DEMO-VEH-0012,Volkswagen,Jetta,2021,DEMOVIN0012X,Black,DEMO-0012,CO,2021-06-10,45500,82000,gasoline,automatic,active,1.4,sedan,"{""demo"":true,""safety_package"":true}",2027-10-15,DEMO-POL-0012

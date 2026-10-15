@@ -31,7 +31,8 @@ const Profile = lazy(() => import('../pages/profile/Profile').then((module) => (
 const Settings = lazy(() => import('../pages/settings/Settings').then((module) => ({ default: module.Settings })))
 
 function ProtectedRoute({ children, roles }) {
-  const { isAuthenticated, user, hasRole } = useAuth()
+  const { isAuthenticated, user, hasRole, loading } = useAuth()
+  if (loading) return <div className="p-8 text-center text-gray-500" role="status">Checking your session…</div>
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (roles && !hasRole(roles)) return <Navigate to="/dashboard" replace />
   return children
@@ -70,14 +71,14 @@ export default function AppRoutes() {
         <Route path="claims/:id" element={<ClaimDetails />} />
         <Route path="claims/new" element={<SubmitClaim />} />
         <Route path="claims/:id/tracking" element={<ClaimTracking />} />
-        <Route path="ai-assessment" element={<AIAssessment />} />
-        <Route path="fraud" element={<FraudDashboard />} />
+        <Route path="ai-assessment" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIAssessment /></ProtectedRoute>} />
+        <Route path="fraud" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><FraudDashboard /></ProtectedRoute>} />
         <Route path="investigators" element={<InvestigatorDashboard />} />
         <Route path="repair-shops" element={<RepairDashboard />} />
-        <Route path="settlements" element={<SettlementDashboard />} />
-        <Route path="analytics" element={<AdminDashboard />} />
-        <Route path="ai-decision" element={<AIDecisionCenter />} />
-        <Route path="operations" element={<AIOperations />} />
+        <Route path="settlements" element={<ProtectedRoute roles={['employee', 'admin']}><SettlementDashboard /></ProtectedRoute>} />
+        <Route path="analytics" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AdminDashboard /></ProtectedRoute>} />
+        <Route path="ai-decision" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIDecisionCenter /></ProtectedRoute>} />
+        <Route path="operations" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIOperations /></ProtectedRoute>} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />

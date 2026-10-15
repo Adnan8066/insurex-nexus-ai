@@ -8,17 +8,22 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null)
 
   const loadUser = useCallback(async () => {
-    const storedUser = localStorage.getItem('user')
     const token = localStorage.getItem('access_token')
 
-    if (storedUser && token) {
+    if (token) {
       try {
-        setUser(JSON.parse(storedUser))
+        const profile = await authService.getProfile()
+        setUser(profile)
+        localStorage.setItem('user', JSON.stringify(profile))
       } catch {
         localStorage.removeItem('user')
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
+        setUser(null)
       }
+    } else {
+      localStorage.removeItem('user')
+      setUser(null)
     }
     setLoading(false)
   }, [])
@@ -40,7 +45,10 @@ export function AuthProvider({ children }) {
       setUser(userData)
       return { success: true, user: userData }
     } catch (err) {
-      const message = err.response?.data?.detail || err.response?.data?.non_field_errors?.[0] || 'Login failed'
+      const message = err.response?.data?.detail
+        || err.response?.data?.error?.message
+        || err.response?.data?.non_field_errors?.[0]
+        || 'Login failed. Check the backend connection and your credentials.'
       setError(message)
       return { success: false, error: message }
     }
@@ -77,7 +85,7 @@ export function AuthProvider({ children }) {
       await authService.forgotPassword(email)
       return { success: true }
     } catch (err) {
-      const message = err.response?.data?.detail || 'Failed to send reset email'
+      const message = err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to send reset email'
       setError(message)
       return { success: false, error: message }
     }
@@ -89,7 +97,7 @@ export function AuthProvider({ children }) {
       await authService.resetPassword(token, password)
       return { success: true }
     } catch (err) {
-      const message = err.response?.data?.detail || 'Password reset failed'
+      const message = err.response?.data?.detail || err.response?.data?.error?.message || 'Password reset failed'
       setError(message)
       return { success: false, error: message }
     }
@@ -103,7 +111,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('user', JSON.stringify(updatedUser))
       return { success: true, user: updatedUser }
     } catch (err) {
-      const message = err.response?.data?.detail || 'Profile update failed'
+      const message = err.response?.data?.detail || err.response?.data?.error?.message || 'Profile update failed'
       setError(message)
       return { success: false, error: message }
     }
@@ -115,7 +123,7 @@ export function AuthProvider({ children }) {
       await authService.changePassword(passwordData)
       return { success: true }
     } catch (err) {
-      const message = err.response?.data?.detail || 'Password change failed'
+      const message = err.response?.data?.detail || err.response?.data?.error?.message || 'Password change failed'
       setError(message)
       return { success: false, error: message }
     }

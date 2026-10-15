@@ -14,6 +14,7 @@ from ml_service import (
     detect_fraud_ml,
     predict_repair_cost_ml,
     predict_total_loss_ml,
+    MLModelUnavailable,
 )
 
 
@@ -77,6 +78,8 @@ def assess_claim(request):
     except Exception as e:
         assessment.status = AssessmentStatus.FAILED
         assessment.save()
+        if isinstance(e, MLModelUnavailable):
+            return Response({'error': str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -151,7 +154,8 @@ def generate_recommendation(assessment):
 
 
 def calculate_confidence(assessment):
-    return 85.0
+    # The current models do not produce a validated, calibrated claim-level confidence value.
+    return None
 
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
@@ -163,7 +167,12 @@ def predict_repair_cost(request):
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     claim = get_object_or_404(Claim, id=claim_id)
-    result = predict_repair_cost_internal(claim)
+    if not request.user.is_staff_member and claim.customer_id != request.user.id:
+        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        result = predict_repair_cost_internal(claim)
+    except MLModelUnavailable as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response(result)
 
 
@@ -176,7 +185,12 @@ def detect_fraud(request):
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     claim = get_object_or_404(Claim, id=claim_id)
-    result = detect_fraud_internal(claim)
+    if not request.user.is_staff_member and claim.customer_id != request.user.id:
+        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        result = detect_fraud_internal(claim)
+    except MLModelUnavailable as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response(result)
 
 
@@ -189,7 +203,12 @@ def predict_total_loss(request):
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     claim = get_object_or_404(Claim, id=claim_id)
-    result = predict_total_loss_internal(claim)
+    if not request.user.is_staff_member and claim.customer_id != request.user.id:
+        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        result = predict_total_loss_internal(claim)
+    except MLModelUnavailable as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response(result)
 
 
@@ -199,11 +218,21 @@ def predict_total_loss(request):
 def run_agent(request, agent_type):
     claim_id = request.data.get('claim_id')
     input_data = request.data.get('input_data', {})
+    supported_agents = {
+        'claim_agent', 'policy_agent', 'fraud_agent',
+        'damage_agent', 'settlement_agent', 'decision_agent',
+    }
     
     if not claim_id:
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if agent_type not in supported_agents:
+        return Response({'error': 'Unknown agent type'}, status=status.HTTP_404_NOT_FOUND)
     
     claim = get_object_or_404(Claim, id=claim_id)
+
+    if not request.user.is_staff_member and claim.customer_id != request.user.id:
+        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
     
     agent_output, created = AgentOutput.objects.get_or_create(
         claim=claim,
@@ -218,31 +247,84 @@ def run_agent(request, agent_type):
     try:
         output_data = {}
         if agent_type == 'claim_agent':
-            output_data = {'status': 'processed', 'summary': 'Claim validated'}
+            output_data = {
+                'status': claim.status,
+                'claim_number': claim.claim_number,
+                'policy_number': claim.policy.policy_number,
+                'summary': 'Claim record and required policy and vehicle links loaded.',
+            }
         elif agent_type == 'policy_agent':
-            output_data = {'coverage_valid': True, 'deductible_applies': True}
+            policy = claim.policy
+            covered = (
+                policy.customer_id == claim.customer_id
+                and policy.status == 'active'
+                and policy.start_date <= claim.incident_date <= policy.end_date
+            )
+            vehicle_matches = policy.vehicle_id in (None, claim.vehicle_id)
+            output_data = {
+                'coverage_valid': covered and vehicle_matches,
+                'policy_status': policy.status,
+                'incident_within_term': policy.start_date <= claim.incident_date <= policy.end_date,
+                'vehicle_matches_policy': vehicle_matches,
+                'deductible': float(policy.deductible),
+                'review_required': not covered or not vehicle_matches,
+            }
         elif agent_type == 'fraud_agent':
             output_data = detect_fraud_internal(claim)
         elif agent_type == 'damage_agent':
             output_data = predict_repair_cost_internal(claim)
         elif agent_type == 'settlement_agent':
-            output_data = {'recommended_amount': claim.claim_amount * 0.85}
+            cost = predict_repair_cost_internal(claim)
+            deductible = float(claim.policy.deductible or 0)
+            estimate = float(cost.get('cost') or claim.claim_amount or 0)
+            output_data = {
+                'estimated_repair_cost': estimate,
+                'deductible': deductible,
+                'recommended_amount': max(0, estimate - deductible),
+                'requires_adjuster_approval': True,
+            }
         elif agent_type == 'decision_agent':
-            output_data = {'decision': 'approve', 'reason': 'Standard claim'}
+            fraud = detect_fraud_internal(claim)
+            cost = predict_repair_cost_internal(claim)
+            deductible = float(claim.policy.deductible or 0)
+            estimated_cost = float(cost.get('cost') or claim.claim_amount or 0)
+            output_data = {
+                'decision': 'manual_review',
+                'reason': 'AI outputs are review aids; an adjuster must make the coverage and settlement decision.',
+                'fraud_risk_score': fraud.get('score'),
+                'recommended_amount': max(0, estimated_cost - deductible),
+                'automated_approval': False,
+            }
         
         agent_output.output_data = output_data
         agent_output.status = 'completed'
-        agent_output.confidence = 90.0
-        agent_output.processing_time_seconds = 1.5
+        agent_output.confidence = None
+        agent_output.processing_time_seconds = None
         agent_output.completed_at = timezone.now()
         agent_output.save()
+
+        decision_flow, _ = DecisionFlow.objects.get_or_create(
+            claim=claim,
+            defaults={'rl_recommendation': {'available': False, 'reason': 'No reinforcement-learning optimizer is configured.'}},
+        )
+        decision_flow.agents = list(claim.agent_outputs.order_by('created_at').values(
+            'agent_type', 'status', 'input_data', 'output_data', 'confidence',
+            'processing_time_seconds', 'error_message', 'created_at', 'completed_at',
+        ))
+        if agent_type == 'decision_agent':
+            decision_flow.final_decision = output_data
+            decision_flow.decided_by = 'Rules-based review recommendation'
+            decision_flow.decided_at = timezone.now()
+        decision_flow.save()
         
-        return Response({'status': 'completed', 'output': output_data})
+        return Response({'status': 'completed', 'agent_type': agent_type, 'output': output_data})
         
     except Exception as e:
         agent_output.status = 'failed'
         agent_output.error_message = str(e)
         agent_output.save()
+        if isinstance(e, MLModelUnavailable):
+            return Response({'error': str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -251,6 +333,8 @@ def run_agent(request, agent_type):
 @permission_classes([IsAuthenticated])
 def get_decision_flow(request, claim_id):
     claim = get_object_or_404(Claim, id=claim_id)
+    if not request.user.is_staff_member and claim.customer_id != request.user.id:
+        return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
     
     decision_flow, created = DecisionFlow.objects.get_or_create(
         claim=claim,
@@ -264,3 +348,21 @@ def get_decision_flow(request, claim_id):
     from .serializers import DecisionFlowSerializer
     serializer = DecisionFlowSerializer(decision_flow)
     return Response(serializer.data)
+
+
+@extend_schema(responses=OpenApiTypes.OBJECT)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def model_status(request):
+    if not request.user.is_staff_member:
+        return Response({'detail': 'Staff access is required.'}, status=status.HTTP_403_FORBIDDEN)
+    from ml_service import get_model_status
+    current = get_model_status()
+    report = current.pop('training_report', None)
+    return Response({
+        'models': current,
+        'trained_at': report.get('trained_at') if report else None,
+        'datasets': report.get('datasets', {}) if report else {},
+        'metrics': report.get('metrics', []) if report else [],
+        'data_audit': report.get('data_audit', {}) if report else {},
+    })

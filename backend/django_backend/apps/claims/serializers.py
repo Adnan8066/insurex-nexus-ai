@@ -128,6 +128,21 @@ class ClaimUpdateSerializer(serializers.ModelSerializer):
             'assigned_repair_shop', 'ai_assessment', 'fraud_risk_score', 'total_loss_probability'
         ]
 
+    def validate(self, attrs):
+        request = self.context.get('request')
+        if request and request.user.role == 'customer':
+            protected_fields = {
+                'status', 'priority', 'assigned_adjuster', 'assigned_investigator',
+                'assigned_repair_shop', 'ai_assessment', 'fraud_risk_score',
+                'total_loss_probability',
+            }
+            attempted = protected_fields.intersection(self.initial_data.keys())
+            if attempted:
+                raise serializers.ValidationError({
+                    field: 'Only staff can update this field.' for field in sorted(attempted)
+                })
+        return attrs
+
 class ClaimStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=ClaimStatus.choices)
     reason = serializers.CharField(required=False, allow_blank=True)

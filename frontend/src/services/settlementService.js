@@ -16,18 +16,33 @@ export const settlementService = {
     return response.data
   },
 
+  async approveSettlement(id, data) {
+    const response = await api.post(`/settlements/${id}/approve/`, data)
+    return response.data
+  },
+
+  async rejectSettlement(id, data = {}) {
+    const response = await api.post(`/settlements/${id}/reject/`, data)
+    return response.data
+  },
+
   async updateSettlement(id, data) {
     const response = await api.patch(`/settlements/${id}/`, data)
     return response.data
   },
 
   async getSettlementByClaim(claimId) {
-    const response = await api.get(`/settlements/claim/${claimId}/`)
+    const response = await api.get(`/settlements/by-claim/${claimId}/`)
     return response.data
   },
 
   async processPayment(settlementId, data) {
-    const response = await api.post(`/settlements/${settlementId}/payment/`, data)
+    const response = await api.post(`/settlements/${settlementId}/pay/`, data)
+    return response.data
+  },
+
+  async completePayment(settlementId, paymentId) {
+    const response = await api.post(`/settlements/${settlementId}/complete-payment/`, { payment_id: paymentId })
     return response.data
   },
 

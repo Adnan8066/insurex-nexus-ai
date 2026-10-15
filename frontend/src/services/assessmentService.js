@@ -46,6 +46,11 @@ export const assessmentService = {
     return response.data
   },
 
+  async getModelStatus() {
+    const response = await api.get('/ai/model-status/')
+    return response.data
+  },
+
   async assessClaim(data) {
     const response = await api.post('/ai/assess-claim/', data)
     return response.data

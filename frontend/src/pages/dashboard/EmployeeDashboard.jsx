@@ -26,8 +26,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
-import { policyService, claimService, vehicleService, settlementService } from '../../services'
-import api from '../../services/api'
+import { policyService, claimService, vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
@@ -139,16 +138,12 @@ export function EmployeeDashboard() {
     setRefreshing(true)
     setConnectionError(null)
     try {
-      const [clmRes, polRes, setRes, invRes] = await Promise.all([
-        claimService.getClaims().catch(() => ({ results: [] })),
-        policyService.getPolicies().catch(() => ({ results: [] })),
-        settlementService.getSettlements().catch(() => ({ results: [] })),
-        api.get('/investigations/').catch(() => ({ data: { results: [] } })),
+      const [clmRes, polRes] = await Promise.all([
+        claimService.getClaims(),
+        policyService.getPolicies(),
       ])
       const clms = Array.isArray(clmRes) ? clmRes : (clmRes.results || [])
       const pols = Array.isArray(polRes) ? polRes : (polRes.results || [])
-      const sets = Array.isArray(setRes) ? setRes : (setRes.results || [])
-      const invs = Array.isArray(invRes) ? invRes : (invRes.data?.results || invRes.results || [])
       setClaims(clms.map(mapClaim))
       setPolicies(pols.map(mapPolicy))
       setFraudAlerts(clms.filter((c) => (c.fraud_risk_score || 0) >= 50 || (c.priority === 'high' || c.priority === 'critical')).map(mapClaim))
@@ -286,8 +281,8 @@ export function EmployeeDashboard() {
       icon: FileText,
       iconColor: 'text-blue-600',
       bgColor: 'bg-blue-50',
-      trend: '+12%',
-      trendLabel: 'vs last month',
+      trend: 'Live count',
+      trendLabel: 'current records',
       link: '/policies',
     },
     {
@@ -296,8 +291,8 @@ export function EmployeeDashboard() {
       icon: Briefcase,
       iconColor: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      trend: '+3',
-      trendLabel: 'this week',
+      trend: 'Live count',
+      trendLabel: 'current records',
       link: '/claims',
     },
     {
@@ -306,8 +301,8 @@ export function EmployeeDashboard() {
       icon: Clock,
       iconColor: 'text-yellow-600',
       bgColor: 'bg-yellow-50',
-      trend: '+5',
-      trendLabel: 'awaiting review',
+      trend: 'Live count',
+      trendLabel: 'current records',
       link: '/claims?status=pending',
     },
     {
@@ -316,8 +311,8 @@ export function EmployeeDashboard() {
       icon: AlertTriangle,
       iconColor: 'text-red-600',
       bgColor: 'bg-red-50',
-      trend: '+2',
-      trendLabel: 'high risk',
+      trend: 'Live count',
+      trendLabel: 'current records',
       link: '/fraud',
     },
   ]
@@ -329,8 +324,8 @@ export function EmployeeDashboard() {
       icon: AlertTriangle,
       iconColor: 'text-orange-600',
       bgColor: 'bg-orange-50',
-      trend: '+1',
-      trendLabel: 'pending',
+      trend: 'Live count',
+      trendLabel: 'current records',
       link: '/claims?status=total_loss',
     },
   ]

@@ -131,6 +131,7 @@ export function Profile() {
                 type="email"
                 value={formData.email}
                 onChange={handleProfileChange}
+                readOnly
                 required
               />
 

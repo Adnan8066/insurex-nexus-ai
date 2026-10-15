@@ -104,12 +104,12 @@ export function AIAssessment() {
     if (!selectedClaimId) return
     setAnalyzing(true)
     try {
-      await assessmentService.assessClaim({ claim: Number(selectedClaimId) })
+      await assessmentService.assessClaim({ claim_id: Number(selectedClaimId) })
       const assessmentsRes = await assessmentService.getAssessments()
       setAssessments(Array.isArray(assessmentsRes) ? assessmentsRes : assessmentsRes.results || [])
     } catch (err) {
       console.error('Failed to run AI assessment:', err)
-      setError(err.message || 'Failed to run AI assessment.')
+      setError(err.response?.data?.detail || err.message || 'Failed to run AI assessment.')
     } finally {
       setAnalyzing(false)
     }
@@ -315,11 +315,11 @@ export function AIAssessment() {
                   <Cpu className="w-4 h-4 text-blue-600" />
                 </div>
                 <div className="text-3xl font-extrabold text-gray-900">
-                  {PRIORITY_LABELS[assessment.claim_priority] || assessment.claim_priority || 'Medium'}
+                  {PRIORITY_LABELS[assessment.claim_priority] || assessment.claim_priority || 'Not set'}
                 </div>
                 <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
                   <span>Model Confidence:</span>
-                  <strong className="text-gray-800">{Math.round(Number(assessment.confidence || 0))}%</strong>
+                  <strong className="text-gray-800">{assessment.confidence == null ? 'Not calibrated' : `${Math.round(Number(assessment.confidence))}%`}</strong>
                 </div>
               </CardContent>
             </Card>
@@ -337,7 +337,7 @@ export function AIAssessment() {
                     AI Recommendation & Action Plan
                   </span>
                   <h3 className="text-xl font-bold text-gray-900 mt-0.5">
-                    {assessment.ai_recommendation || 'Approve with standard processing'}
+                    {assessment.ai_recommendation || 'No recommendation recorded.'}
                   </h3>
                   <p className="text-sm text-gray-600 mt-1">
                     Model version:{' '}
@@ -376,9 +376,11 @@ export function AIAssessment() {
             <div>
               <ChartCard
                 title="Predicted Cost Composition"
-                subtitle="Labor, OEM parts, and refinishing breakdown"
+                subtitle="No repair-part or labor breakdown model is available"
               >
-                <DoughnutChart data={costData} height={280} />
+                {Object.keys(costBreakdown).length > 0
+                  ? <DoughnutChart data={costData} height={280} />
+                  : <p className="text-sm text-gray-500 p-6">The model predicts a total repair cost only. A cost breakdown is not available.</p>}
               </ChartCard>
             </div>
           </div>
@@ -387,7 +389,7 @@ export function AIAssessment() {
           <Card>
             <CardHeader
               title="Inference Contributing Factors"
-              subtitle="Feature importance weights computed by the explainable AI assessment pipeline"
+              subtitle="Stored assessment details and risk factors; model feature attribution is not available"
             />
             <CardContent className="p-6">
               <div className="space-y-3">

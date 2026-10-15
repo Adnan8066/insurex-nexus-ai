@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import {
   Brain,
   Cpu,
-  Zap,
   Activity,
   Sparkles,
   UserCheck,
@@ -16,7 +15,6 @@ import {
   RefreshCw,
   Info,
 } from 'lucide-react'
-import { clsx } from 'clsx'
 import {
   assessmentService,
   claimService,
@@ -37,14 +35,13 @@ export function AIOperations() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [optimizing, setOptimizing] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const results = await Promise.allSettled([
-        assessmentService.getModelPerformance(),
+        assessmentService.getModelStatus(),
         assessmentService.getAgentOutputs(),
         assessmentService.getAssessments(),
         claimService.getClaims(),
@@ -55,7 +52,28 @@ export function AIOperations() {
         r.status === 'fulfilled'
           ? Array.isArray(r.value) ? r.value : r.value.results || []
           : []
-      setModels(unwrap(results[0]))
+      const status = results[0].status === 'fulfilled' ? results[0].value : null
+      const artifactByModel = {
+        insurance_fraud: 'fraud_risk_model',
+        repair_cost: 'repair_cost_model',
+        total_loss: 'total_loss_model',
+        fraud_oracle_fraud: 'fraud_oracle_model',
+      }
+      const reportMetrics = status?.metrics || []
+      setModels(Object.entries(artifactByModel)
+        .filter(([name, artifactKey]) => status?.models?.[artifactKey] || reportMetrics.some((metric) => metric.model === name))
+        .map(([name, artifactKey]) => {
+          const metric = reportMetrics.find((item) => item.model === name) || {}
+          return {
+            ...metric,
+            id: name,
+            model_type: name,
+            f1_score: metric.f1 ?? metric.f1_score,
+            auc: metric.roc_auc ?? metric.auc,
+            version: status?.trained_at ? status.trained_at.slice(0, 10) : 'artifact available',
+            is_active: Boolean(status?.models?.[artifactKey]),
+          }
+        }))
       setAgentOutputs(unwrap(results[1]))
       setAssessments(unwrap(results[2]))
       setClaims(unwrap(results[3]))
@@ -72,17 +90,6 @@ export function AIOperations() {
   useEffect(() => {
     loadData()
   }, [loadData])
-
-  const triggerReOptimize = async () => {
-    setOptimizing(true)
-    try {
-      await assessmentService.runAgent('triage-optimizer', {})
-    } catch (err) {
-      console.error('RL optimizer run failed:', err)
-    } finally {
-      setOptimizing(false)
-    }
-  }
 
   const claimsMap = {}
   claims.forEach((c) => {
@@ -104,7 +111,7 @@ export function AIOperations() {
         currentPriority: claim.priority,
         recommendedPriority: a.claim_priority,
         reason: a.ai_recommendation || `AI assessment recommends ${a.claim_priority} priority based on risk scoring.`,
-        score: Math.round(Number(a.confidence || 0) * 100),
+      score: a.confidence == null ? null : Math.round(Number(a.confidence) * 100),
       }
     })
 
@@ -141,22 +148,22 @@ export function AIOperations() {
       claimNumber: a.claim_number,
       estimatedDays: Math.round(Number(a.repair_time_estimate_days) || 0),
       factors: (a.risk_factors || []).slice(0, 3).map((f) => (typeof f === 'string' ? f : f.factor || f.name || 'factor')),
-      confidence: Math.round(Number(a.confidence || 0) * 100),
+      confidence: a.confidence == null ? null : Math.round(Number(a.confidence) * 100),
     }))
 
-  // Model accuracy comparison chart (real data)
+  // Held-out evaluation metrics from the backend training report.
   const modelChartData = {
     labels: models.map((m) => `${m.model_type || 'model'} v${m.version || '?'}`),
     datasets: [
       {
         label: 'Accuracy',
-        data: models.map((m) => Math.round(Number(m.accuracy || 0) * 100)),
+        data: models.map((m) => m.accuracy == null ? null : Math.round(Number(m.accuracy) * 100)),
         backgroundColor: '#1e3a5f',
         borderRadius: 4,
       },
       {
         label: 'F1 Score',
-        data: models.map((m) => Math.round(Number(m.f1_score || 0) * 100)),
+        data: models.map((m) => m.f1_score == null ? null : Math.round(Number(m.f1_score) * 100)),
         backgroundColor: '#00c896',
         borderRadius: 4,
       },
@@ -173,20 +180,20 @@ export function AIOperations() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-              <Zap className="w-3.5 h-3.5 text-emerald-600" />
-              Reinforcement Learning Triage Policy
+              <Brain className="w-3.5 h-3.5 text-emerald-600" />
+              Live model and workflow data
             </span>
           </div>
-          <h1 className="page-title">AI & RL Operations Console</h1>
+          <h1 className="page-title">AI Operations Console</h1>
           <p className="page-subtitle">
-            Autonomous policy optimization for claim triage, investigator matching, facility allocation, and turnaround minimization
+            Current model availability, assessments, fraud reviews, and repair workflow activity
           </p>
         </div>
 
         <div className="flex gap-2">
-          <Button variant="primary" onClick={triggerReOptimize} disabled={optimizing}>
-            <RefreshCw className={clsx('w-4 h-4 mr-2', optimizing && 'animate-spin')} />
-            {optimizing ? 'Running Optimizer...' : 'Run RL Policy Optimizer'}
+          <Button variant="primary" onClick={loadData} disabled={loading}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh Data
           </Button>
           <Link to="/ai-decision">
             <Button variant="outline">Decision Center</Button>
@@ -390,7 +397,7 @@ export function AIOperations() {
                     </div>
                     <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-100 flex justify-between">
                       <span>Model Confidence:</span>
-                      <strong className="text-gray-800">{pe.confidence}%</strong>
+                      <strong className="text-gray-800">{pe.confidence == null ? 'Not calibrated' : `${pe.confidence}%`}</strong>
                     </div>
                   </div>
                 ))
@@ -406,7 +413,7 @@ export function AIOperations() {
       <Card>
         <CardHeader
           title="Model Performance Registry"
-          subtitle="Registered ML models with validation metrics"
+          subtitle="Model artifacts and held-out evaluation metrics from the training report"
         />
         <CardContent className="p-6">
           <div className="overflow-x-auto">
@@ -430,10 +437,10 @@ export function AIOperations() {
                     <tr key={m.id} className="border-b border-gray-100">
                       <td className="py-2.5 pr-4 font-semibold text-gray-900">{m.model_type}</td>
                       <td className="py-2.5 pr-4 font-mono text-gray-600">{m.version}</td>
-                      <td className="py-2.5 pr-4">{Math.round(Number(m.accuracy || 0) * 100)}%</td>
-                      <td className="py-2.5 pr-4">{Math.round(Number(m.precision || 0) * 100)}%</td>
-                      <td className="py-2.5 pr-4">{Math.round(Number(m.recall || 0) * 100)}%</td>
-                      <td className="py-2.5 pr-4">{Math.round(Number(m.f1_score || 0) * 100)}%</td>
+                      <td className="py-2.5 pr-4">{m.accuracy == null ? '—' : `${Math.round(Number(m.accuracy) * 100)}%`}</td>
+                      <td className="py-2.5 pr-4">{m.precision == null ? '—' : `${Math.round(Number(m.precision) * 100)}%`}</td>
+                      <td className="py-2.5 pr-4">{m.recall == null ? '—' : `${Math.round(Number(m.recall) * 100)}%`}</td>
+                      <td className="py-2.5 pr-4">{m.f1_score == null ? '—' : `${Math.round(Number(m.f1_score) * 100)}%`}</td>
                       <td className="py-2.5 pr-4">{m.auc != null ? Math.round(Number(m.auc) * 100) / 100 : '—'}</td>
                       <td className="py-2.5 pr-4">{m.mae != null ? Number(m.mae).toFixed(2) : '—'}</td>
                       <td className="py-2.5">
@@ -446,7 +453,7 @@ export function AIOperations() {
                 ) : (
                   <tr>
                     <td colSpan="9" className="py-6 text-center text-gray-400">
-                      No registered models found.
+                      No training report metrics are available. Run the model training command to generate them.
                     </td>
                   </tr>
                 )}

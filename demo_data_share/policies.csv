@@ -1,0 +1,13 @@
+﻿policy_id,policy_number,type,status,start_date,end_date,premium,deductible,payment_frequency,auto_renew,coverage,vehicle_id,property_address,property_type,property_year_built,property_square_footage
+DEMO-POL-0001,DEMO-POLICY-0001,auto_collision,active,2026-10-14,2027-10-14,100000,500,annual,True,{},,[redacted demo location],owned,2016,100
+DEMO-POL-0002,DEMO-POLICY-0002,umbrella,active,2026-10-07,2027-10-14,0.06,500,semi_annual,True,{},,,,,
+DEMO-POL-0003,DEMO-POLICY-0003,auto_comprehensive,active,2026-10-15,2027-10-15,847,500,monthly,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":false}",DEMO-VEH-0003,,,,
+DEMO-POL-0004,DEMO-POLICY-0004,auto_comprehensive,active,2026-10-15,2027-10-15,914,1000,annual,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":true}",DEMO-VEH-0004,,,,
+DEMO-POL-0005,DEMO-POLICY-0005,auto_comprehensive,active,2026-10-15,2027-10-15,981,500,monthly,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":false}",DEMO-VEH-0005,,,,
+DEMO-POL-0006,DEMO-POLICY-0006,auto_comprehensive,active,2026-10-15,2027-10-15,1048,1000,annual,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":true}",DEMO-VEH-0006,,,,
+DEMO-POL-0007,DEMO-POLICY-0007,auto_comprehensive,active,2026-10-15,2027-10-15,1115,500,monthly,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":false}",DEMO-VEH-0007,,,,
+DEMO-POL-0008,DEMO-POLICY-0008,auto_comprehensive,active,2026-10-15,2027-10-15,1182,1000,annual,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":true}",DEMO-VEH-0008,,,,
+DEMO-POL-0009,DEMO-POLICY-0009,auto_comprehensive,active,2026-10-15,2027-10-15,1249,500,monthly,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":false}",DEMO-VEH-0009,,,,
+DEMO-POL-0010,DEMO-POLICY-0010,auto_comprehensive,active,2026-10-15,2027-10-15,1316,1000,annual,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":true}",DEMO-VEH-0010,,,,
+DEMO-POL-0011,DEMO-POLICY-0011,auto_comprehensive,active,2026-10-15,2027-10-15,1383,500,monthly,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":false}",DEMO-VEH-0011,,,,
+DEMO-POL-0012,DEMO-POLICY-0012,auto_comprehensive,active,2026-10-15,2027-10-15,1450,1000,annual,True,"{""liability"":100000,""collision"":50000,""comprehensive"":50000,""roadside_assistance"":true}",DEMO-VEH-0012,,,,

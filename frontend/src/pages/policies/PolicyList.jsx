@@ -90,6 +90,7 @@ export function PolicyList() {
         if (!cancelled) {
           setPolicies([])
           setFilteredPolicies([])
+          setError(err.response?.data?.detail || 'Could not load policies. Check your connection and try again.')
         }
       } finally {
         if (!cancelled) setLoading(false)

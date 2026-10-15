@@ -86,6 +86,12 @@ class PolicyViewSet(viewsets.ModelViewSet):
         policy = serializer.save(policy_number=policy_number, customer=customer)
         if policy.vehicle_id:
             Vehicle.objects.filter(pk=policy.vehicle_id).update(policy=policy)
+        from apps.notifications.services import create_in_app_notification
+        create_in_app_notification(
+            policy.customer, 'policy', 'Policy created',
+            f'Policy {policy.policy_number} was added to your account.',
+            link=f'/policies/{policy.policy_number}', related_object_type='policy', related_object_id=policy.policy_number,
+        )
 
     def perform_update(self, serializer):
         policy = self.get_object()

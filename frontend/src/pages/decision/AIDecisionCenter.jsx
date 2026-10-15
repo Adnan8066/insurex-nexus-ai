@@ -24,15 +24,16 @@ import { formatCurrency, formatDate } from '../../utils/helpers'
 const normalizeAgent = (a, idx) => ({
   id: a.id || a.agent_type || `agent-${idx}`,
   name: a.name || a.agent_type || a.title || `Agent ${idx + 1}`,
-  confidence: Math.round(Number(a.confidence || 0) * 100) || 0,
-  processingTime: Number(a.processing_time || a.processing_time_seconds || a.processingTime || 0),
+  confidence: a.confidence == null ? null : Math.round(Number(a.confidence) <= 1 ? Number(a.confidence) * 100 : Number(a.confidence)),
+  processingTime: a.processing_time == null && a.processing_time_seconds == null ? null : Number(a.processing_time || a.processing_time_seconds || a.processingTime),
   input: a.input || a.input_data || {},
   output: a.output || a.output_data || {},
 })
 
 const normalizeRL = (rl) => ({
+  available: rl.available ?? Boolean(rl.action || rl.recommended_action || rl.recommendation),
   optimizationScore: Math.round(Number(rl.optimization_score || rl.optimizationScore || rl.score || 0)),
-  action: rl.action || rl.recommended_action || rl.recommendation || 'Pending RL optimization',
+  action: rl.action || rl.recommended_action || rl.recommendation || 'Not configured',
   explanation: rl.explanation || rl.rationale || rl.reason || '',
   estimatedProcessingDays: Math.round(Number(rl.estimated_processing_days || rl.estimatedProcessingDays || 0)),
   recommendedAdjuster: rl.recommended_adjuster || rl.recommendedAdjuster || rl.adjuster || 'Auto-assigned',
@@ -42,7 +43,7 @@ const normalizeRL = (rl) => ({
 
 const normalizeDecision = (fd, flow) => ({
   status: fd.status || fd.decision || fd.outcome || 'Pending',
-  amount: Number(fd.amount || fd.payout_amount || fd.approved_amount || 0),
+  amount: Number(fd.recommended_amount || fd.amount || fd.payout_amount || fd.approved_amount || 0),
   rationale: fd.rationale || fd.reason || fd.explanation || '',
   decidedBy: fd.decided_by || fd.decidedBy || flow?.decided_by_name || 'AI Decision Engine',
   decidedAt: fd.decided_at || fd.decidedAt || flow?.decided_at || '',
@@ -101,21 +102,21 @@ export function AIDecisionCenter() {
     if (!selectedClaimId) return
     setIsSimulating(true)
     setSimulationStep(0)
-    let current = 0
-    const interval = setInterval(() => {
-      current += 1
-      setSimulationStep(current)
-      if (current >= 6) {
-        clearInterval(interval)
-        setIsSimulating(false)
-      }
-    }, 600)
     try {
-      await assessmentService.runAgent('claim-assessment', { claim: Number(selectedClaimId) })
+      const agentTypes = ['claim_agent', 'policy_agent', 'fraud_agent', 'damage_agent', 'settlement_agent', 'decision_agent']
+      for (const [index, agentType] of agentTypes.entries()) {
+        await assessmentService.runAgent(agentType, { claim_id: Number(selectedClaimId) })
+        setSimulationStep(index + 1)
+      }
       const flowsRes = await assessmentService.getDecisionFlows()
       setFlows(Array.isArray(flowsRes) ? flowsRes : flowsRes.results || [])
     } catch (err) {
       console.error('Agent run failed:', err)
+      setError(err.response?.data?.error || err.response?.data?.detail || 'Unable to run the claim review workflow.')
+      const flowsRes = await assessmentService.getDecisionFlows()
+      setFlows(Array.isArray(flowsRes) ? flowsRes : flowsRes.results || [])
+    } finally {
+      setIsSimulating(false)
     }
   }
 
@@ -126,8 +127,8 @@ export function AIDecisionCenter() {
     { title: '2. ML Predictions', subtitle: 'Cost, Fraud & Total Loss Regressors', icon: Cpu },
     { title: '3. AI Multi-Agents', subtitle: 'Autonomous Specialized Sub-Agents', icon: Bot },
     { title: '4. Decision Engine', subtitle: 'Policy Rules & Threshold Synthesis', icon: GitBranch },
-    { title: '5. RL Recommendation', subtitle: 'Trained PPO Triage Optimization', icon: Brain },
-    { title: '6. Recommended Action', subtitle: 'Final Executable Adjudication', icon: CheckCircle2 },
+    { title: '5. Settlement Estimate', subtitle: 'Predicted repair cost less policy deductible', icon: Brain },
+    { title: '6. Adjuster Review', subtitle: 'Human coverage and settlement decision', icon: CheckCircle2 },
   ]
 
   const selectedClaim = claims.find((c) => String(c.id) === String(selectedClaimId))
@@ -140,12 +141,12 @@ export function AIDecisionCenter() {
           <div className="flex items-center gap-2 mb-1">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800">
               <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-              Autonomous Agent Orchestration
+              Connected Claim Review Workflow
             </span>
           </div>
           <h1 className="page-title">AI Decision Center</h1>
           <p className="page-subtitle">
-            Visual explainability pipeline: Multi-Agent coordination, ML predictions, and Reinforcement Learning adjudication
+            Claim data, policy checks, model estimates, and an adjuster review recommendation
           </p>
         </div>
 
@@ -164,10 +165,10 @@ export function AIDecisionCenter() {
           </select>
           <Button variant="primary" onClick={handleSimulateFlow} disabled={isSimulating || !selectedClaimId}>
             <Play className={clsx('w-4 h-4 mr-2', isSimulating && 'animate-spin')} />
-            {isSimulating ? 'Simulating Pipeline...' : 'Run Decision Simulation'}
+            {isSimulating ? 'Running Review Workflow...' : 'Run Claim Review'}
           </Button>
           <Link to="/operations">
-            <Button variant="outline">AI/RL Operations</Button>
+            <Button variant="outline">AI Operations</Button>
           </Link>
         </div>
       </div>
@@ -186,7 +187,7 @@ export function AIDecisionCenter() {
       {!loading && !flow && selectedClaimId && (
         <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-900">
           <strong className="font-semibold block mb-1">No Decision Flow Recorded</strong>
-          Run the decision simulation to generate the multi-agent pipeline for this claim.
+          Run the review workflow to save claim, policy, fraud, damage, settlement, and human-review recommendations.
         </div>
       )}
 
@@ -277,8 +278,8 @@ export function AIDecisionCenter() {
                         <h4 className="font-bold text-xs leading-tight">{agent.name}</h4>
                       </div>
                       <div className="text-[11px] opacity-80 mt-2 flex items-center justify-between">
-                        <span>{agent.confidence}% conf</span>
-                        <span className="font-mono">{agent.processingTime}s</span>
+                        <span>{agent.confidence == null ? 'Confidence not calibrated' : `${agent.confidence}% conf`}</span>
+                        <span className="font-mono">{agent.processingTime == null ? 'Time n/a' : `${agent.processingTime}s`}</span>
                       </div>
                     </button>
                   )
@@ -292,8 +293,8 @@ export function AIDecisionCenter() {
               <Card className="border-t-4 border-t-primary shadow-sm">
                 <CardHeader
                   title={`${selectedAgent.name} — Execution Details`}
-                  subtitle={`Processing Time: ${selectedAgent.processingTime}s • Model Confidence: ${selectedAgent.confidence}%`}
-                  action={<Badge variant="success">Execution Verified</Badge>}
+                  subtitle={`Processing Time: ${selectedAgent.processingTime == null ? 'not recorded' : `${selectedAgent.processingTime}s`} • Confidence: ${selectedAgent.confidence == null ? 'not calibrated' : `${selectedAgent.confidence}%`}`}
+                  action={<Badge variant="neutral">Saved output</Badge>}
                 />
                 <CardContent className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
@@ -316,47 +317,23 @@ export function AIDecisionCenter() {
             )}
           </div>
 
-          {/* RL Recommendation & Decision Engine Synthesis */}
+          {/* Model recommendation and human review */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* RL Optimization Card */}
+            {/* Optional optimizer status */}
             <Card className="border-2 border-emerald-500/20">
               <CardHeader
-                title="Reinforcement Learning Recommendation"
-                subtitle="Policy Gradient optimization for claim triage"
+                title="Triage Optimizer"
+                subtitle="Optional model integration status"
               />
               <CardContent className="p-6 space-y-4">
-                <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-100">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-emerald-800 uppercase">Recommended Triage Action</span>
-                    <Badge variant="success">RL Score: {rlRecommendation.optimizationScore}/100</Badge>
+                <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                  <div className="flex items-center gap-2 font-semibold text-amber-900">
+                    <Info className="w-4 h-4" />
+                    {rlRecommendation.available ? rlRecommendation.action : 'No triage optimizer is configured'}
                   </div>
-                  <h3 className="text-lg font-bold text-emerald-950">
-                    {rlRecommendation.action}
-                  </h3>
-                  <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
-                    {rlRecommendation.explanation}
+                  <p className="mt-2 text-sm text-amber-800">
+                    {rlRecommendation.explanation || 'The current workflow uses saved claim data and supervised model predictions. It does not run a reinforcement-learning model.'}
                   </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-500 block">Est. Processing Days</span>
-                    <span className="font-bold text-gray-900 text-sm">{rlRecommendation.estimatedProcessingDays} Days</span>
-                  </div>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-500 block">Recommended Adjuster</span>
-                    <span className="font-bold text-gray-900 text-sm">{rlRecommendation.recommendedAdjuster}</span>
-                  </div>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-500 block">Recommended Repair Facility</span>
-                    <span className="font-bold text-gray-900 text-sm">{rlRecommendation.recommendedRepairShop}</span>
-                  </div>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-500 block">SIU Required?</span>
-                    <span className="font-bold text-gray-900 text-sm">
-                      {rlRecommendation.investigatorRequired ? 'Yes (SIU Dispatched)' : 'No (Standard Intake)'}
-                    </span>
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -369,10 +346,10 @@ export function AIDecisionCenter() {
               />
               <CardContent className="p-6 space-y-4">
                 <div className="p-4 bg-primary text-white rounded-xl shadow-md">
-                  <span className="text-xs font-semibold text-white/80 uppercase">Adjudication Outcome</span>
+                    <span className="text-xs font-semibold text-white/80 uppercase">Review Recommendation</span>
                   <div className="text-3xl font-black mt-0.5">{finalDecision.status}</div>
                   <div className="text-sm font-semibold text-emerald-300 mt-1">
-                    Authorized Payout: {formatCurrency(finalDecision.amount)}
+                    Estimated payout: {formatCurrency(finalDecision.amount)}
                   </div>
                 </div>
 
@@ -398,13 +375,13 @@ export function AIDecisionCenter() {
       {!flow && !loading && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="border-2 border-emerald-500/20">
-            <CardHeader title="Reinforcement Learning Recommendation" subtitle="Run a decision simulation to generate" />
+            <CardHeader title="Triage Optimizer" subtitle="Optional model integration status" />
             <CardContent className="p-6">
-              <p className="text-sm text-gray-400">No RL recommendation on record for the selected claim.</p>
+              <p className="text-sm text-gray-500">No reinforcement-learning optimizer is configured. The review workflow uses supervised models and policy data.</p>
             </CardContent>
           </Card>
           <Card className="border-2 border-primary/20">
-            <CardHeader title="Final Decision Engine Output" subtitle="Run a decision simulation to generate" />
+            <CardHeader title="Adjuster Review Recommendation" subtitle="Run the connected review workflow to generate" />
             <CardContent className="p-6">
               <p className="text-sm text-gray-400">No final decision on record for the selected claim.</p>
             </CardContent>

@@ -99,6 +99,12 @@ class ClaimViewSet(viewsets.ModelViewSet):
             user=self.request.user,
             is_system=True
         )
+        from apps.notifications.services import create_in_app_notification
+        create_in_app_notification(
+            claim.customer, 'claim', 'Claim submitted',
+            f'Claim {claim.claim_number} was submitted successfully.',
+            link=f'/claims/{claim.id}', related_object_type='claim', related_object_id=claim.id,
+        )
     
     @action(detail=True, methods=['post'], url_path='documents')
     def upload_document(self, request, pk=None):
@@ -146,6 +152,14 @@ class ClaimViewSet(viewsets.ModelViewSet):
                     description=reason or f'Status updated from {old_status} to {new_status}',
                     user=request.user,
                     is_system=False
+                )
+
+            if claim.customer_id != request.user.id:
+                from apps.notifications.services import create_in_app_notification
+                create_in_app_notification(
+                    claim.customer, 'claim', 'Claim status updated',
+                    f'Claim {claim.claim_number} is now {claim.get_status_display()}.',
+                    link=f'/claims/{claim.id}', related_object_type='claim', related_object_id=claim.id,
                 )
             
             serializer = self.get_serializer(claim)
@@ -326,6 +340,7 @@ class ClaimViewSet(viewsets.ModelViewSet):
             predict_repair_cost_internal, detect_fraud_internal, predict_total_loss_internal,
             generate_recommendation, calculate_confidence,
         )
+        from ml_service import MLModelUnavailable
         from apps.assessments.models import ClaimAssessment, AssessmentType, AssessmentStatus
         from apps.assessments.serializers import ClaimAssessmentSerializer
 
@@ -334,9 +349,12 @@ class ClaimViewSet(viewsets.ModelViewSet):
             claim=claim,
             defaults={'assessment_type': AssessmentType.COMPREHENSIVE},
         )
-        predicted_cost = predict_repair_cost_internal(claim)
-        fraud_score = detect_fraud_internal(claim)
-        total_loss_prob = predict_total_loss_internal(claim)
+        try:
+            predicted_cost = predict_repair_cost_internal(claim)
+            fraud_score = detect_fraud_internal(claim)
+            total_loss_prob = predict_total_loss_internal(claim)
+        except MLModelUnavailable as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         assessment.predicted_repair_cost = predicted_cost['cost']
         assessment.fraud_risk_score = fraud_score['score']
         assessment.total_loss_probability = total_loss_prob['probability']

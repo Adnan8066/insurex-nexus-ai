@@ -1,52 +1,11 @@
 import api from './api'
-import { mockUser, mockEmployees } from '../data/users'
 
-const demoUsers = {
-  'customer@demo.com': { id: 1, name: 'John Anderson', email: 'customer@demo.com', role: 'customer', phone: '+1 (555) 123-4567', department: 'Policyholder' },
-  'employee@demo.com': { id: 2, name: 'Sarah Mitchell', email: 'employee@demo.com', role: 'employee', phone: '+1 (555) 234-5678', department: 'Claims Management' },
-  'investigator@demo.com': { id: 3, name: 'Emily Rodriguez', email: 'investigator@demo.com', role: 'investigator', phone: '+1 (555) 345-6789', department: 'SIU Investigations' },
-  'repair@demo.com': { id: 4, name: 'Lisa Thompson', email: 'repair@demo.com', role: 'repair', phone: '+1 (555) 456-7890', department: 'AutoFix Collision' },
-}
+const responseData = (response) => response.data?.data ?? response.data
 
 export const authService = {
   async login(credentials) {
-    try {
-      const response = await api.post('/auth/login/', credentials)
-      const data = response.data
-      if (data?.success && data?.data) {
-        return data.data
-      }
-      return data
-    } catch (error) {
-      // Only use mock fallback when backend is unreachable (no response)
-      // If backend responded with an error (e.g. 401 invalid credentials), propagate it
-      if (error.response) {
-        const message = error.response?.data?.error?.message
-          || error.response?.data?.detail
-          || 'Invalid credentials'
-        throw { response: { data: { detail: message } } }
-      }
-
-      // Network error / backend down - graceful mock fallback
-      const emailLower = credentials.email?.toLowerCase().trim()
-      const user = demoUsers[emailLower]
-      if (!user) {
-        throw {
-          response: {
-            data: {
-              detail: 'Authentication service is unavailable. Start the backend and try again.',
-            },
-          },
-        }
-      }
-
-      const mockResponse = {
-        access: 'mock-jwt-access-token-' + Date.now(),
-        refresh: 'mock-jwt-refresh-token-' + Date.now(),
-        user,
-      }
-      return mockResponse
-    }
+    const response = await api.post('/auth/login/', credentials)
+    return responseData(response)
   },
 
   async register(userData) {
@@ -55,11 +14,7 @@ export const authService = {
       const registrationData = { ...userData }
       delete registrationData.role
       const response = await api.post('/auth/register/', registrationData)
-      const data = response.data
-      if (data?.success && data?.data) {
-        return data.data
-      }
-      return data
+      return responseData(response)
     } catch (error) {
       const message = error.response?.data?.detail
         || Object.values(error.response?.data || {}).flat().join(', ')
@@ -83,53 +38,44 @@ export const authService = {
   },
 
   async forgotPassword(email) {
-    try {
-      const response = await api.post('/auth/password-reset/', { email })
-      return response.data
-    } catch (error) {
-      return { success: true, message: 'Password reset link sent to ' + email }
-    }
+    const response = await api.post('/auth/password-reset/', { email })
+    return responseData(response)
   },
 
   async resetPassword(token, password) {
-    try {
-      const response = await api.post('/auth/password-reset/confirm/', { token, password })
-      return response.data
-    } catch (error) {
-      return { success: true, message: 'Password reset successfully' }
-    }
+    const response = await api.post('/auth/password-reset/confirm/', {
+      token,
+      password,
+      confirm_password: password,
+    })
+    return responseData(response)
   },
 
   async getProfile() {
-    try {
-      const response = await api.get('/auth/profile/')
-      return response.data
-    } catch (error) {
-      const stored = localStorage.getItem('user')
-      return stored ? JSON.parse(stored) : mockUser
-    }
+    const response = await api.get('/auth/profile/')
+    return responseData(response)
   },
 
   async updateProfile(data) {
-    try {
-      const response = await api.patch('/auth/profile/', data)
-      return response.data
-    } catch (error) {
-      const stored = localStorage.getItem('user')
-      const current = stored ? JSON.parse(stored) : mockUser
-      const updated = { ...current, ...data }
-      localStorage.setItem('user', JSON.stringify(updated))
-      return updated
+    const profileData = { ...data }
+    delete profileData.email
+    if (profileData.name) {
+      const [firstName, ...lastName] = profileData.name.trim().split(/\s+/)
+      profileData.first_name = firstName || ''
+      profileData.last_name = lastName.join(' ')
+      delete profileData.name
     }
+    const response = await api.patch('/auth/profile/', profileData)
+    return responseData(response)
   },
 
   async changePassword(data) {
-    try {
-      const response = await api.post('/auth/change-password/', data)
-      return response.data
-    } catch (error) {
-      return { success: true, message: 'Password updated successfully' }
-    }
+    const response = await api.post('/auth/change-password/', {
+      current_password: data.currentPassword ?? data.current_password,
+      new_password: data.newPassword ?? data.new_password,
+      confirm_password: data.confirmPassword ?? data.confirm_password ?? data.newPassword ?? data.new_password,
+    })
+    return responseData(response)
   },
 }
 

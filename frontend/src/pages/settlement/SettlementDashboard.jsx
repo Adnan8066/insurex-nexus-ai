@@ -21,9 +21,12 @@ import { Input, Select } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
 import { Modal } from '../../components/ui/Modal'
 import { formatCurrency, formatDate } from '../../utils/helpers'
-import { settlementService } from '../../services'
+import { settlementService, claimService, policyService } from '../../services'
+import { useAuth } from '../../context/useAuth'
 
 export function SettlementDashboard() {
+  const { user } = useAuth()
+  const canProcessPayouts = ['employee', 'admin'].includes(user?.role)
   const [settlements, setSettlements] = useState([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -32,6 +35,13 @@ export function SettlementDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [payoutReference, setPayoutReference] = useState('')
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [approvalTarget, setApprovalTarget] = useState(null)
+  const [approvedAmount, setApprovedAmount] = useState('')
+  const [eligibleClaims, setEligibleClaims] = useState([])
+  const [policies, setPolicies] = useState([])
+  const [settlementDraft, setSettlementDraft] = useState({ claim: '', estimated_amount: '', deductible: '', approved_amount: '' })
 
   const mapSettlement = (s) => ({
     id: s.id,
@@ -47,7 +57,8 @@ export function SettlementDashboard() {
     status: s.status,
     paymentStatus: s.payment_status,
     paymentMethod: s.payment_method,
-    paymentReference: s.payment_reference || null,
+    paymentReference: s.payment_reference || s.payments?.[0]?.payment_reference || s.payments?.[0]?.payment_number || null,
+    latestPaymentId: s.payments?.[0]?.id || null,
     approvedBy: s.approved_by_name || '—',
     approvedAt: s.approved_at,
     paidBy: s.paid_by_name || null,
@@ -62,8 +73,7 @@ export function SettlementDashboard() {
     setError(null)
     try {
       const response = await settlementService.getSettlements()
-      const data = response.data
-      const items = Array.isArray(data) ? data : data.results || []
+      const items = Array.isArray(response) ? response : response.results || []
       setSettlements(items.map(mapSettlement))
     } catch (err) {
       console.error('Failed to load settlements:', err)
@@ -89,6 +99,7 @@ export function SettlementDashboard() {
 
   const handleProcessPayment = (settlement) => {
     setActiveSettlementForPay(settlement)
+    setPayoutReference('')
     setPayModalOpen(true)
   }
 
@@ -98,7 +109,7 @@ export function SettlementDashboard() {
     try {
       await settlementService.processPayment(activeSettlementForPay.id, {
         payment_method: activeSettlementForPay.paymentMethod || 'bank_transfer',
-        payment_reference: 'TXN-' + Math.floor(100000 + Math.random() * 900000),
+        payment_reference: payoutReference.trim(),
       })
       setPayModalOpen(false)
       setActiveSettlementForPay(null)
@@ -108,6 +119,111 @@ export function SettlementDashboard() {
       setError(err.message || 'Failed to process payment. Please try again.')
     } finally {
       setProcessingPayment(false)
+    }
+  }
+
+  const markPayoutComplete = async (settlement) => {
+    if (!settlement.latestPaymentId) {
+      setError('The initiated payment record could not be found. Reload and try again.')
+      return
+    }
+    if (!window.confirm('Confirm that this payment was completed outside InsureX? This only records the completion; it does not transfer funds.')) return
+    setProcessingPayment(true)
+    setError(null)
+    try {
+      await settlementService.completePayment(settlement.id, settlement.latestPaymentId)
+      await loadSettlements()
+    } catch (err) {
+      setError(err.response?.data?.detail || err.response?.data?.error || 'Failed to record the completed payout.')
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
+  const openCreateSettlement = async () => {
+    setError(null)
+    setCreateModalOpen(true)
+    try {
+      const [claimResponse, policyResponse] = await Promise.all([
+        claimService.getClaims({ status: 'approved' }),
+        policyService.getPolicies(),
+      ])
+      const claims = Array.isArray(claimResponse) ? claimResponse : claimResponse.results || []
+      const policyItems = Array.isArray(policyResponse) ? policyResponse : policyResponse.results || []
+      const existingClaimIds = new Set(settlements.map((settlement) => Number(settlement.claimId)))
+      setEligibleClaims(claims.filter((claim) => !existingClaimIds.has(Number(claim.id))))
+      setPolicies(policyItems)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not load claims and policies for settlement setup.')
+    }
+  }
+
+  const selectSettlementClaim = async (claimId) => {
+    const claim = eligibleClaims.find((item) => String(item.id) === String(claimId))
+    let policy = policies.find((item) => Number(item.id) === Number(claim?.policy))
+    if (!policy && claim?.policy) {
+      try {
+        policy = await policyService.getPolicy(claim.policy)
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Could not load the claim policy deductible.')
+      }
+    }
+    const estimate = Number(claim?.ai_assessment?.predicted_repair_cost || claim?.claim_amount || 0)
+    const deductible = Number(policy?.deductible || 0)
+    setSettlementDraft({
+      claim: claimId,
+      estimated_amount: String(estimate),
+      deductible: String(deductible),
+      approved_amount: String(Math.max(0, estimate - deductible)),
+    })
+  }
+
+  const createSettlement = async (event) => {
+    event.preventDefault()
+    setProcessingPayment(true)
+    setError(null)
+    try {
+      await settlementService.createSettlement({
+        claim: Number(settlementDraft.claim),
+        estimated_amount: Number(settlementDraft.estimated_amount),
+        deductible: Number(settlementDraft.deductible),
+        approved_amount: Number(settlementDraft.approved_amount),
+      })
+      setCreateModalOpen(false)
+      setSettlementDraft({ claim: '', estimated_amount: '', deductible: '', approved_amount: '' })
+      await loadSettlements()
+    } catch (err) {
+      const data = err.response?.data
+      setError(data?.detail || data?.error || 'Could not create the settlement record.')
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
+  const approveSettlement = async (event) => {
+    event.preventDefault()
+    if (!approvalTarget) return
+    setProcessingPayment(true)
+    setError(null)
+    try {
+      await settlementService.approveSettlement(approvalTarget.id, { approved_amount: Number(approvedAmount) })
+      setApprovalTarget(null)
+      await loadSettlements()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not approve this settlement.')
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
+  const rejectSettlement = async (settlement) => {
+    if (!window.confirm(`Reject settlement ${settlement.settlementNumber}?`)) return
+    setError(null)
+    try {
+      await settlementService.rejectSettlement(settlement.id)
+      await loadSettlements()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not reject this settlement.')
     }
   }
 
@@ -166,6 +282,9 @@ export function SettlementDashboard() {
         </div>
 
         <div className="flex gap-2">
+          <Button variant="outline" onClick={openCreateSettlement}>
+            Create Settlement
+          </Button>
           <Button variant="outline" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
             Export Ledger
@@ -217,7 +336,7 @@ export function SettlementDashboard() {
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Disbursed (Paid)</p>
             <p className="text-2xl font-black text-primary mt-1">{formatCurrency(stats.totalPaidAmount)}</p>
-            <span className="text-xs text-gray-500">Direct ACH / Wire</span>
+            <span className="text-xs text-gray-500">Recorded payment completions</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
             <CreditCard className="w-6 h-6" />
@@ -256,6 +375,8 @@ export function SettlementDashboard() {
             <Select
               options={[
                 { value: '', label: 'All Settlement Statuses' },
+                { value: 'calculated', label: 'Calculated' },
+                { value: 'under_review', label: 'Under Review' },
                 { value: 'approved', label: 'Approved' },
                 { value: 'paid', label: 'Paid' },
                 { value: 'under_review', label: 'Under Review' },
@@ -333,20 +454,33 @@ export function SettlementDashboard() {
                       </span>
                     </TableCell>
                     <TableCell align="right">
-                      {s.paymentStatus === 'pending' ? (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          disabled={processingPayment}
-                          onClick={() => handleProcessPayment(s)}
-                        >
-                          Disburse
-                        </Button>
+                      {['calculated', 'under_review'].includes(s.status) ? (
+                        <div className="flex justify-end gap-1">
+                          <Button variant="primary" size="sm" disabled={processingPayment} onClick={() => { setApprovalTarget(s); setApprovedAmount(String(s.approvedAmount || Math.max(0, s.estimatedAmount - s.deductible))) }}>Review</Button>
+                          <Button variant="outline" size="sm" onClick={() => rejectSettlement(s)}>Reject</Button>
+                        </div>
+                      ) : s.paymentStatus === 'pending' ? (
+                        canProcessPayouts ? (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={processingPayment}
+                            onClick={() => handleProcessPayment(s)}
+                          >
+                            Record Payout
+                          </Button>
+                        ) : <span className="text-xs text-amber-700">Pending</span>
                       ) : s.paymentStatus === 'processing' ? (
-                        <span className="text-xs text-blue-600 font-semibold flex items-center justify-end gap-1">
-                          <Clock className="w-3.5 h-3.5" />
-                          Processing
-                        </span>
+                        canProcessPayouts ? (
+                          <Button variant="outline" size="sm" disabled={processingPayment} onClick={() => markPayoutComplete(s)}>
+                            Record Paid
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-blue-600 font-semibold flex items-center justify-end gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            Processing
+                          </span>
+                        )
                       ) : (
                         <span className="text-xs text-emerald-600 font-semibold flex items-center justify-end gap-1">
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -361,6 +495,43 @@ export function SettlementDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {createModalOpen && (
+        <Modal isOpen onClose={() => setCreateModalOpen(false)} title="Create Settlement Record" size="md">
+          <form onSubmit={createSettlement} className="space-y-4">
+            <p className="text-sm text-gray-600">Select an approved claim. Amounts are prefilled from its model estimate, claim amount, and policy deductible; review them before saving.</p>
+            <Select
+              label="Approved claim"
+              value={settlementDraft.claim}
+              onChange={(event) => selectSettlementClaim(event.target.value)}
+              options={eligibleClaims.map((claim) => ({ value: String(claim.id), label: `${claim.claim_number} — ${claim.customer_name || claim.customer_email}`}))}
+              placeholder="Select a claim"
+              required
+            />
+            {eligibleClaims.length === 0 && <p className="text-sm text-amber-700">No eligible approved claims without an existing settlement were found.</p>}
+            <Input label="Estimated amount" type="number" min="0" step="0.01" required value={settlementDraft.estimated_amount} onChange={(event) => setSettlementDraft((draft) => ({ ...draft, estimated_amount: event.target.value }))} />
+            <Input label="Policy deductible" type="number" min="0" step="0.01" required value={settlementDraft.deductible} onChange={(event) => setSettlementDraft((draft) => ({ ...draft, deductible: event.target.value }))} />
+            <Input label="Proposed net settlement" type="number" min="0" step="0.01" required value={settlementDraft.approved_amount} onChange={(event) => setSettlementDraft((draft) => ({ ...draft, approved_amount: event.target.value }))} />
+            <div className="flex justify-end gap-2 pt-3 border-t">
+              <Button type="button" variant="secondary" onClick={() => setCreateModalOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={processingPayment} disabled={processingPayment || !settlementDraft.claim}>Save for Review</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {approvalTarget && (
+        <Modal isOpen onClose={() => setApprovalTarget(null)} title={`Review ${approvalTarget.settlementNumber}`} size="md">
+          <form onSubmit={approveSettlement} className="space-y-4">
+            <p className="text-sm text-gray-600">Confirm the amount as an authorized adjuster. Saving approval does not trigger a payment.</p>
+            <Input label="Approved amount" type="number" min="0" step="0.01" required value={approvedAmount} onChange={(event) => setApprovedAmount(event.target.value)} />
+            <div className="flex justify-end gap-2 pt-3 border-t">
+              <Button type="button" variant="secondary" onClick={() => setApprovalTarget(null)}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={processingPayment} disabled={processingPayment}>Approve Settlement</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {/* Disburse Payment Modal */}
       {payModalOpen && activeSettlementForPay && (
@@ -391,15 +562,22 @@ export function SettlementDashboard() {
             </div>
 
             <p className="text-xs text-gray-500">
-              Disbursement will initiate direct ACH transfer to policyholder&apos;s verified bank account on file.
+              This records a payout initiation in InsureX. It does not send funds. Enter the external transfer reference after arranging payment, then record completion once the transfer clears.
             </p>
+
+            <Input
+              label="External transfer reference (optional)"
+              value={payoutReference}
+              onChange={(event) => setPayoutReference(event.target.value)}
+              placeholder="Bank or payment provider reference"
+            />
 
             <div className="flex justify-end gap-2 pt-4 border-t">
               <Button variant="secondary" onClick={() => setPayModalOpen(false)}>
                 Cancel
               </Button>
               <Button variant="primary" onClick={confirmPayment}>
-                Confirm Payout Transfer
+                Record Payout Initiation
               </Button>
             </div>
           </div>

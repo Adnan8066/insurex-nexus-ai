@@ -1,12 +1,27 @@
 import axios from 'axios'
 
-const configuredApiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
-const API_BASE_URL = configuredApiBase.replace(/\/api\/?$/, '/api/v1').replace(/\/$/, '')
+const configuredApiBase = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '')
+const API_BASE_URL = /\/api\/v1$/.test(configuredApiBase)
+  ? configuredApiBase
+  : /\/api$/.test(configuredApiBase)
+    ? `${configuredApiBase}/v1`
+    : `${configuredApiBase}/api/v1`
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
 })
+
+const describeErrorDetails = (details) => {
+  if (typeof details === 'string') return details
+  if (Array.isArray(details)) return details.map(String).join(', ')
+  if (details && typeof details === 'object') {
+    return Object.entries(details)
+      .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.map(String).join(', ') : String(messages)}`)
+      .join('; ')
+  }
+  return ''
+}
 
 api.interceptors.request.use(
   (config) => {
@@ -22,6 +37,14 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const payload = error.response?.data
+    if (payload?.success === false && payload.error && !payload.detail) {
+      const message = payload.error.message
+      payload.detail = message && message !== 'An error occurred'
+        ? message
+        : describeErrorDetails(payload.error.details) || 'The request could not be completed.'
+    }
+
     const originalRequest = error.config
 
     if (error.response?.status === 401 && !originalRequest._retry) {
