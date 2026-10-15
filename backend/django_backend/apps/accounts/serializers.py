@@ -2,6 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from drf_spectacular.utils import extend_schema_field
+from django.db import transaction
+from django.utils.text import slugify
 from .models import User, UserProfile, Role
 
 User = get_user_model()
@@ -73,6 +75,54 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         validated_data.pop('name', None)
         validated_data['role'] = Role.CUSTOMER
         user = User.objects.create_user(**validated_data)
+        UserProfile.objects.create(user=user)
+        return user
+
+
+class AdminUserCreateSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    role = serializers.ChoiceField(choices=[
+        (Role.CUSTOMER, 'Customer'),
+        (Role.INVESTIGATOR, 'Investigator'),
+        (Role.EMPLOYEE, 'Insurance Employee'),
+    ])
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    department = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password_confirm = serializers.CharField(write_only=True)
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('A user with this email already exists.')
+        return value
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({'password_confirm': 'Passwords do not match.'})
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        validated_data.pop('password_confirm')
+        password = validated_data.pop('password')
+        email = validated_data.pop('email')
+        username_base = slugify(email.split('@', 1)[0])[:150] or 'user'
+        username = username_base
+        suffix = 1
+        while User.objects.filter(username=username).exists():
+            suffix_text = str(suffix)
+            username = f'{username_base[:150 - len(suffix_text)]}{suffix_text}'
+            suffix += 1
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            **validated_data,
+        )
         UserProfile.objects.create(user=user)
         return user
 

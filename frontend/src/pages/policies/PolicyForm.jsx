@@ -5,6 +5,8 @@ import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { policyService, vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
+import { policyTiers } from '../../data/policyTiers'
+import { formatCurrency } from '../../utils/helpers'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const nextYear = () => new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10)
@@ -24,6 +26,8 @@ export function PolicyForm() {
     customer: '',
     agent: user?.role === 'employee' ? String(user.id) : '',
     vehicle: '',
+    policyTierId: '',
+    coverage: {},
     type: 'auto_comprehensive',
     status: 'pending',
     startDate: today(),
@@ -39,6 +43,8 @@ export function PolicyForm() {
   })
 
   const selectedCustomer = canAssignCustomer ? formData.customer : user?.id
+  const selectedTier = policyTiers.find((tier) => tier.id === formData.policyTierId)
+  const isCustomPolicy = formData.policyTierId === 'custom'
   const isAutoPolicy = formData.type.startsWith('auto_')
   const customerOptions = useMemo(
     () => customers.map((customer) => ({ value: String(customer.id), label: `${customer.name} (${customer.email})` })),
@@ -72,6 +78,8 @@ export function PolicyForm() {
               customer: String(policy.customer || ''),
               agent: String(policy.agent || ''),
               vehicle: String(policy.vehicle || ''),
+              policyTierId: policy.coverage?.policy_plan?.id || 'custom',
+              coverage: policy.coverage || {},
               type: policy.type,
               status: policy.status,
               startDate: policy.start_date,
@@ -123,6 +131,19 @@ export function PolicyForm() {
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target
+    if (name === 'policyTierId') {
+      const tier = policyTiers.find((option) => option.id === value)
+      setFormData((current) => ({
+        ...current,
+        policyTierId: value,
+        ...(tier ? {
+          type: tier.type,
+          premium: String(tier.basePremium),
+          deductible: String(tier.deductible),
+        } : {}),
+      }))
+      return
+    }
     setFormData((current) => ({
       ...current,
       [name]: type === 'checkbox' ? checked : value,
@@ -147,6 +168,19 @@ export function PolicyForm() {
         deductible: Number(formData.deductible),
         payment_frequency: formData.paymentFrequency,
         auto_renew: formData.autoRenew,
+        coverage: selectedTier ? {
+          ...formData.coverage,
+          policy_plan: {
+            id: selectedTier.id,
+            name: selectedTier.name,
+            category: selectedTier.category,
+            coverage_sections: selectedTier.coverageSections,
+            mandatory_covers: selectedTier.mandatoryCovers,
+            addons: selectedTier.addons,
+            base_premium_estimate_inr: selectedTier.basePremium,
+            estimate_source: 'User-provided draft; not an insurer quote',
+          },
+        } : Object.fromEntries(Object.entries(formData.coverage || {}).filter(([key]) => key !== 'policy_plan')),
         property_address: formData.propertyAddress,
         property_type: formData.propertyType,
         property_year_built: Number(formData.propertyYearBuilt) || null,
@@ -181,6 +215,42 @@ export function PolicyForm() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <section className="card">
+          <div className="card-header"><h2 className="card-title">Choose a Policy Tier</h2></div>
+          <div className="card-content space-y-4">
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              These eight motor policy tiers and base premiums are the estimates you supplied. They are not verified insurer offers or quotes; confirm the wording and final premium with an insurer before issuing coverage.
+            </p>
+            <Select
+              label="Policy tier"
+              name="policyTierId"
+              value={formData.policyTierId}
+              onChange={handleChange}
+              options={[
+                ...policyTiers.map((tier) => ({
+                  value: tier.id,
+                  label: `${tier.id} · ${tier.name} · ${formatCurrency(tier.basePremium, 'INR', 'en-IN')}/yr (estimate)`,
+                })),
+                { value: 'custom', label: 'Other / custom policy' },
+              ]}
+              placeholder="Select a policy tier"
+              required={!isEdit}
+            />
+            {selectedTier && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div><span className="font-medium text-gray-500">Category</span><p>{selectedTier.category}</p></div>
+                  <div><span className="font-medium text-gray-500">Base premium estimate</span><p>{formatCurrency(selectedTier.basePremium, 'INR', 'en-IN')} per year</p></div>
+                  <div><span className="font-medium text-gray-500">Coverage sections</span><p>{selectedTier.coverageSections.join('; ') || 'None listed'}</p></div>
+                  <div><span className="font-medium text-gray-500">Mandatory covers</span><p>{selectedTier.mandatoryCovers.join('; ') || 'None listed'}</p></div>
+                  <div><span className="font-medium text-gray-500">Compulsory deductible estimate</span><p>{formatCurrency(selectedTier.deductible, 'INR', 'en-IN')}</p></div>
+                  <div><span className="font-medium text-gray-500">Available add-ons</span><p>{selectedTier.addons.join(', ') || 'None listed'}</p></div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="card">
           <div className="card-header"><h2 className="card-title">Policy Details</h2></div>
           <div className="card-content grid grid-cols-1 gap-4 md:grid-cols-2">
             {canAssignCustomer && (
@@ -189,22 +259,22 @@ export function PolicyForm() {
             {canAssignCustomer && (
               <Select label="Assigned Agent" name="agent" value={formData.agent} onChange={handleChange} options={agentOptions} placeholder="Select agent (optional)" />
             )}
-            <Select label="Policy Type" name="type" value={formData.type} onChange={handleChange} options={[
+            {isCustomPolicy && <Select label="Policy Type" name="type" value={formData.type} onChange={handleChange} options={[
               { value: 'auto_comprehensive', label: 'Comprehensive Auto' },
               { value: 'auto_collision', label: 'Collision Auto' },
               { value: 'auto_liability', label: 'Liability Auto' },
               { value: 'homeowners', label: 'Homeowners' },
               { value: 'renters', label: 'Renters' },
               { value: 'umbrella', label: 'Umbrella' },
-            ]} />
+            ]} />}
             <Select label="Status" name="status" value={formData.status} onChange={handleChange} options={[
               { value: 'pending', label: 'Pending' }, { value: 'active', label: 'Active' },
               { value: 'suspended', label: 'Suspended' }, { value: 'expired', label: 'Expired' }, { value: 'cancelled', label: 'Cancelled' },
             ]} />
             <Input label="Start Date" name="startDate" type="date" value={formData.startDate} onChange={handleChange} required />
             <Input label="End Date" name="endDate" type="date" value={formData.endDate} onChange={handleChange} required />
-            <Input label="Premium" name="premium" type="number" min="0" step="0.01" value={formData.premium} onChange={handleChange} required />
-            <Input label="Deductible" name="deductible" type="number" min="0" step="0.01" value={formData.deductible} onChange={handleChange} required />
+            <Input label={selectedTier ? 'Annual premium (INR estimate)' : 'Premium'} name="premium" type="number" min="0" step="0.01" value={formData.premium} onChange={handleChange} required />
+            <Input label={selectedTier ? 'Compulsory deductible (INR estimate)' : 'Deductible'} name="deductible" type="number" min="0" step="0.01" value={formData.deductible} onChange={handleChange} required />
             <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange} options={[
               { value: 'annual', label: 'Annual' }, { value: 'semi_annual', label: 'Semi-Annual' },
               { value: 'quarterly', label: 'Quarterly' }, { value: 'monthly', label: 'Monthly' },

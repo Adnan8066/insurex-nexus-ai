@@ -19,7 +19,6 @@ import {
   Moon,
   Plus,
   Settings,
-  Shield,
   Sun,
   User,
   Users,
@@ -32,6 +31,7 @@ import { formatRelativeTime } from '../../utils/helpers'
 const moduleItems = [
   { label: 'Dashboard', to: '/dashboard', Icon: LayoutDashboard, roles: ['customer', 'employee', 'investigator', 'repair', 'admin'] },
   { label: 'Policies', to: '/policies', Icon: FileText, roles: ['customer', 'employee', 'admin'] },
+  { label: 'User Management', to: '/admin/users', Icon: Users, roles: ['admin'] },
   { label: 'Vehicles', to: '/vehicles', Icon: Car, roles: ['customer', 'employee', 'admin'] },
   { label: 'Claims', to: '/claims', Icon: Briefcase, roles: ['customer', 'employee', 'investigator', 'admin'] },
   { label: 'New Claim', to: '/claims/new', Icon: Plus, roles: ['customer', 'employee', 'admin'] },
@@ -144,7 +144,7 @@ export function Navbar() {
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 shadow-sm shadow-slate-900/[0.03] backdrop-blur" role="banner">
       <div className="mx-auto flex min-h-16 max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <Link to="/dashboard" className="flex shrink-0 items-center gap-2.5" aria-label="InsureX dashboard">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20"><Shield className="h-5 w-5" /></span>
+          <img src="/insurex-nexus-ai-logo.jpg" alt="" className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-sm shadow-blue-600/20" />
           <span className="text-base font-extrabold tracking-tight text-slate-950 sm:text-lg">InsureX <span className="text-blue-600">Nexus AI</span></span>
         </Link>
 

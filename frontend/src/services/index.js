@@ -1,5 +1,6 @@
 export { default as api } from './api'
 export { default as authService } from './authService'
+export { default as adminUserService } from './adminUserService'
 export { default as policyService } from './policyService'
 export { default as claimService } from './claimService'
 export { default as vehicleService } from './vehicleService'

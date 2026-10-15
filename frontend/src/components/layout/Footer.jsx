@@ -1,4 +1,4 @@
-import { ArrowRight, Shield } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/useAuth'
 
@@ -38,6 +38,7 @@ const moduleGroups = [
     badge: 'CLAIM OPERATIONS',
     links: [
       { label: 'Settlements', to: '/settlements', roles: staffRoles },
+      { label: 'User Management', to: '/admin/users', roles: ['admin'] },
       { label: 'AI Operations', to: '/operations', roles: reviewRoles },
     ],
     secondBadge: '',
@@ -70,7 +71,7 @@ export function Footer() {
               </a>
             </div>
             <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm font-bold text-white" aria-label="InsureX dashboard">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500"><Shield className="h-4 w-4" /></span>
+              <img src="/insurex-nexus-ai-logo.jpg" alt="" className="h-8 w-8 rounded-lg object-cover" />
               InsureX Nexus AI
             </Link>
           </section>

@@ -70,6 +70,7 @@ export function PolicyList() {
           id: p.id,
           policyNumber: p.policy_number,
           type: p.type,
+          policyPlan: p.coverage?.policy_plan || null,
           status: p.status,
           startDate: p.start_date,
           endDate: p.end_date,
@@ -109,6 +110,8 @@ export function PolicyList() {
         (p) =>
           (p.policyNumber || '').toLowerCase().includes(searchLower) ||
           (p.type || '').toLowerCase().includes(searchLower) ||
+          (p.policyPlan?.name || '').toLowerCase().includes(searchLower) ||
+          (p.policyPlan?.id || '').toLowerCase().includes(searchLower) ||
           (p.customerName || '').toLowerCase().includes(searchLower) ||
           (p.vehicle && p.vehicle.make && p.vehicle.make.toLowerCase().includes(searchLower)) ||
           (p.vehicle && p.vehicle.model && p.vehicle.model.toLowerCase().includes(searchLower))
@@ -289,14 +292,17 @@ export function PolicyList() {
                             <span className={clsx('text-gray-400', policy.type.toLowerCase().includes('auto') && 'text-blue-500', policy.type.toLowerCase().includes('home') && 'text-green-500')}>
                               {getTypeIcon(policy.type)}
                             </span>
-                            <span>{policy.type}</span>
+                            <span>{policy.policyPlan?.name || policy.type}</span>
                           </div>
                         </TableCell>
                         <TableCell>{policy.customerName}</TableCell>
                         <TableCell><StatusBadge status={policy.status} /></TableCell>
                         <TableCell>{formatDate(policy.startDate)}</TableCell>
                         <TableCell>{formatDate(policy.endDate)}</TableCell>
-                        <TableCell className="font-medium">{formatCurrency(policy.premium)}/yr</TableCell>
+                        <TableCell className="font-medium">
+                          {formatCurrency(policy.premium, policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}/yr
+                          {policy.policyPlan && <span className="ml-1 text-xs font-normal text-gray-500">est.</span>}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Link to={`/policies/${policy.id}`} className="text-primary hover:underline text-sm">View</Link>

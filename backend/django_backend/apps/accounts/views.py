@@ -14,11 +14,12 @@ import logging
 
 from .models import User, UserProfile, Role
 from .serializers import (
-    UserSerializer, UserRegistrationSerializer, UserLoginSerializer,
+    UserSerializer, UserRegistrationSerializer, UserLoginSerializer, AdminUserCreateSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer, UserUpdateSerializer,
     RefreshTokenRequestSerializer, LogoutRequestSerializer
 )
+from common.permissions import IsAdmin
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -153,6 +154,24 @@ class AuthViewSet(viewsets.GenericViewSet):
             return Response({'success': True, 'data': UserSerializer(request.user).data})
         serializer = UserSerializer(request.user)
         return Response({'success': True, 'data': serializer.data})
+
+    @action(detail=False, methods=['get', 'post'], permission_classes=[IsAuthenticated, IsAdmin])
+    def users(self, request):
+        managed_roles = [Role.CUSTOMER, Role.INVESTIGATOR, Role.EMPLOYEE]
+        if request.method == 'GET':
+            users = User.objects.filter(role__in=managed_roles).order_by('-date_joined')
+            return Response({
+                'success': True,
+                'data': {'users': UserSerializer(users, many=True).data},
+            })
+
+        serializer = AdminUserCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response({
+            'success': True,
+            'data': {'user': UserSerializer(user).data},
+        }, status=status.HTTP_201_CREATED)
     
     @action(detail=False, methods=['patch'], permission_classes=[IsAuthenticated], url_path='update_profile')
     def update_profile(self, request):

@@ -16,13 +16,13 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Shield,
 } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['customer', 'employee', 'investigator', 'repair', 'admin'] },
   { name: 'Policies', href: '/policies', icon: FileText, roles: ['customer', 'employee', 'admin'] },
+  { name: 'User Management', href: '/admin/users', icon: Users, roles: ['admin'] },
   { name: 'Vehicles', href: '/vehicles', icon: Car, roles: ['customer', 'employee', 'admin'] },
   { name: 'Claims', href: '/claims', icon: Briefcase, roles: ['customer', 'employee', 'investigator', 'admin'] },
   { name: 'AI Assessment', href: '/ai-assessment', icon: Brain, roles: ['employee', 'investigator', 'admin'] },
@@ -56,9 +56,7 @@ export function Sidebar({ collapsed, onToggle }) {
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
         {!collapsed && (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
+            <img src="/insurex-nexus-ai-logo.jpg" alt="" className="w-8 h-8 rounded-lg object-cover" />
             <span className="font-bold text-lg text-gray-900">InsureX Nexus AI</span>
           </div>
         )}

@@ -31,3 +31,6 @@ python manage.py import_project_datasets --dry-run
 The import maps claim dates, severity, amounts, incidents, injuries, witnesses, police reports, vehicle details, policy premiums and deductibles, and fraud labels into the existing Django models. Each original CSV row is also retained under `Claim.ai_assessment.source_data`. Fraud-labeled rows are marked for investigation; other historical records are marked closed. Imported account records are inactive and use generated dataset addresses, not customer sign-in accounts.
 
 The existing claims, policies, vehicles, fraud, and analytics APIs expose the imported records to the application. Staff views can see the dataset claims; customer views remain limited to claims owned by the signed-in customer.
+
+The policy creation form includes eight user-provided motor policy tier examples (`POL-PC-001`–`POL-PC-006` and `POL-TW-007`–`POL-TW-008`). Their base premiums are illustrative estimates only; they are not verified insurer quotes or offers. Selecting a tier stores its ID and coverage summary with the created policy.
+

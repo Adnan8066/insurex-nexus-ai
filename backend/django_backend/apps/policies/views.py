@@ -14,7 +14,7 @@ from apps.vehicles.models import Vehicle
 from apps.repair_shops.models import RepairShop
 from .serializers import (
     PolicySerializer, PolicyCreateSerializer, PolicyUpdateSerializer,
-    PolicyCoverageSerializer, PolicyDocumentSerializer, PremiumHistorySerializer
+    PolicyCoverageSerializer, PolicyDocumentSerializer, PremiumHistorySerializer,
 )
 from common.permissions import IsEmployee, IsAdmin
 
