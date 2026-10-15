@@ -104,7 +104,7 @@ export function AIAssessment() {
     if (!selectedClaimId) return
     setAnalyzing(true)
     try {
-      await assessmentService.assessClaim({ claim: Number(selectedClaimId) })
+      await assessmentService.assessClaim({ claim_id: Number(selectedClaimId) })
       const assessmentsRes = await assessmentService.getAssessments()
       setAssessments(Array.isArray(assessmentsRes) ? assessmentsRes : assessmentsRes.results || [])
     } catch (err) {
