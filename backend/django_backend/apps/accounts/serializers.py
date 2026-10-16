@@ -87,6 +87,7 @@ class AdminUserCreateSerializer(serializers.Serializer):
         (Role.CUSTOMER, 'Customer'),
         (Role.INVESTIGATOR, 'Investigator'),
         (Role.EMPLOYEE, 'Insurance Employee'),
+        (Role.REPAIR, 'Repair Shop'),
     ])
     phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
     department = serializers.CharField(max_length=100, required=False, allow_blank=True)

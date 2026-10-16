@@ -157,7 +157,7 @@ class AuthViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get', 'post'], permission_classes=[IsAuthenticated, IsAdmin])
     def users(self, request):
-        managed_roles = [Role.CUSTOMER, Role.INVESTIGATOR, Role.EMPLOYEE]
+        managed_roles = [Role.CUSTOMER, Role.INVESTIGATOR, Role.EMPLOYEE, Role.REPAIR]
         if request.method == 'GET':
             users = User.objects.filter(role__in=managed_roles).order_by('-date_joined')
             return Response({

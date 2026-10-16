@@ -25,6 +25,7 @@ import { formatCurrency, formatDate } from '../../utils/helpers'
 const normalizeAgent = (a, idx) => ({
   id: a.id || a.agent_type || `agent-${idx}`,
   name: a.name || a.agent_type || a.title || `Agent ${idx + 1}`,
+  status: a.status || 'saved',
   confidence: a.confidence == null ? null : Math.round(Number(a.confidence) <= 1 ? Number(a.confidence) * 100 : Number(a.confidence)),
   processingTime: a.processing_time == null && a.processing_time_seconds == null ? null : Number(a.processing_time || a.processing_time_seconds || a.processingTime),
   input: a.input || a.input_data || {},
@@ -54,6 +55,7 @@ export function AIDecisionCenter() {
   const [claims, setClaims] = useState([])
   const [flows, setFlows] = useState([])
   const [selectedClaimId, setSelectedClaimId] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useState('')
   const [isSimulating, setIsSimulating] = useState(false)
   const [simulationStep, setSimulationStep] = useState(6)
   const [loading, setLoading] = useState(true)
@@ -121,7 +123,10 @@ export function AIDecisionCenter() {
     }
   }
 
-  const selectedAgent = agents.find((a) => a.id === 'claim-agent') || agents[0] || null
+  const selectedAgent = agents.find((agent) => String(agent.id) === String(selectedAgentId))
+    || agents.find((agent) => agent.name === 'claim_agent')
+    || agents[0]
+    || null
 
   const flowNodes = [
     { title: '1. Claim Intake', subtitle: 'Raw Claim & Telemetry Ingestion', icon: Activity },
@@ -266,9 +271,11 @@ export function AIDecisionCenter() {
                     <button
                       key={agent.id}
                       type="button"
-                      onClick={() => {}}
+                      onClick={() => setSelectedAgentId(String(agent.id))}
+                      aria-pressed={isSelected}
+                      title={`View ${agent.name} execution details (${agent.status || 'saved'})`}
                       className={clsx(
-                        'p-4 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between h-32',
+                        'p-4 rounded-xl border text-left cursor-pointer transition-all duration-200 flex flex-col justify-between h-32',
                         isSelected
                           ? 'border-primary bg-primary text-white shadow-md ring-2 ring-primary/20 scale-[1.02]'
                           : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 text-gray-900'
@@ -280,7 +287,7 @@ export function AIDecisionCenter() {
                       </div>
                       <div className="text-[11px] opacity-80 mt-2 flex items-center justify-between">
                         <span>{agent.confidence == null ? 'Confidence not calibrated' : `${agent.confidence}% conf`}</span>
-                        <span className="font-mono">{agent.processingTime == null ? 'Time n/a' : `${agent.processingTime}s`}</span>
+                        <span className="font-mono">{agent.processingTime == null ? 'Time n/a' : `${agent.processingTime.toFixed(2)}s`}</span>
                       </div>
                     </button>
                   )
@@ -302,7 +309,7 @@ export function AIDecisionCenter() {
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                       <span className="text-xs font-bold uppercase text-gray-500 tracking-wider block mb-2">Input Telemetry</span>
                       <pre className="font-mono text-xs text-gray-800 bg-white p-3 rounded-lg border border-gray-100 overflow-x-auto">
-                        {JSON.stringify(selectedAgent.input, null, 2)}
+                        {Object.keys(selectedAgent.input || {}).length ? JSON.stringify(selectedAgent.input, null, 2) : 'No input telemetry was recorded for this run. Run the workflow again to capture claim inputs.'}
                       </pre>
                     </div>
 
