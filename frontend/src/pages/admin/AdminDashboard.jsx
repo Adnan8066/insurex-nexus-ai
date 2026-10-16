@@ -87,7 +87,7 @@ export function AdminDashboard() {
         tension: 0.35,
       },
       {
-        label: 'Claim Amount ($)',
+        label: 'Claim Amount (₹)',
         data: trendLabels.map((m) => Math.round(monthly[m].amount)),
         borderColor: '#10b981',
         backgroundColor: 'rgba(16, 185, 129, 0.08)',

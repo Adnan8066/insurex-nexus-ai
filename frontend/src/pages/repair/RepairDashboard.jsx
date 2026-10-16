@@ -547,7 +547,7 @@ export function RepairDashboard() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-gray-700 uppercase block mb-1.5">Actual Cost ($)</label>
+              <label className="text-xs font-semibold text-gray-700 uppercase block mb-1.5">Actual Cost (₹)</label>
               <Input
                 type="number"
                 step="0.01"

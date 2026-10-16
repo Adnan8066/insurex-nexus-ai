@@ -63,7 +63,7 @@ export const mockAIAssessments = {
     factors: [
       { factor: 'High severity', impact: 'negative', weight: 0.25, description: 'Major collision with structural damage' },
       { factor: 'Injuries involved', impact: 'negative', weight: 0.2, description: 'Hospitalization increases claim complexity' },
-      { factor: 'High claim amount', impact: 'negative', weight: 0.2, description: 'Claim exceeds $40K threshold for enhanced review' },
+      { factor: 'High claim amount', impact: 'negative', weight: 0.2, description: 'Claim exceeds ₹40K threshold for enhanced review' },
       { factor: 'Police report supports claim', impact: 'positive', weight: 0.2, description: 'Official report corroborates customer account' },
       { factor: 'Dashcam footage available', impact: 'positive', weight: 0.15, description: 'Video evidence eliminates liability dispute' },
     ],
@@ -142,7 +142,7 @@ export const mockDecisionFlow = {
         id: 'damage-agent',
         name: 'Damage Assessment Agent',
         status: 'completed',
-        input: { photos: 12, estimate: '$8,200', type: 'Collision' },
+        input: { photos: 12, estimate: '₹8,200', type: 'Collision' },
         output: { repairCost: 8200, totalLoss: false, repairDays: 5, partsAvailability: 'In stock' },
         confidence: 87,
         processingTime: 3.4,

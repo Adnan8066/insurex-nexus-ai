@@ -141,7 +141,7 @@ export function AIAssessment() {
     labels: ['Customer Estimate', 'AI Predicted Cost'],
     datasets: [
       {
-        label: 'Amount ($)',
+        label: 'Amount (₹)',
         data: [claimAmount, predictedRepairCost],
         backgroundColor: ['#94a3b8', '#1e3a5f'],
         borderRadius: 6,

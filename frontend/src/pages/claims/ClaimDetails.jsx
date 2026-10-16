@@ -731,7 +731,7 @@ export function ClaimDetails() {
               </div>
               <div className="flex justify-between py-1 border-b border-gray-100">
                 <span className="text-gray-500">Policy Deductible</span>
-                <span className="font-medium text-gray-900">$500.00</span>
+                <span className="font-medium text-gray-900">{formatCurrency(500)}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-gray-100">
                 <span className="text-gray-500">Estimated Payout</span>

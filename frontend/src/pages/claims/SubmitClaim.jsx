@@ -384,7 +384,7 @@ export function SubmitClaim() {
                   <Shield className="w-5 h-5 flex-shrink-0 text-primary mt-0.5" />
                   <div>
                     <span className="font-semibold block">Coverage Verification</span>
-                    Selected policy covers Collision, Comprehensive up to \$50,000 with a \$500 deductible.
+                    Selected policy covers Collision, Comprehensive up to ₹50,000 with a ₹500 deductible.
                   </div>
                 </div>
               </div>
@@ -554,7 +554,7 @@ export function SubmitClaim() {
                 <h2 className="text-lg font-bold text-gray-900 border-b pb-2">Step 4: Claim Amount & Verification</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
-                    label="Estimated Repair or Claim Amount ($)"
+                    label="Estimated Repair or Claim Amount (₹)"
                     type="number"
                     min="1"
                     name="claimAmount"

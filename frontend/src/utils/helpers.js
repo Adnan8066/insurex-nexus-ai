@@ -1,4 +1,4 @@
-export function formatCurrency(amount, currency = 'USD', locale = 'en-US') {
+export function formatCurrency(amount, currency = 'INR', locale = 'en-IN') {
   if (amount === null || amount === undefined) return '—'
   return new Intl.NumberFormat(locale, {
     style: 'currency',
@@ -8,7 +8,7 @@ export function formatCurrency(amount, currency = 'USD', locale = 'en-US') {
   }).format(amount)
 }
 
-export function formatCurrencyCompact(amount, currency = 'USD', locale = 'en-US') {
+export function formatCurrencyCompact(amount, currency = 'INR', locale = 'en-IN') {
   if (amount === null || amount === undefined) return '—'
   return new Intl.NumberFormat(locale, {
     style: 'currency',

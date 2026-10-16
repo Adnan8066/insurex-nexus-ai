@@ -300,7 +300,7 @@ export function PolicyList() {
                         <TableCell>{formatDate(policy.startDate)}</TableCell>
                         <TableCell>{formatDate(policy.endDate)}</TableCell>
                         <TableCell className="font-medium">
-                          {formatCurrency(policy.premium, policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}/yr
+                          {formatCurrency(policy.premium)}/yr
                           {policy.policyPlan && <span className="ml-1 text-xs font-normal text-gray-500">est.</span>}
                         </TableCell>
                         <TableCell>

@@ -253,16 +253,16 @@ export function PolicyDetails() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Annual Premium</dt>
-                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.premium, policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}</dd>
+                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.premium)}</dd>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Deductible</dt>
-                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.deductible, policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}</dd>
+                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.deductible)}</dd>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Payment per Period</dt>
                       <dd className="mt-1 text-2xl font-bold text-gray-900">
-                        {formatCurrency((policy.paymentFrequency === 'monthly' ? (Number(policy.premium) || 0) / 12 : (Number(policy.premium) || 0)), policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}
+                        {formatCurrency(policy.paymentFrequency === 'monthly' ? (Number(policy.premium) || 0) / 12 : (Number(policy.premium) || 0))}
                       </dd>
                     </div>
                   </div>

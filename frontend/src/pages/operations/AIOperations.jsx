@@ -25,6 +25,7 @@ import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { ChartCard, BarChart } from '../../components/charts/ChartComponents'
+import { formatCurrency } from '../../utils/helpers'
 
 export function AIOperations() {
   const [models, setModels] = useState([])
@@ -136,7 +137,7 @@ export function AIOperations() {
       claimNumber: j.claim_number,
       matchScore: j.quality_score ? Math.round(Number(j.quality_score)) : 85,
       recommendedShop: j.repair_shop_name,
-      reason: `Assigned for ${j.repair_stage || 'repair'} — estimated ${j.estimated_cost ? `$${Number(j.estimated_cost).toLocaleString()}` : 'N/A'}.`,
+        reason: `Assigned for ${j.repair_stage || 'repair'} — estimated ${j.estimated_cost ? formatCurrency(j.estimated_cost) : 'N/A'}.`,
     }))
 
   // Module 4: Processing Time Estimates (assessments with repair_time_estimate_days)
