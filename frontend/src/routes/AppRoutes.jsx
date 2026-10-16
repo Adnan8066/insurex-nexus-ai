@@ -77,7 +77,7 @@ export default function AppRoutes() {
         <Route path="fraud" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><FraudDashboard /></ProtectedRoute>} />
         <Route path="investigators" element={<InvestigatorDashboard />} />
         <Route path="repair-shops" element={<RepairDashboard />} />
-        <Route path="settlements" element={<ProtectedRoute roles={['employee', 'admin']}><SettlementDashboard /></ProtectedRoute>} />
+        <Route path="settlements" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><SettlementDashboard /></ProtectedRoute>} />
         <Route path="analytics" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="admin/users" element={<ProtectedRoute roles={['admin']}><UserManagement /></ProtectedRoute>} />
         <Route path="ai-decision" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><ErrorBoundary><AIDecisionCenter /></ErrorBoundary></ProtectedRoute>} />

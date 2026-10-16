@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   FileText,
@@ -6,7 +6,6 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
-  Bell,
   Car,
   DollarSign,
   TrendingUp,
@@ -38,8 +37,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import ErrorBoundary, { ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
 import { DashboardSkeleton, ChartSkeleton, TableSkeleton, SkeletonCard } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/toastHooks'
-import { useAnalytics, useAutoRefresh } from '../../hooks/useAnalytics'
-import { analyticsService } from '../../services/analyticsService'
+
 
 const claimStatusConfig = {
   submitted: { label: 'Submitted', color: 'info' },
@@ -72,8 +70,8 @@ export function EmployeeDashboard() {
   const [fraudAlerts, setFraudAlerts] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
   const [timeframe, setTimeframe] = useState(searchParams.get('timeframe') || 'quarter')
-  const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [connectionError, setConnectionError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(new Date())
 
@@ -152,7 +150,7 @@ export function EmployeeDashboard() {
           id: c.id || i,
           type: 'claim',
           title: `Claim ${c.claim_number} - ${c.status?.replace(/_/g, ' ')}`,
-          detail: `${c.customer_name || 'Customer'} • ${c.incident_type?.replace(/_/g, ' ') || 'N/A'}`,
+          detail: `${c.customer_name || 'Customer'} � ${c.incident_type?.replace(/_/g, ' ') || 'N/A'}`,
           time: c.submitted_at ? formatRelativeTime(c.submitted_at) : 'N/A',
           icon: Briefcase,
           color: 'text-blue-600 bg-blue-50',
@@ -183,7 +181,6 @@ export function EmployeeDashboard() {
     setSearchParams(params, { replace: true })
   }, [timeframe, searchParams, setSearchParams])
 
-  useAutoRefresh(autoRefresh, 60000, () => fetchData(timeframe))
 
   const activePolicies = policies.filter((p) => p.status === 'active')
   const activeClaims = claims.filter((c) => !['closed', 'rejected'].includes(c.status))
@@ -252,14 +249,33 @@ export function EmployeeDashboard() {
 
   const handleTimeframeChange = (newTimeframe) => {
     setTimeframe(newTimeframe)
-    setLoading(true)
-    fetchData(newTimeframe)
   }
 
-  const handleExport = async () => {
+  const handleExport = () => {
+    setExporting(true)
     try {
-      const report = await analyticsService.exportReport('csv', { timeframe, claims: claims.length, policies: policies.length })
-      const blob = new Blob([report], { type: 'text/csv' })
+      const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+      const rows = [
+        ['Executive Claims and Policies Report'],
+        ['Reporting period', timeframe],
+        ['Generated at', new Date().toISOString()],
+        ['Total claims', claims.length],
+        ['Active claims', activeClaims.length],
+        ['Pending claims', pendingClaims.length],
+        ['Total claim amount', totalClaimAmount],
+        ['Total policies', policies.length],
+        ['Active policies', activePolicies.length],
+        [],
+        ['Claims'],
+        ['Claim number', 'Customer', 'Status', 'Incident type', 'Submitted', 'Amount', 'Priority'],
+        ...claims.map((claim) => [claim.claimNumber, claim.customerName, claim.status, claim.incidentType, claim.submittedAt, claim.claimAmount, claim.priority]),
+        [],
+        ['Policies'],
+        ['Policy number', 'Customer', 'Type', 'Status', 'Start date', 'End date', 'Premium'],
+        ...policies.map((policy) => [policy.policyNumber, policy.customerName, policy.type, policy.status, policy.startDate, policy.endDate, policy.premium]),
+      ]
+      const report = rows.map((row) => row.map(csvCell).join(',')).join('\r\n')
+      const blob = new Blob([report], { type: 'text/csv;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -267,13 +283,14 @@ export function EmployeeDashboard() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       toast.showSuccess('Executive report exported successfully')
     } catch (err) {
       toast.showError('Failed to export report')
+    } finally {
+      setExporting(false)
     }
   }
-
   const metricCards = [
     {
       title: 'Total Policies',
@@ -370,27 +387,11 @@ export function EmployeeDashboard() {
             </select>
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={clsx(autoRefresh && 'text-primary bg-primary/10')}
-            title={autoRefresh ? 'Auto-refresh ON (60s)' : 'Auto-refresh OFF'}
-          >
-            <RefreshCw className={clsx('w-4 h-4', autoRefresh && 'animate-spin')} />
-            <span className="ml-1">{autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}</span>
-          </Button>
-
-          <Button variant="ghost" size="sm" className="relative" onClick={() => fetchData(timeframe)} loading={refreshing}>
+          <Button variant="ghost" size="sm" onClick={() => fetchData(timeframe)} loading={refreshing} aria-label="Refresh dashboard" title="Refresh dashboard">
             <RefreshCw className="w-4 h-4" />
           </Button>
 
-          <Button variant="ghost" size="sm" className="relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center">3</span>
-          </Button>
-
-          <Button variant="primary" size="sm" onClick={handleExport} loading={refreshing}>
+          <Button variant="primary" size="sm" onClick={handleExport} loading={exporting} disabled={exporting}>
             <Download className="w-4 h-4 mr-2" />
             Export Executive Report
           </Button>
@@ -569,7 +570,7 @@ export function EmployeeDashboard() {
                               </Badge>
                             </div>
                             <p className="text-sm text-gray-600 mt-1">{alert.customerName}</p>
-                            <p className="text-xs text-gray-500">Score: {alert.fraudRiskScore}% â€¢ {formatRelativeTime(alert.createdAt)}</p>
+                            <p className="text-xs text-gray-500">Score: {alert.fraudRiskScore}% • {formatRelativeTime(alert.createdAt)}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
                             <span className="text-lg font-bold text-gray-900">{alert.fraudRiskScore}%</span>
