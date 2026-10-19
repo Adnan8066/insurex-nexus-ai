@@ -1,10 +1,13 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth import get_user_model
+from django.utils.dateparse import parse_date
 from apps.accounts.models import Role
 from apps.vehicles.models import Vehicle
-from .models import Policy, PolicyCoverage, PolicyDocument, PremiumHistory
+from .models import Policy, PolicyApplication, PolicyEndorsement, PolicyCoverage, PolicyDocument, PremiumHistory
 
 User = get_user_model()
 
@@ -150,4 +153,90 @@ class PolicyUpdateSerializer(serializers.ModelSerializer):
         end_date = attrs.get('end_date', self.instance.end_date)
         if end_date < start_date:
             raise serializers.ValidationError({'end_date': 'End date must be on or after the start date.'})
+        return attrs
+
+
+class PolicyQuoteSerializer(serializers.ModelSerializer):
+    """Collect the minimum underwriting intake needed for a versioned quote."""
+    customer = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role=Role.CUSTOMER, is_active=True))
+    class Meta:
+        model = PolicyApplication
+        fields = [
+            'customer', 'policy_type', 'applicant_details', 'asset_details', 'risk_factors',
+            'asset_value', 'coverage_limit', 'deductible', 'risk_score', 'policy_terms',
+        ]
+
+    def validate(self, attrs):
+        request_user = self.context['request'].user
+        customer = attrs['customer']
+        if request_user.role == Role.CUSTOMER and customer.pk != request_user.pk:
+            raise serializers.ValidationError({'customer': 'You can only request a quote for your own account.'})
+        if attrs['asset_value'] <= 0 or attrs['coverage_limit'] <= 0:
+            raise serializers.ValidationError('Asset value and coverage limit must be positive.')
+        if not Decimal('0') <= attrs['risk_score'] <= Decimal('100'):
+            raise serializers.ValidationError({'risk_score': 'Risk score must be between 0 and 100.'})
+        if attrs['deductible'] >= attrs['coverage_limit']:
+            raise serializers.ValidationError({'deductible': 'Deductible must be below the coverage limit.'})
+        terms = attrs['policy_terms']
+        if not isinstance(terms, dict) or not terms.get('start_date') or not terms.get('end_date'):
+            raise serializers.ValidationError({'policy_terms': 'start_date and end_date are required.'})
+        start_date = parse_date(str(terms['start_date']))
+        end_date = parse_date(str(terms['end_date']))
+        if not start_date or not end_date or end_date < start_date:
+            raise serializers.ValidationError({'policy_terms': 'Provide valid dates with end_date on or after start_date.'})
+        terms['start_date'] = start_date.isoformat()
+        terms['end_date'] = end_date.isoformat()
+        if terms.get('agent') and not User.objects.filter(
+            pk=terms['agent'], role__in=[Role.EMPLOYEE, Role.ADMIN], is_active=True
+        ).exists():
+            raise serializers.ValidationError({'policy_terms': 'Assigned agent must be an active employee or admin.'})
+        if terms.get('payment_frequency', 'annual') not in {'monthly', 'quarterly', 'semi_annual', 'annual'}:
+            raise serializers.ValidationError({'policy_terms': 'Unsupported payment frequency.'})
+        vehicle_id = terms.get('vehicle')
+        if vehicle_id:
+            vehicle = Vehicle.objects.filter(pk=vehicle_id, customer=customer).first()
+            if vehicle is None:
+                raise serializers.ValidationError({'policy_terms': 'Vehicle must belong to the selected customer.'})
+            if vehicle.policy_id:
+                raise serializers.ValidationError({'policy_terms': 'Vehicle is already insured by a policy.'})
+            terms['vehicle'] = vehicle.pk
+        if attrs['policy_type'].startswith('auto_') and not vehicle_id:
+            raise serializers.ValidationError({'policy_terms': 'Choose a vehicle for an auto policy.'})
+        return attrs
+
+
+class PolicyApplicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PolicyApplication
+        fields = [
+            'id', 'customer', 'policy_type', 'applicant_details', 'asset_details', 'risk_factors',
+            'asset_value', 'coverage_limit', 'deductible', 'risk_score', 'quoted_premium',
+            'rating_breakdown', 'policy_terms', 'status', 'bound_policy', 'created_at',
+        ]
+        read_only_fields = fields
+
+
+class PolicyEndorsementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PolicyEndorsement
+        fields = [
+            'id', 'policy', 'change_type', 'proposed_changes', 'premium_delta', 'before_snapshot',
+            'after_snapshot', 'status', 'created_by', 'reviewed_by', 'created_at', 'reviewed_at',
+        ]
+        read_only_fields = fields
+
+
+class PolicyEndorsementCreateSerializer(serializers.Serializer):
+    change_type = serializers.CharField(max_length=40)
+    coverage = serializers.DictField(required=False)
+    deductible = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0, required=False)
+    premium_delta = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, default=0)
+    assets_add = serializers.ListField(child=serializers.DictField(), required=False)
+
+    def validate(self, attrs):
+        if not any(key in attrs for key in ('coverage', 'deductible', 'assets_add')):
+            raise serializers.ValidationError('Provide coverage, deductible, or assets_add changes.')
+        for asset in attrs.get('assets_add', []):
+            if not asset.get('description') or Decimal(str(asset.get('value', 0))) <= 0:
+                raise serializers.ValidationError({'assets_add': 'Each asset needs a description and positive value.'})
         return attrs

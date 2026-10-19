@@ -1,7 +1,10 @@
+import json
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from django.core.serializers.json import DjangoJSONEncoder
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -17,6 +20,11 @@ from ml_service import (
     MLModelUnavailable,
 )
 from common.permissions import IsStaffMember
+
+
+def json_safe(value):
+    """Convert Python date/time and other Django-supported values to JSON types."""
+    return json.loads(json.dumps(value, cls=DjangoJSONEncoder))
 
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses=ClaimAssessmentSerializer)
@@ -285,6 +293,8 @@ def run_agent(request, agent_type):
                 'automated_approval': False,
             }
         
+        # Keep JSONField data free of Python-only types such as datetime.
+        output_data = json_safe(output_data)
         agent_output.output_data = output_data
         agent_output.status = 'completed'
         agent_output.confidence = None
@@ -296,10 +306,12 @@ def run_agent(request, agent_type):
             claim=claim,
             defaults={'rl_recommendation': {'available': False, 'reason': 'No reinforcement-learning optimizer is configured.'}},
         )
-        decision_flow.agents = list(claim.agent_outputs.order_by('created_at').values(
+        agent_history = list(claim.agent_outputs.order_by('created_at').values(
             'agent_type', 'status', 'input_data', 'output_data', 'confidence',
             'processing_time_seconds', 'error_message', 'created_at', 'completed_at',
         ))
+        # The snapshot is stored in a JSONField; normalize values recursively.
+        decision_flow.agents = json_safe(agent_history)
         if agent_type == 'decision_agent':
             decision_flow.final_decision = output_data
             decision_flow.decided_by = 'Rules-based review recommendation'

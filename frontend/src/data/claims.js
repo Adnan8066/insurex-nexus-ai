@@ -28,7 +28,6 @@ export const mockClaims = [
     updatedAt: '2024-02-16T09:30:00Z',
     assignedAdjuster: 'Sarah Mitchell',
     assignedInvestigator: null,
-    assignedRepairShop: null,
     documents: [
       { id: 1, name: 'Police Report', type: 'police-report', url: '#', uploadedAt: '2024-02-15T17:00:00Z' },
       { id: 2, name: 'Photos - Damage', type: 'photos', url: '#', uploadedAt: '2024-02-15T17:05:00Z' },
@@ -82,7 +81,6 @@ export const mockClaims = [
     updatedAt: '2024-01-21T14:20:00Z',
     assignedAdjuster: 'Sarah Mitchell',
     assignedInvestigator: null,
-    assignedRepairShop: null,
     documents: [
       { id: 5, name: 'Photos - Hail Damage', type: 'photos', url: '#', uploadedAt: '2024-01-20T10:30:00Z' },
       { id: 6, name: 'Weather Report', type: 'weather', url: '#', uploadedAt: '2024-01-20T11:00:00Z' },
@@ -134,7 +132,6 @@ export const mockClaims = [
     updatedAt: '2023-12-05T16:00:00Z',
     assignedAdjuster: 'Michael Chen',
     assignedInvestigator: null,
-    assignedRepairShop: 'AutoFix Repair',
     documents: [
       { id: 8, name: 'Photos - Tree Damage', type: 'photos', url: '#', uploadedAt: '2023-11-20T21:30:00Z' },
       { id: 9, name: 'Repair Invoice', type: 'invoice', url: '#', uploadedAt: '2023-12-01T10:00:00Z' },
@@ -143,8 +140,8 @@ export const mockClaims = [
     timeline: [
       { id: 7, status: 'submitted', title: 'Claim Submitted', description: 'Claim submitted by customer', timestamp: '2023-11-20T21:00:00Z', user: 'John Anderson' },
       { id: 8, status: 'under-review', title: 'Under Review', description: 'Assigned to adjuster', timestamp: '2023-11-21T09:00:00Z', user: 'System' },
-      { id: 9, status: 'approved', title: 'Approved', description: 'Claim approved for $1,500', timestamp: '2023-11-25T11:00:00Z', user: 'Michael Chen' },
-      { id: 10, status: 'repair-settlement', title: 'Repair Completed', description: 'Vehicle repaired at AutoFix Repair', timestamp: '2023-11-30T15:00:00Z', user: 'AutoFix Repair' },
+      { id: 9, status: 'approved', title: 'Approved', description: 'Claim approved for ₹1,500', timestamp: '2023-11-25T11:00:00Z', user: 'Michael Chen' },
+      { id: 10, status: 'repair-settlement', title: 'Settlement Review', description: 'Repair costs reviewed for the settlement', timestamp: '2023-11-30T15:00:00Z', user: 'Claims Team' },
       { id: 11, status: 'closed', title: 'Claim Closed', description: 'Settlement processed and claim closed', timestamp: '2023-12-05T16:00:00Z', user: 'System' },
     ],
     aiAssessment: {
@@ -191,7 +188,6 @@ export const mockClaims = [
     updatedAt: '2023-08-15T10:00:00Z',
     assignedAdjuster: 'Sarah Mitchell',
     assignedInvestigator: 'Emily Rodriguez',
-    assignedRepairShop: 'AutoFix Repair',
     documents: [
       { id: 11, name: 'Police Report', type: 'police-report', url: '#', uploadedAt: '2023-06-10T18:30:00Z' },
       { id: 12, name: 'Medical Records', type: 'medical', url: '#', uploadedAt: '2023-06-11T09:00:00Z' },
@@ -202,7 +198,7 @@ export const mockClaims = [
       { id: 12, status: 'submitted', title: 'Claim Submitted', description: 'Claim submitted by customer', timestamp: '2023-06-10T18:00:00Z', user: 'John Anderson' },
       { id: 13, status: 'under-review', title: 'Under Review', description: 'Assigned to adjuster and investigator', timestamp: '2023-06-11T09:00:00Z', user: 'System' },
       { id: 14, status: 'investigation', title: 'Investigation Started', description: 'Investigator Emily Rodriguez assigned', timestamp: '2023-06-12T10:00:00Z', user: 'Emily Rodriguez' },
-      { id: 15, status: 'approved', title: 'Approved', description: 'Total loss approved - $45,000 settlement', timestamp: '2023-07-01T14:00:00Z', user: 'Sarah Mitchell' },
+      { id: 15, status: 'approved', title: 'Approved', description: 'Total loss approved - ₹45,000 settlement', timestamp: '2023-07-01T14:00:00Z', user: 'Sarah Mitchell' },
       { id: 16, status: 'closed', title: 'Claim Closed', description: 'Settlement paid and claim closed', timestamp: '2023-08-15T10:00:00Z', user: 'System' },
     ],
     aiAssessment: {
@@ -248,7 +244,6 @@ export const mockClaims = [
     updatedAt: '2024-02-12T09:15:00Z',
     assignedAdjuster: 'Sarah Mitchell',
     assignedInvestigator: 'Emily Rodriguez',
-    assignedRepairShop: null,
     documents: [
       { id: 15, name: 'Photos - Damage', type: 'photos', url: '#', uploadedAt: '2024-02-10T11:00:00Z' },
       { id: 16, name: 'Repair Estimate', type: 'estimate', url: '#', uploadedAt: '2024-02-11T14:00:00Z' },
@@ -301,7 +296,6 @@ export const mockClaims = [
     updatedAt: '2024-02-09T16:45:00Z',
     assignedAdjuster: 'Michael Chen',
     assignedInvestigator: 'David Park',
-    assignedRepairShop: null,
     documents: [
       { id: 17, name: 'Police Report', type: 'police-report', url: '#', uploadedAt: '2024-02-08T18:30:00Z' },
       { id: 18, name: 'Photos - Damage', type: 'photos', url: '#', uploadedAt: '2024-02-08T19:00:00Z' },
@@ -320,7 +314,7 @@ export const mockClaims = [
       confidence: 71,
       factors: [
         { factor: 'Delayed reporting', impact: 'negative', weight: 0.25 },
-        { factor: 'Repair shop referral pattern', impact: 'negative', weight: 0.2 },
+        { factor: 'Estimate inconsistency', impact: 'negative', weight: 0.2 },
         { factor: 'Pre-existing damage indicators', impact: 'negative', weight: 0.15 },
         { factor: 'Hit and run', impact: 'neutral', weight: 0.2 },
         { factor: 'Police report available', impact: 'positive', weight: 0.2 },

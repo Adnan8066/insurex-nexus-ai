@@ -47,7 +47,6 @@ class ClaimSerializer(serializers.ModelSerializer):
     vehicle_info = serializers.SerializerMethodField()
     assigned_adjuster_name = serializers.CharField(source='assigned_adjuster.get_full_name', read_only=True)
     assigned_investigator_name = serializers.CharField(source='assigned_investigator.get_full_name', read_only=True)
-    assigned_repair_shop_name = serializers.CharField(source='assigned_repair_shop.name', read_only=True)
     documents = ClaimDocumentSerializer(many=True, read_only=True)
     status_history = ClaimStatusHistorySerializer(many=True, read_only=True)
     timeline = ClaimTimelineSerializer(many=True, read_only=True)
@@ -63,14 +62,14 @@ class ClaimSerializer(serializers.ModelSerializer):
             'injuries', 'injury_details', 'property_damage', 'property_damage_details',
             'witnesses', 'witness_details', 'police_report', 'police_report_number',
             'claim_amount', 'description', 'status', 'priority',
+            'estimated_repair_cost', 'complexity_score',
             'assigned_adjuster', 'assigned_adjuster_name',
             'assigned_investigator', 'assigned_investigator_name',
-            'assigned_repair_shop', 'assigned_repair_shop_name',
             'ai_assessment', 'fraud_risk_score', 'total_loss_probability',
             'submitted_at', 'updated_at', 'closed_at',
             'documents', 'status_history', 'timeline', 'notes'
         ]
-        read_only_fields = ['id', 'claim_number', 'submitted_at', 'updated_at', 'closed_at']
+        read_only_fields = ['id', 'claim_number', 'submitted_at', 'updated_at', 'closed_at', 'complexity_score']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -102,7 +101,7 @@ class ClaimCreateSerializer(serializers.ModelSerializer):
             'incident_type', 'incident_severity', 'location', 'latitude', 'longitude',
             'number_of_vehicles', 'injuries', 'injury_details', 'property_damage',
             'property_damage_details', 'witnesses', 'witness_details', 'police_report',
-            'police_report_number', 'claim_amount', 'description'
+            'police_report_number', 'claim_amount', 'estimated_repair_cost', 'description'
         ]
     
     def validate(self, attrs):
@@ -133,8 +132,9 @@ class ClaimUpdateSerializer(serializers.ModelSerializer):
             'number_of_vehicles', 'injuries', 'injury_details', 'property_damage',
             'property_damage_details', 'witnesses', 'witness_details', 'police_report',
             'police_report_number', 'claim_amount', 'description',
+            'estimated_repair_cost',
             'status', 'priority', 'assigned_adjuster', 'assigned_investigator',
-            'assigned_repair_shop', 'ai_assessment', 'fraud_risk_score', 'total_loss_probability'
+            'ai_assessment', 'fraud_risk_score', 'total_loss_probability'
         ]
 
     def validate(self, attrs):
@@ -142,7 +142,7 @@ class ClaimUpdateSerializer(serializers.ModelSerializer):
         if request and request.user.role == 'customer':
             protected_fields = {
                 'status', 'priority', 'assigned_adjuster', 'assigned_investigator',
-                'assigned_repair_shop', 'ai_assessment', 'fraud_risk_score',
+                'ai_assessment', 'fraud_risk_score',
                 'total_loss_probability',
             }
             attempted = protected_fields.intersection(self.initial_data.keys())

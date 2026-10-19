@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   Briefcase,
@@ -67,7 +67,7 @@ export function ClaimList() {
   const [deleteError, setDeleteError] = useState('')
   const [error, setError] = useState('')
 
-  const fetchClaims = async () => {
+  const fetchClaims = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -105,7 +105,6 @@ export function ClaimList() {
         priority: c.priority,
         assignedAdjuster: c.assigned_adjuster_name,
         assignedInvestigator: c.assigned_investigator_name,
-        assignedRepairShop: c.assigned_repair_shop_name,
         aiAssessment: c.ai_assessment ? {
           ...c.ai_assessment,
           claimPriority: c.ai_assessment.priority || c.ai_assessment.claim_priority,
@@ -125,11 +124,11 @@ export function ClaimList() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [canViewAI])
 
   useEffect(() => {
     fetchClaims()
-  }, [])
+  }, [fetchClaims])
 
   useEffect(() => {
     let result = [...claims]
@@ -229,12 +228,7 @@ export function ClaimList() {
           <p className="page-subtitle">Track, review, and manage all auto insurance claims across their full lifecycle</p>
         </div>
         <div className="flex gap-2">
-          {canSubmitClaim && <Link to="/claims/new">
-            <Button variant="primary">
-              <Plus className="w-4 h-4 mr-2" />
-              Submit Claim
-            </Button>
-          </Link>}
+          {canSubmitClaim && <Button asChild variant="primary"><Link to="/claims/new"><Plus className="w-4 h-4 mr-2" />Submit Claim</Link></Button>}
         </div>
       </div>
 

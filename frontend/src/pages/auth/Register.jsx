@@ -4,6 +4,7 @@ import { Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
+import { AuthLayout } from '../../components/auth/BrandArtwork'
 
 export function Register() {
   const navigate = useNavigate()
@@ -56,11 +57,11 @@ export function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <AuthLayout mode="register">
+      <div className="w-full max-w-md space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-9">
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-3 mb-8">
-            <img src="/insurex-nexus-ai-logo.jpg" alt="" className="w-12 h-12 rounded-xl object-cover" />
+            <img src="/insurex-nexus-ai-logo.jpg" alt="InsureX Nexus AI logo" className="w-12 h-12 rounded-xl object-cover" />
             <span className="text-2xl font-bold text-gray-900">InsureX Nexus AI</span>
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">Create an account</h1>
@@ -177,7 +178,7 @@ export function Register() {
           </p>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   )
 }
 

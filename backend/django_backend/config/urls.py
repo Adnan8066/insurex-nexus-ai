@@ -2,10 +2,17 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
 from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
+
+def health_check(request):
+    return JsonResponse({'status': 'ok'})
+
+
 urlpatterns = [
+    path('api/health/', health_check, name='health'),
     path('', RedirectView.as_view(url='/api/v1/schema/swagger-ui/', permanent=False), name='home'),
     path('admin/', admin.site.urls),
     
@@ -22,7 +29,6 @@ urlpatterns = [
     path('api/v1/claims/', include('apps.claims.urls')),
     path('api/v1/assessments/', include('apps.assessments.urls')),
     path('api/v1/investigations/', include('apps.investigations.urls')),
-    path('api/v1/repair-shops/', include('apps.repair_shops.urls')),
     path('api/v1/settlements/', include('apps.settlements.urls')),
     path('api/v1/notifications/', include('apps.notifications.urls')),
     path('api/v1/analytics/', include('apps.analytics.urls')),

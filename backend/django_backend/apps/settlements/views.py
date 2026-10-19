@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 from django.utils import timezone
 import uuid
 
@@ -15,6 +16,7 @@ from .serializers import (
     SettlementApproveSerializer, SettlementPaySerializer,
     SettlementTimelineSerializer, SettlementPaymentSerializer
 )
+from apps.claims.models import ClaimStatus, ClaimStatusHistory, ClaimTimeline
 from common.permissions import IsStaffMember
 
 
@@ -50,16 +52,25 @@ class SettlementViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         settlement_number = f"SET-{uuid.uuid4().hex[:8].upper()}"
+        claim = serializer.validated_data['claim']
+        from .services.payout import calculate_payout_for_claim
+        payout = calculate_payout_for_claim(claim, serializer.validated_data['estimated_amount'])
         settlement = serializer.save(
             settlement_number=settlement_number,
-            customer=serializer.validated_data['claim'].customer,
+            customer=claim.customer,
+            deductible=payout.deductible,
+            approved_amount=payout.payout,
+            depreciation_amount=payout.depreciation,
+            asset_age_years=payout.asset_age_years,
+            zero_depreciation_applied=payout.zero_depreciation_applied,
+            payout_calculation=payout.as_dict(),
         )
         
         SettlementTimeline.objects.create(
             settlement=settlement,
             status=settlement.status,
             title='Settlement Calculated',
-            description=f'Settlement calculated with estimated amount: ${settlement.estimated_amount}',
+            description=f'Settlement calculated with estimated amount: ₹{settlement.estimated_amount:,.2f}',
             user=self.request.user,
             metadata={'estimated_amount': str(settlement.estimated_amount)}
         )
@@ -77,23 +88,45 @@ class SettlementViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Only calculated settlements can be approved.'}, status=status.HTTP_409_CONFLICT)
         serializer = SettlementApproveSerializer(data=request.data)
         if serializer.is_valid():
-            settlement.approved_amount = serializer.validated_data['approved_amount']
-            settlement.status = SettlementStatus.APPROVED
-            settlement.approved_by = request.user
-            settlement.approved_at = timezone.now()
-            settlement.notes = serializer.validated_data.get('notes', settlement.notes)
-            settlement.save(update_fields=[
-                'approved_amount', 'status', 'approved_by', 'approved_at', 'notes'
-            ])
-            
-            SettlementTimeline.objects.create(
-                settlement=settlement,
-                status=settlement.status,
-                title='Settlement Approved',
-                description=f'Settlement approved for amount: ${settlement.approved_amount}',
-                user=request.user,
-                metadata={'approved_amount': str(settlement.approved_amount)}
-            )
+            with transaction.atomic():
+                settlement.approved_amount = serializer.validated_data['approved_amount']
+                settlement.status = SettlementStatus.APPROVED
+                settlement.approved_by = request.user
+                settlement.approved_at = timezone.now()
+                settlement.notes = serializer.validated_data.get('notes', settlement.notes)
+                settlement.save(update_fields=[
+                    'approved_amount', 'status', 'approved_by', 'approved_at', 'notes'
+                ])
+
+                SettlementTimeline.objects.create(
+                    settlement=settlement,
+                    status=settlement.status,
+                    title='Settlement Approved',
+                    description=f'Settlement approved for amount: ₹{settlement.approved_amount:,.2f}',
+                    user=request.user,
+                    metadata={'approved_amount': str(settlement.approved_amount)}
+                )
+
+                claim = settlement.claim
+                if claim.status == ClaimStatus.APPROVED:
+                    claim.status = ClaimStatus.REPAIR_SETTLEMENT
+                    claim.save(update_fields=['status', 'updated_at'])
+                    ClaimStatusHistory.objects.create(
+                        claim=claim,
+                        from_status=ClaimStatus.APPROVED,
+                        to_status=ClaimStatus.REPAIR_SETTLEMENT,
+                        reason=f'Settlement {settlement.settlement_number} approved.',
+                        changed_by=request.user,
+                        metadata={'settlement_id': settlement.id},
+                    )
+                    ClaimTimeline.objects.create(
+                        claim=claim,
+                        status=ClaimStatus.REPAIR_SETTLEMENT,
+                        title='Settlement Approved',
+                        description=f'Settlement {settlement.settlement_number} approved for ₹{settlement.approved_amount:,.2f}.',
+                        user=request.user,
+                        metadata={'settlement_id': settlement.id},
+                    )
             from apps.notifications.services import create_in_app_notification
             create_in_app_notification(
                 settlement.customer, 'settlement', 'Settlement approved',
@@ -168,7 +201,7 @@ class SettlementViewSet(viewsets.ModelViewSet):
                 settlement=settlement,
                 status=settlement.status,
                 title='Payment Initiated',
-                description=f'Payment of ${payment.amount} initiated via {payment.payment_method}',
+                description=f'Payment of ₹{payment.amount:,.2f} initiated via {payment.payment_method}',
                 user=request.user,
                 metadata={'payment_number': payment_number}
             )
@@ -215,7 +248,7 @@ class SettlementViewSet(viewsets.ModelViewSet):
             settlement=settlement,
             status=settlement.status,
             title='Payment Completed',
-            description=f'Payment of ${payment.amount} completed successfully',
+            description=f'Payment of ₹{payment.amount:,.2f} completed successfully',
             user=request.user,
             metadata={'payment_number': payment.payment_number}
         )

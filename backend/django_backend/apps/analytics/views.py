@@ -136,7 +136,6 @@ def dashboard_summary(request):
     from apps.investigations.models import FraudAlert
     from apps.customers.models import Customer
     from apps.vehicles.models import Vehicle, VehicleStatus
-    from apps.repair_shops.models import RepairShop, RepairShopStatus, RepairJob
     
     now = timezone.now()
     thirty_days_ago = now - timedelta(days=30)
@@ -181,11 +180,6 @@ def dashboard_summary(request):
         'vehicles': {
             'total': Vehicle.objects.count(),
             'active': Vehicle.objects.filter(status=VehicleStatus.ACTIVE).count(),
-        },
-        'repair_shops': {
-            'total': RepairShop.objects.count(),
-            'approved': RepairShop.objects.filter(status=RepairShopStatus.APPROVED).count(),
-            'active_jobs': RepairJob.objects.exclude(status__in=['completed', 'delivered', 'cancelled']).count(),
         },
     }
     

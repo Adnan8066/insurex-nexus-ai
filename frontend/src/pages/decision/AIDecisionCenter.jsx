@@ -38,7 +38,6 @@ const normalizeRL = (rl) => ({
   explanation: rl.explanation || rl.rationale || rl.reason || '',
   estimatedProcessingDays: Math.round(Number(rl.estimated_processing_days || rl.estimatedProcessingDays || 0)),
   recommendedAdjuster: rl.recommended_adjuster || rl.recommendedAdjuster || rl.adjuster || 'Auto-assigned',
-  recommendedRepairShop: rl.recommended_repair_shop || rl.recommendedRepairShop || rl.repair_shop || 'Network facility',
   investigatorRequired: Boolean(rl.investigator_required || rl.investigatorRequired || rl.siu_required),
 })
 
@@ -168,9 +167,7 @@ export function AIDecisionCenter() {
             <Play className={clsx('w-4 h-4 mr-2', isSimulating && 'animate-spin')} />
             {isSimulating ? 'Running Review Workflow...' : 'Run Claim Review'}
           </Button>
-          <Link to="/operations">
-            <Button variant="outline">AI Operations</Button>
-          </Link>
+          <Button asChild variant="outline"><Link to="/operations">AI Operations</Link></Button>
         </div>
       </div>
 
@@ -263,10 +260,8 @@ export function AIDecisionCenter() {
                 agents.map((agent) => {
                   const isSelected = selectedAgent?.id === agent.id
                   return (
-                    <button
+                    <div
                       key={agent.id}
-                      type="button"
-                      onClick={() => {}}
                       className={clsx(
                         'p-4 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between h-32',
                         isSelected
@@ -282,7 +277,7 @@ export function AIDecisionCenter() {
                         <span>{agent.confidence == null ? 'Confidence not calibrated' : `${agent.confidence}% conf`}</span>
                         <span className="font-mono">{agent.processingTime == null ? 'Time n/a' : `${agent.processingTime}s`}</span>
                       </div>
-                    </button>
+                    </div>
                   )
                 })
               ) : (

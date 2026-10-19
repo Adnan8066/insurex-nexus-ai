@@ -3,4 +3,4 @@ from django.apps import AppConfig
 class RepairShopsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'apps.repair_shops'
-    verbose_name = 'Repair Shops'
+    verbose_name = 'Retired repair workflow migrations'

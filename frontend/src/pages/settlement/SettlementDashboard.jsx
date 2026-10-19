@@ -53,6 +53,9 @@ export function SettlementDashboard() {
     customerEmail: s.customer_email,
     estimatedAmount: Number(s.estimated_amount) || 0,
     deductible: Number(s.deductible) || 0,
+    depreciationAmount: Number(s.depreciation_amount) || 0,
+    assetAgeYears: Number(s.asset_age_years) || 0,
+    zeroDepreciationApplied: Boolean(s.zero_depreciation_applied),
     approvedAmount: Number(s.approved_amount) || 0,
     status: s.status,
     paymentStatus: s.payment_status,
@@ -168,7 +171,7 @@ export function SettlementDashboard() {
         setError(err.response?.data?.detail || 'Could not load the claim policy deductible.')
       }
     }
-    const estimate = Number(claim?.ai_assessment?.predicted_repair_cost || claim?.claim_amount || 0)
+    const estimate = Number(claim?.estimated_repair_cost || claim?.ai_assessment?.predicted_repair_cost || claim?.claim_amount || 0)
     const deductible = Number(policy?.deductible || 0)
     setSettlementDraft({
       claim: claimId,
@@ -289,11 +292,7 @@ export function SettlementDashboard() {
             <Download className="w-4 h-4 mr-2" />
             Export Ledger
           </Button>
-          <Link to="/claims">
-            <Button variant="primary">
-              Browse Claims
-            </Button>
-          </Link>
+          <Button asChild variant="primary"><Link to="/claims">Browse Claims</Link></Button>
         </div>
       </div>
 
@@ -396,6 +395,7 @@ export function SettlementDashboard() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Estimated Amount</TableHead>
                   <TableHead>Deductible</TableHead>
+                  <TableHead>Depreciation</TableHead>
                   <TableHead>Approved Amount</TableHead>
                   <TableHead>Settlement Status</TableHead>
                   <TableHead>Payment Status</TableHead>
@@ -423,6 +423,9 @@ export function SettlementDashboard() {
                     </TableCell>
                     <TableCell className="text-red-600 font-medium">
                       -{formatCurrency(s.deductible)}
+                    </TableCell>
+                    <TableCell className="text-amber-700 font-medium">
+                      {s.zeroDepreciationApplied ? 'Waived (add-on)' : `-${formatCurrency(s.depreciationAmount)}`}
                     </TableCell>
                     <TableCell className="text-emerald-700 font-extrabold text-base">
                       {formatCurrency(s.approvedAmount)}

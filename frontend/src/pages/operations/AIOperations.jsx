@@ -6,7 +6,6 @@ import {
   Activity,
   Sparkles,
   UserCheck,
-  Wrench,
   Clock,
   TrendingUp,
   AlertCircle,
@@ -19,7 +18,6 @@ import {
   assessmentService,
   claimService,
   investigationService,
-  repairService,
 } from '../../services'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
@@ -32,7 +30,6 @@ export function AIOperations() {
   const [assessments, setAssessments] = useState([])
   const [claims, setClaims] = useState([])
   const [fraudAlerts, setFraudAlerts] = useState([])
-  const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -46,7 +43,6 @@ export function AIOperations() {
         assessmentService.getAssessments(),
         claimService.getClaims(),
         investigationService.getFraudAlerts(),
-        repairService.getJobs(),
       ])
       const unwrap = (r) =>
         r.status === 'fulfilled'
@@ -78,7 +74,6 @@ export function AIOperations() {
       setAssessments(unwrap(results[2]))
       setClaims(unwrap(results[3]))
       setFraudAlerts(unwrap(results[4]))
-      setJobs(unwrap(results[5]))
     } catch (err) {
       console.error('Failed to load AI operations data:', err)
       setError(err.message || 'Failed to load AI operations data.')
@@ -127,19 +122,7 @@ export function AIOperations() {
       reason: f.ai_recommendation || 'Matched based on fraud risk profile and SIU specialty.',
     }))
 
-  // Module 3: Repair Shop Recommendation (repair jobs)
-  const shopRecommendations = jobs
-    .filter((j) => j.repair_shop_name)
-    .slice(0, 6)
-    .map((j) => ({
-      claimId: j.claim,
-      claimNumber: j.claim_number,
-      matchScore: j.quality_score ? Math.round(Number(j.quality_score)) : 85,
-      recommendedShop: j.repair_shop_name,
-      reason: `Assigned for ${j.repair_stage || 'repair'} — estimated ${j.estimated_cost ? `$${Number(j.estimated_cost).toLocaleString()}` : 'N/A'}.`,
-    }))
-
-  // Module 4: Processing Time Estimates (assessments with repair_time_estimate_days)
+  // Module 3: Processing Time Estimates (assessments with repair_time_estimate_days)
   const processingEstimates = assessments
     .filter((a) => a.repair_time_estimate_days != null)
     .slice(0, 6)
@@ -186,7 +169,7 @@ export function AIOperations() {
           </div>
           <h1 className="page-title">AI Operations Console</h1>
           <p className="page-subtitle">
-            Current model availability, assessments, fraud reviews, and repair workflow activity
+            Current model availability, assessments, and fraud reviews
           </p>
         </div>
 
@@ -195,9 +178,7 @@ export function AIOperations() {
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh Data
           </Button>
-          <Link to="/ai-decision">
-            <Button variant="outline">Decision Center</Button>
-          </Link>
+          <Button asChild variant="outline"><Link to="/ai-decision">Decision Center</Link></Button>
         </div>
       </div>
 
@@ -331,40 +312,7 @@ export function AIOperations() {
           </CardContent>
         </Card>
 
-        {/* Module 3: Repair Shop Recommendation */}
-        <Card>
-          <CardHeader
-            title="3. Repair Shop Recommendation"
-            subtitle="OEM certified capacity and historical turnaround optimization"
-          />
-          <CardContent className="p-6">
-            <div className="space-y-3">
-              {shopRecommendations.length > 0 ? (
-                shopRecommendations.map((rs, idx) => (
-                  <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Link to={`/claims/${rs.claimId}`} className="font-mono font-bold text-primary hover:underline text-sm">
-                        {rs.claimNumber}
-                      </Link>
-                      <span className="font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full text-xs">
-                        {rs.matchScore}% Optimal Fit
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                      <Wrench className="w-4 h-4 text-primary" />
-                      Recommended: {rs.recommendedShop}
-                    </div>
-                    <p className="text-xs text-gray-600">{rs.reason}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-gray-400">No repair shop assignments on record.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Module 4: Estimated Processing Time */}
+        {/* Module 3: Estimated Processing Time */}
         <Card>
           <CardHeader
             title="4. Estimated Processing Time Predictions"

@@ -8,7 +8,6 @@ import {
   Brain,
   AlertTriangle,
   Users,
-  Wrench,
   Gavel,
   GitBranch,
   BarChart3,
@@ -20,19 +19,19 @@ import {
 import { useAuth } from '../../context/useAuth'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['customer', 'employee', 'investigator', 'repair', 'admin'] },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['customer', 'employee', 'investigator', 'admin'] },
   { name: 'Policies', href: '/policies', icon: FileText, roles: ['customer', 'employee', 'admin'] },
   { name: 'User Management', href: '/admin/users', icon: Users, roles: ['admin'] },
   { name: 'Vehicles', href: '/vehicles', icon: Car, roles: ['customer', 'employee', 'admin'] },
   { name: 'Claims', href: '/claims', icon: Briefcase, roles: ['customer', 'employee', 'investigator', 'admin'] },
   { name: 'AI Assessment', href: '/ai-assessment', icon: Brain, roles: ['employee', 'investigator', 'admin'] },
+  { name: 'Routing Advice', href: '/routing-advisory', icon: GitBranch, roles: ['employee', 'investigator', 'admin'] },
   { name: 'Fraud Investigation', href: '/fraud', icon: AlertTriangle, roles: ['employee', 'investigator', 'admin'] },
   { name: 'Investigators', href: '/investigators', icon: Users, roles: ['employee', 'admin'] },
-  { name: 'Repair Shops', href: '/repair-shops', icon: Wrench, roles: ['employee', 'repair', 'admin'] },
   { name: 'Settlements', href: '/settlements', icon: Gavel, roles: ['employee', 'admin'] },
   { name: 'AI Decision Center', href: '/ai-decision', icon: GitBranch, roles: ['employee', 'admin'] },
   { name: 'Analytics', href: '/analytics', icon: BarChart3, roles: ['employee', 'admin'] },
-  { name: 'Notifications', href: '/notifications', icon: Bell, roles: ['customer', 'employee', 'investigator', 'repair', 'admin'] },
+  { name: 'Notifications', href: '/notifications', icon: Bell, roles: ['customer', 'employee', 'investigator', 'admin'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },
 ]
 
@@ -56,7 +55,7 @@ export function Sidebar({ collapsed, onToggle }) {
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
         {!collapsed && (
           <div className="flex items-center gap-3">
-            <img src="/insurex-nexus-ai-logo.jpg" alt="" className="w-8 h-8 rounded-lg object-cover" />
+            <img src="/insurex-nexus-ai-logo.jpg" alt="InsureX Nexus AI logo" className="w-8 h-8 rounded-lg object-cover" />
             <span className="font-bold text-lg text-gray-900">InsureX Nexus AI</span>
           </div>
         )}

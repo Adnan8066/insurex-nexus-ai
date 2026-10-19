@@ -37,22 +37,9 @@ class CanIssuePolicy(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role in ['customer', 'employee', 'admin']
 
-class CanManageRepairJob(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role in ['employee', 'admin', 'repair']
-
-    def has_object_permission(self, request, view, obj):
-        if request.user.role in ['employee', 'admin']:
-            return True
-        return request.user.role == 'repair' and obj.repair_shop.email.casefold() == request.user.email.casefold()
-
 class IsInvestigator(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role in ['investigator', 'admin']
-
-class IsRepairShop(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role in ['repair', 'admin']
 
 class IsAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -67,8 +54,6 @@ class CanAccessClaim(permissions.BasePermission):
             return obj.customer_id == user.id
         if user.role in ['employee', 'investigator']:
             return True
-        if user.role == 'repair':
-            return obj.assigned_repair_shop_id == user.repair_shop_id if hasattr(user, 'repair_shop_id') else False
         return False
 
 class CanAccessPolicy(permissions.BasePermission):

@@ -63,7 +63,7 @@ export const mockAIAssessments = {
     factors: [
       { factor: 'High severity', impact: 'negative', weight: 0.25, description: 'Major collision with structural damage' },
       { factor: 'Injuries involved', impact: 'negative', weight: 0.2, description: 'Hospitalization increases claim complexity' },
-      { factor: 'High claim amount', impact: 'negative', weight: 0.2, description: 'Claim exceeds $40K threshold for enhanced review' },
+      { factor: 'High claim amount', impact: 'negative', weight: 0.2, description: 'Claim exceeds ₹40,000 threshold for enhanced review' },
       { factor: 'Police report supports claim', impact: 'positive', weight: 0.2, description: 'Official report corroborates customer account' },
       { factor: 'Dashcam footage available', impact: 'positive', weight: 0.15, description: 'Video evidence eliminates liability dispute' },
     ],
@@ -98,12 +98,12 @@ export const mockFraudAnalysis = {
     networkAnalysis: {
       connectedEntities: 3,
       suspiciousConnections: 1,
-      details: 'One connected claim with same repair shop referral pattern',
+      details: 'One connected claim has a similar incident timeline',
     },
     aiRecommendation: 'Full investigation required - high probability of staged accident. Recommend SIU assignment and surveillance authorization.',
     modelVersion: 'fraud-detection-v3.1.0',
     analyzedAt: '2024-02-10T14:30:00Z',
-    investigatorNotes: 'Surveillance scheduled for 02/15. Repair shop under review.',
+    investigatorNotes: 'Surveillance scheduled for 02/15. Supporting documents are under review.',
   },
 }
 
@@ -142,7 +142,7 @@ export const mockDecisionFlow = {
         id: 'damage-agent',
         name: 'Damage Assessment Agent',
         status: 'completed',
-        input: { photos: 12, estimate: '$8,200', type: 'Collision' },
+        input: { photos: 12, estimate: '₹8,200', type: 'Collision' },
         output: { repairCost: 8200, totalLoss: false, repairDays: 5, partsAvailability: 'In stock' },
         confidence: 87,
         processingTime: 3.4,
@@ -171,7 +171,6 @@ export const mockDecisionFlow = {
       priority: 'Medium',
       estimatedProcessingDays: 7,
       recommendedAdjuster: 'Sarah Mitchell',
-      recommendedRepairShop: 'AutoFix Repair',
       investigatorRequired: false,
       optimizationScore: 88,
       explanation: 'Low fraud risk, clear liability, and complete documentation support streamlined processing. RL model predicts 94% customer satisfaction with standard workflow.',
@@ -195,11 +194,7 @@ export const mockRLOptimization = {
   ],
   investigatorAssignment: [
     { claimId: 'CLM-2024-001235', recommendedInvestigator: 'Emily Rodriguez', reason: 'Fraud specialist with 94% resolution rate on high-risk cases', matchScore: 96 },
-    { claimId: 'CLM-2024-001236', recommendedInvestigator: 'David Park', reason: 'Financial fraud expertise matches repair shop referral pattern', matchScore: 89 },
-  ],
-  repairShopRecommendation: [
-    { claimId: 'CLM-2024-001234', recommendedShop: 'AutoFix Repair', reason: 'OEM certified for Toyota, 4.8 rating, 7-day average turnaround', matchScore: 93 },
-    { claimId: 'CLM-2024-001230', recommendedShop: 'AutoFix Repair', reason: 'Certified for hail damage repair, capacity available', matchScore: 87 },
+    { claimId: 'CLM-2024-001236', recommendedInvestigator: 'David Park', reason: 'Financial fraud expertise matches the claim risk profile', matchScore: 89 },
   ],
   processingTimeEstimates: [
     { claimId: 'CLM-2024-001234', estimatedDays: 7, confidence: 91, factors: ['Complete docs', 'Low complexity', 'Shop capacity'] },

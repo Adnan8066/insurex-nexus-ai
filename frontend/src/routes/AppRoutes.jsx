@@ -4,6 +4,7 @@ import { useAuth } from '../context/useAuth'
 
 const Login = lazy(() => import('../pages/auth/Login').then((module) => ({ default: module.Login })))
 const Register = lazy(() => import('../pages/auth/Register').then((module) => ({ default: module.Register })))
+const LandingPage = lazy(() => import('../pages/auth/LandingPage').then((module) => ({ default: module.LandingPage })))
 const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword').then((module) => ({ default: module.ForgotPassword })))
 const MainLayout = lazy(() => import('../layouts/MainLayout').then((module) => ({ default: module.MainLayout })))
 const CustomerDashboard = lazy(() => import('../pages/dashboard/CustomerDashboard').then((module) => ({ default: module.CustomerDashboard })))
@@ -19,9 +20,9 @@ const ClaimDetails = lazy(() => import('../pages/claims/ClaimDetails').then((mod
 const SubmitClaim = lazy(() => import('../pages/claims/SubmitClaim').then((module) => ({ default: module.SubmitClaim })))
 const ClaimTracking = lazy(() => import('../pages/claims/ClaimTracking').then((module) => ({ default: module.ClaimTracking })))
 const AIAssessment = lazy(() => import('../pages/ai/AIAssessment').then((module) => ({ default: module.AIAssessment })))
+const RoutingAdvisory = lazy(() => import('../pages/ai/RoutingAdvisory').then((module) => ({ default: module.RoutingAdvisory })))
 const FraudDashboard = lazy(() => import('../pages/fraud/FraudDashboard').then((module) => ({ default: module.FraudDashboard })))
 const InvestigatorDashboard = lazy(() => import('../pages/investigator/InvestigatorDashboard').then((module) => ({ default: module.InvestigatorDashboard })))
-const RepairDashboard = lazy(() => import('../pages/repair/RepairDashboard').then((module) => ({ default: module.RepairDashboard })))
 const SettlementDashboard = lazy(() => import('../pages/settlement/SettlementDashboard').then((module) => ({ default: module.SettlementDashboard })))
 const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })))
 const UserManagement = lazy(() => import('../pages/admin/UserManagement').then((module) => ({ default: module.UserManagement })))
@@ -45,7 +46,6 @@ function RoleBasedDashboard() {
   if (user.role === 'employee') return <EmployeeDashboard />
   if (user.role === 'admin') return <AdminDashboard />
   if (user.role === 'investigator') return <InvestigatorDashboard />
-  if (user.role === 'repair') return <RepairDashboard />
   return <CustomerDashboard />
 }
 
@@ -53,12 +53,12 @@ export default function AppRoutes() {
   return (
     <Suspense fallback={<div className="p-8 text-center text-gray-500" role="status">Loading page…</div>}>
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
 
-      <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
+      <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
         <Route path="dashboard" element={<RoleBasedDashboard />} />
         <Route path="policies" element={<PolicyList />} />
         <Route path="policies/new" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
@@ -73,9 +73,9 @@ export default function AppRoutes() {
         <Route path="claims/new" element={<SubmitClaim />} />
         <Route path="claims/:id/tracking" element={<ClaimTracking />} />
         <Route path="ai-assessment" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIAssessment /></ProtectedRoute>} />
+        <Route path="routing-advisory" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><RoutingAdvisory /></ProtectedRoute>} />
         <Route path="fraud" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><FraudDashboard /></ProtectedRoute>} />
         <Route path="investigators" element={<InvestigatorDashboard />} />
-        <Route path="repair-shops" element={<RepairDashboard />} />
         <Route path="settlements" element={<ProtectedRoute roles={['employee', 'admin']}><SettlementDashboard /></ProtectedRoute>} />
         <Route path="analytics" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="admin/users" element={<ProtectedRoute roles={['admin']}><UserManagement /></ProtectedRoute>} />
@@ -87,7 +87,7 @@ export default function AppRoutes() {
       </Route>
 
       {/* Fallback route */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </Suspense>
   )

@@ -12,10 +12,10 @@ import {
   Shield,
   Brain,
   Download,
+  Upload,
   Activity,
   ChevronRight,
   UserCheck,
-  Building,
   Trash2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -71,8 +71,6 @@ const mapClaim = (c) => ({
   assignedAdjusterId: c.assigned_adjuster,
   assignedInvestigator: c.assigned_investigator_name,
   assignedInvestigatorId: c.assigned_investigator,
-  assignedRepairShop: c.assigned_repair_shop_name,
-  assignedRepairShopId: c.assigned_repair_shop,
   aiAssessment: c.ai_assessment ? {
     ...c.ai_assessment,
     predictedRepairCost: c.ai_assessment.predicted_repair_cost,
@@ -127,15 +125,20 @@ export function ClaimDetails() {
   const canViewAI = ['admin', 'employee', 'investigator'].includes(user?.role)
   const canManageAssignments = ['admin', 'employee'].includes(user?.role)
   const [claim, setClaim] = useState(null)
+  const lifecycleStatus = (claim?.status || '').replace(/_/g, '-')
   const [statusDraft, setStatusDraft] = useState('')
   const [savingStatus, setSavingStatus] = useState(false)
+  const [documentFile, setDocumentFile] = useState(null)
+  const [documentType, setDocumentType] = useState('photos')
+  const [uploadingDocument, setUploadingDocument] = useState(false)
+  const [documentError, setDocumentError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [assignmentOptions, setAssignmentOptions] = useState({ agents: [], investigators: [], repair_shops: [] })
-  const [assignmentForm, setAssignmentForm] = useState({ adjuster: '', investigator: '', repairShop: '' })
+  const [assignmentOptions, setAssignmentOptions] = useState({ agents: [], investigators: [] })
+  const [assignmentForm, setAssignmentForm] = useState({ adjuster: '', investigator: '' })
   const [savingAssignment, setSavingAssignment] = useState(false)
 
   const refreshClaim = async () => {
@@ -145,7 +148,6 @@ export function ClaimDetails() {
     setAssignmentForm({
       adjuster: String(result.assignedAdjusterId || ''),
       investigator: String(result.assignedInvestigatorId || ''),
-      repairShop: String(result.assignedRepairShopId || ''),
     })
   }
 
@@ -168,7 +170,7 @@ export function ClaimDetails() {
         if (!cancelled) {
           setClaim(res)
           setStatusDraft(res.status)
-          setAssignmentForm({ adjuster: String(res.assignedAdjusterId || ''), investigator: String(res.assignedInvestigatorId || ''), repairShop: String(res.assignedRepairShopId || '') })
+          setAssignmentForm({ adjuster: String(res.assignedAdjusterId || ''), investigator: String(res.assignedInvestigatorId || '') })
         }
       } catch (err) {
         if (!cancelled) {
@@ -189,7 +191,6 @@ export function ClaimDetails() {
     try {
       if (kind === 'adjuster') await claimService.assignAdjuster(id, Number(assignmentForm.adjuster))
       if (kind === 'investigator') await claimService.assignInvestigator(id, Number(assignmentForm.investigator))
-      if (kind === 'repairShop') await claimService.assignRepairShop(id, Number(assignmentForm.repairShop))
       await refreshClaim()
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.detail || 'Unable to update claim assignment.')
@@ -211,6 +212,37 @@ export function ClaimDetails() {
       setError(typeof message === 'string' ? message : 'Unable to update claim status.')
     } finally {
       setSavingStatus(false)
+    }
+  }
+
+  const uploadDocument = async () => {
+    if (!documentFile || !claim) return
+    if (documentFile.size > 25 * 1024 * 1024) {
+      setDocumentError('Choose a file that is 25 MB or smaller.')
+      return
+    }
+
+    setUploadingDocument(true)
+    setDocumentError('')
+    try {
+      const formData = new FormData()
+      formData.append('file', documentFile)
+      formData.append('document_type', documentType)
+      formData.append('original_name', documentFile.name)
+      formData.append('description', '')
+      await claimService.uploadClaimDocument(claim.id, formData)
+      await refreshClaim()
+      setDocumentFile(null)
+      const input = document.getElementById('claim-detail-document')
+      if (input) input.value = ''
+    } catch (err) {
+      const detail = err.response?.data?.detail || err.response?.data
+      const message = typeof detail === 'string'
+        ? detail
+        : Object.entries(detail || {}).map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(', ') : value}`).join('; ')
+      setDocumentError(message || 'The document could not be uploaded. Please try again.')
+    } finally {
+      setUploadingDocument(false)
     }
   }
 
@@ -296,18 +328,8 @@ export function ClaimDetails() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link to={`/claims/${claim.id}/tracking`}>
-            <Button variant="outline">
-              <Activity className="w-4 h-4 mr-2" />
-              Live Workflow Tracking
-            </Button>
-          </Link>
-          {canViewAI && <Link to={`/ai-assessment?claim=${claim.id}`}>
-            <Button variant="primary">
-              <Brain className="w-4 h-4 mr-2" />
-              AI Assessment Center
-            </Button>
-          </Link>}
+          <Button asChild variant="outline"><Link to={`/claims/${claim.id}/tracking`}><Activity className="w-4 h-4 mr-2" />Live Workflow Tracking</Link></Button>
+          {canViewAI && <Button asChild variant="primary"><Link to={`/ai-assessment?claim=${claim.id}`}><Brain className="w-4 h-4 mr-2" />AI Assessment Center</Link></Button>}
           <Button variant="ghost" onClick={() => setDeleteOpen(true)} className="text-red-600 hover:text-red-700">
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -437,7 +459,7 @@ export function ClaimDetails() {
               <Card>
                 <CardHeader title="Processing & Personnel" />
                 <CardContent className="p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div className="p-3 bg-gray-50 rounded-lg">
                       <span className="text-gray-500 block text-xs">Assigned Adjuster</span>
                       <span className="font-medium text-gray-900 flex items-center gap-1.5 mt-1">
@@ -452,20 +474,12 @@ export function ClaimDetails() {
                         {claim.assignedInvestigator || 'None Required'}
                       </span>
                     </div>
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <span className="text-gray-500 block text-xs">Repair Facility</span>
-                      <span className="font-medium text-gray-900 flex items-center gap-1.5 mt-1">
-                        <Building className="w-4 h-4 text-emerald-600" />
-                        {claim.assignedRepairShop || 'Pending Selection'}
-                      </span>
-                    </div>
                   </div>
                   {canManageAssignments && (
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-5">
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-5">
                       {[
                         { key: 'adjuster', label: 'Assign Adjuster', options: assignmentOptions.agents || [] },
                         { key: 'investigator', label: 'Assign Investigator', options: assignmentOptions.investigators || [] },
-                        { key: 'repairShop', label: 'Assign Repair Facility', options: (assignmentOptions.repair_shops || []).map((shop) => ({ id: shop.id, name: shop.name, email: shop.email })) },
                       ].map(({ key, label, options }) => (
                         <div key={key} className="space-y-2">
                           <Select label={label} value={assignmentForm[key]} onChange={(event) => setAssignmentForm((current) => ({ ...current, [key]: event.target.value }))} options={options.map((item) => ({ value: String(item.id), label: item.name || item.email }))} placeholder={`Select ${label.toLowerCase()}`} />
@@ -551,9 +565,7 @@ export function ClaimDetails() {
                 title="AI Assessment Summary"
                 subtitle="Machine Learning preliminary insights"
                 action={
-                  <Link to={`/ai-assessment?claim=${claim.id}`}>
-                    <Button variant="outline" size="sm">Full AI Center</Button>
-                  </Link>
+                  <Button asChild variant="outline" size="sm"><Link to={`/ai-assessment?claim=${claim.id}`}>Full AI Center</Link></Button>
                 }
               />
               <CardContent className="p-6">
@@ -614,6 +626,48 @@ export function ClaimDetails() {
             <Card>
               <CardHeader title="Attached Documents & Evidence" />
               <CardContent className="p-6">
+                <div className="mb-6 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4">
+                  <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                    <Select
+                      label="Document type"
+                      name="claimDocumentType"
+                      value={documentType}
+                      onChange={(event) => setDocumentType(event.target.value)}
+                      options={[
+                        { value: 'photos', label: 'Damage photos' },
+                        { value: 'estimate', label: 'Repair estimate' },
+                        { value: 'police_report', label: 'Police report' },
+                        { value: 'medical', label: 'Medical records' },
+                        { value: 'other', label: 'Other document' },
+                      ]}
+                    />
+                    <div>
+                      <label htmlFor="claim-detail-document" className="mb-1 block text-sm font-medium text-gray-700">Choose a file</label>
+                      <input
+                        id="claim-detail-document"
+                        type="file"
+                        accept="image/png,image/jpeg,application/pdf"
+                        className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:font-medium file:text-blue-700 hover:file:bg-blue-100"
+                        onChange={(event) => {
+                          setDocumentFile(event.target.files?.[0] || null)
+                          setDocumentError('')
+                        }}
+                      />
+                      <p className="mt-1 text-xs text-gray-500">PNG, JPG, or PDF up to 25 MB</p>
+                    </div>
+                    <Button
+                      variant="primary"
+                      onClick={uploadDocument}
+                      loading={uploadingDocument}
+                      disabled={!documentFile || uploadingDocument}
+                      leftIcon={<Upload className="h-4 w-4" />}
+                    >
+                      Upload
+                    </Button>
+                  </div>
+                  {documentFile && <p className="mt-2 text-sm text-gray-600">Selected: {documentFile.name}</p>}
+                  {documentError && <p className="mt-2 text-sm text-red-600" role="alert">{documentError}</p>}
+                </div>
                 {claim.documents && claim.documents.length > 0 ? (
                   <div className="space-y-3">
                     {claim.documents.map((doc) => (
@@ -687,7 +741,7 @@ export function ClaimDetails() {
             <CardContent className="p-6">
               <div className="space-y-2">
                 {claimStatusWorkflow.map((step) => {
-                  const isCurrent = step.id === claim.status
+                  const isCurrent = step.id === lifecycleStatus
                   return (
                     <div
                       key={step.id}
@@ -712,11 +766,7 @@ export function ClaimDetails() {
               </div>
 
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <Link to={`/claims/${claim.id}/tracking`} className="block">
-                  <Button variant="outline" className="w-full">
-                    View Live Tracking Details
-                  </Button>
-                </Link>
+                <Button asChild variant="outline" className="w-full"><Link to={`/claims/${claim.id}/tracking`}>View Live Tracking Details</Link></Button>
               </div>
             </CardContent>
           </Card>
@@ -731,18 +781,14 @@ export function ClaimDetails() {
               </div>
               <div className="flex justify-between py-1 border-b border-gray-100">
                 <span className="text-gray-500">Policy Deductible</span>
-                <span className="font-medium text-gray-900">$500.00</span>
+                <span className="font-medium text-gray-900">₹500</span>
               </div>
               <div className="flex justify-between py-1 border-b border-gray-100">
                 <span className="text-gray-500">Estimated Payout</span>
                 <span className="font-bold text-emerald-600">{formatCurrency(Math.max(0, claim.claimAmount - 500))}</span>
               </div>
               <div className="pt-2">
-                <Link to="/settlements">
-                  <Button variant="secondary" className="w-full text-xs">
-                    Open Settlement Dashboard
-                  </Button>
-                </Link>
+                <Button asChild variant="secondary" className="w-full text-xs"><Link to="/settlements">Open Settlement Dashboard</Link></Button>
               </div>
             </CardContent>
           </Card>

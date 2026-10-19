@@ -141,7 +141,7 @@ export function AIAssessment() {
     labels: ['Customer Estimate', 'AI Predicted Cost'],
     datasets: [
       {
-        label: 'Amount ($)',
+        label: 'Amount (INR)',
         data: [claimAmount, predictedRepairCost],
         backgroundColor: ['#94a3b8', '#1e3a5f'],
         borderRadius: 6,
@@ -350,12 +350,8 @@ export function AIAssessment() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Link to="/ai-decision">
-                  <Button variant="outline">Inspect Decision Flow</Button>
-                </Link>
-                <Link to="/fraud">
-                  <Button variant="secondary">Fraud Center</Button>
-                </Link>
+                <Button asChild variant="outline"><Link to="/ai-decision">Inspect Decision Flow</Link></Button>
+                <Button asChild variant="secondary"><Link to="/fraud">Fraud Center</Link></Button>
               </div>
             </div>
           </div>

@@ -16,7 +16,11 @@ if not SECRET_KEY:
         raise ImproperlyConfigured('SECRET_KEY must be set when DEBUG=False.')
     SECRET_KEY = 'django-insecure-local-development-only-key'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
+    if host.strip()
+]
 
 SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', str(not DEBUG)).lower() == 'true'
 SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
@@ -140,6 +144,14 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
+# Demonstration factors only; configure approved product-specific rates before
+# using these calculations for actual insurance contracts or claim decisions.
+POLICY_BASE_ANNUAL_RATE = os.environ.get('POLICY_BASE_ANNUAL_RATE', '0.025')
+POLICY_DEDUCTIBLE_CREDIT_RATE = os.environ.get('POLICY_DEDUCTIBLE_CREDIT_RATE', '0.20')
+POLICY_RATING_VERSION = os.environ.get('POLICY_RATING_VERSION', 'demo-v1')
+CLAIM_ANNUAL_DEPRECIATION_RATE = os.environ.get('CLAIM_ANNUAL_DEPRECIATION_RATE', '0.05')
+CLAIM_MAX_DEPRECIATION_RATE = os.environ.get('CLAIM_MAX_DEPRECIATION_RATE', '0.80')
+
 STATIC_URL = '/static/'
 STATIC_ROOT = os.environ.get('STATIC_ROOT', BASE_DIR / 'staticfiles')
 if DEBUG:
@@ -205,10 +217,14 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000',
-).split(',')
+CORS_ALLOWED_ORIGINS = [
+    origin.strip().rstrip('/')
+    for origin in os.environ.get(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000',
+    ).split(',')
+    if origin.strip()
+]
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
@@ -228,7 +244,6 @@ SPECTACULAR_SETTINGS = {
         'ClaimPriorityEnum': 'apps.claims.models.ClaimPriority.choices',
         'PolicyStatusEnum': 'apps.policies.models.PolicyStatus.choices',
         'VehicleStatusEnum': 'apps.vehicles.models.VehicleStatus.choices',
-        'RepairShopStatusEnum': 'apps.repair_shops.models.RepairShopStatus.choices',
         'SettlementStatusEnum': 'apps.settlements.models.SettlementStatus.choices',
         'PaymentStatusEnum': 'apps.settlements.models.PaymentStatus.choices',
         'AssessmentStatusEnum': 'apps.assessments.models.AssessmentStatus.choices',
@@ -236,7 +251,6 @@ SPECTACULAR_SETTINGS = {
         'NotificationPriorityEnum': 'apps.notifications.models.NotificationPriority.choices',
         'AgentOutputStatusEnum': 'apps.assessments.models.AGENT_OUTPUT_STATUS_CHOICES',
         'FraudAlertStatusEnum': 'apps.investigations.models.FRAUD_ALERT_STATUS_CHOICES',
-        'RepairJobStatusEnum': 'apps.repair_shops.models.RepairJob.JOB_STATUS_CHOICES',
     },
     'SCHEMA_PATH_PREFIX': '/api/v1/',
     'TAGS': [
@@ -247,7 +261,6 @@ SPECTACULAR_SETTINGS = {
         {'name': 'Claims', 'description': 'Insurance claim management'},
         {'name': 'Assessments', 'description': 'AI claim assessments'},
         {'name': 'Investigations', 'description': 'SIU investigations'},
-        {'name': 'Repair Shops', 'description': 'Repair shop network'},
         {'name': 'Settlements', 'description': 'Claim settlements and payments'},
         {'name': 'Notifications', 'description': 'User notifications'},
         {'name': 'Analytics', 'description': 'Dashboard analytics'},

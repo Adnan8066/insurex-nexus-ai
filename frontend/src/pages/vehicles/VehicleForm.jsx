@@ -207,7 +207,7 @@ export function VehicleForm() {
         </section>
 
         <div className="flex justify-end gap-3">
-          <Link to="/vehicles"><Button type="button" variant="ghost">Cancel</Button></Link>
+          <Button asChild variant="ghost"><Link to="/vehicles">Cancel</Link></Button>
           <Button type="submit" disabled={loading || (canAssignCustomer && !formData.customer)}><Save className="mr-2 h-4 w-4" />{loading ? 'Saving…' : 'Save Vehicle'}</Button>
         </div>
       </form>

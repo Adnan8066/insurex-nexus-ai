@@ -37,6 +37,10 @@ class Settlement(models.Model):
     )
     estimated_amount = models.DecimalField(_('estimated amount'), max_digits=12, decimal_places=2)
     deductible = models.DecimalField(_('deductible'), max_digits=12, decimal_places=2)
+    depreciation_amount = models.DecimalField(_('depreciation amount'), max_digits=12, decimal_places=2, default=0)
+    asset_age_years = models.PositiveSmallIntegerField(_('asset age in years'), default=0)
+    zero_depreciation_applied = models.BooleanField(_('zero depreciation applied'), default=False)
+    payout_calculation = models.JSONField(_('payout calculation audit'), default=dict, blank=True)
     approved_amount = models.DecimalField(_('approved amount'), max_digits=12, decimal_places=2)
     status = models.CharField(
         _('status'),

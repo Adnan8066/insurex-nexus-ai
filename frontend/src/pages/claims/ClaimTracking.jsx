@@ -59,8 +59,8 @@ const workflowStages = [
   {
     id: 'repair-settlement',
     name: '6. Repair & Settlement',
-    desc: 'Certified repair shop dispatch and electronic deductible settlement.',
-    role: 'Repair Facility & Finance',
+    desc: 'Claim repair cost review and settlement processing.',
+    role: 'Claims & Finance',
   },
   {
     id: 'closed',
@@ -98,7 +98,6 @@ export function ClaimTracking() {
             submittedAt: res.submitted_at,
             assignedAdjuster: res.assigned_adjuster_name,
             assignedInvestigator: res.assigned_investigator_name,
-            assignedRepairShop: res.assigned_repair_shop_name,
             aiAssessment: res.ai_assessment,
             timeline: res.timeline || [],
             statusHistory: res.status_history || [],
@@ -175,15 +174,8 @@ export function ClaimTracking() {
         </div>
 
         <div className="flex gap-2">
-          <Link to={`/claims/${claim.id}`}>
-            <Button variant="secondary">View Full Details</Button>
-          </Link>
-          {canViewAI && <Link to="/ai-decision">
-            <Button variant="primary">
-              <Brain className="w-4 h-4 mr-2" />
-              AI Decision Center
-            </Button>
-          </Link>}
+          <Button asChild variant="secondary"><Link to={`/claims/${claim.id}`}>View Full Details</Link></Button>
+          {canViewAI && <Button asChild variant="primary"><Link to="/ai-decision"><Brain className="w-4 h-4 mr-2" />AI Decision Center</Link></Button>}
         </div>
       </div>
 
@@ -316,7 +308,6 @@ export function ClaimTracking() {
                         {stage.id === 'under-review' && 'Adjuster Sarah Mitchell reviewing submitted documentation.'}
                         {stage.id === 'investigation' && 'Investigator assigned to review conflicting timeline notes.'}
                         {stage.id === 'approved' && 'Finance team preparing digital settlement agreement.'}
-                        {stage.id === 'repair-settlement' && 'AutoFix Repair facility performing scheduled body repair work.'}
                         {stage.id === 'submitted' && 'Intake queue validating initial police report and photos.'}
                         {stage.id === 'closed' && 'Claim archive completed.'}
                       </span>

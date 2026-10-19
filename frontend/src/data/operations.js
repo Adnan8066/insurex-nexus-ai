@@ -52,57 +52,6 @@ export const mockInvestigators = [
   },
 ]
 
-export const mockRepairShops = [
-  {
-    id: 1,
-    name: 'AutoFix Repair',
-    email: 'contact@autofix.com',
-    phone: '+1 (555) 567-8901',
-    address: '450 Industrial Blvd, Springfield, IL 62702',
-    licenseNumber: 'REP-IL-001234',
-    status: 'approved',
-    rating: 4.8,
-    specialties: ['Collision Repair', 'Paint', 'Frame Straightening', 'Mechanical'],
-    certifications: ['I-CAR Gold Class', 'ASE Certified', 'OEM Certified - Toyota, Honda, Ford'],
-    capacity: 15,
-    currentJobs: 8,
-    averageTurnaroundDays: 7,
-    assignedClaims: ['CLM-2023-000456', 'CLM-2023-000891'],
-  },
-  {
-    id: 2,
-    name: 'Precision Auto Body',
-    email: 'info@precisionauto.com',
-    phone: '+1 (555) 678-9012',
-    address: '789 Commerce Dr, Springfield, IL 62703',
-    licenseNumber: 'REP-IL-002345',
-    status: 'approved',
-    rating: 4.6,
-    specialties: ['Luxury Vehicle Repair', 'Aluminum Repair', 'Carbon Fiber', 'Paint Matching'],
-    certifications: ['I-CAR Platinum', 'Manufacturer Certified - BMW, Mercedes, Audi'],
-    capacity: 8,
-    currentJobs: 5,
-    averageTurnaroundDays: 10,
-    assignedClaims: [],
-  },
-  {
-    id: 3,
-    name: 'QuickFix Collision Center',
-    email: 'service@quickfix.com',
-    phone: '+1 (555) 789-0123',
-    address: '321 Service Rd, Springfield, IL 62704',
-    licenseNumber: 'REP-IL-003456',
-    status: 'pending-review',
-    rating: 4.3,
-    specialties: ['Standard Collision', 'Glass Replacement', 'Detailing'],
-    certifications: ['I-CAR Silver', 'ASE Certified'],
-    capacity: 12,
-    currentJobs: 3,
-    averageTurnaroundDays: 5,
-    assignedClaims: [],
-  },
-]
-
 export const mockFraudAlerts = [
   {
     id: 1,
@@ -135,7 +84,7 @@ export const mockFraudAlerts = [
     riskLevel: 'medium',
     riskFactors: [
       { factor: 'Delayed reporting', severity: 'medium', description: 'Claim reported 72 hours after incident' },
-      { factor: 'Repair shop referral pattern', severity: 'medium', description: 'Customer insisted on specific unapproved repair shop' },
+      { factor: 'Estimate inconsistency', severity: 'medium', description: 'Submitted repair estimate differs from the damage documentation' },
       { factor: 'Pre-existing damage indicators', severity: 'low', description: 'Photos show possible pre-existing damage' },
     ],
     aiRecommendation: 'Enhanced review recommended - verify repair estimates and damage timeline',
@@ -179,4 +128,4 @@ export const mockInvestigatorDashboardData = {
   },
 }
 
-export default { mockInvestigators, mockRepairShops, mockFraudAlerts, mockInvestigatorDashboardData }
+export default { mockInvestigators, mockFraudAlerts, mockInvestigatorDashboardData }

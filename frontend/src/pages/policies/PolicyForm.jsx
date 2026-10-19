@@ -22,6 +22,7 @@ export function PolicyForm() {
   const [vehicles, setVehicles] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [quote, setQuote] = useState(null)
   const [formData, setFormData] = useState({
     customer: '',
     agent: user?.role === 'employee' ? String(user.id) : '',
@@ -34,6 +35,9 @@ export function PolicyForm() {
     endDate: nextYear(),
     premium: '',
     deductible: '500',
+    assetValue: '',
+    coverageLimit: '',
+    riskScore: '25',
     paymentFrequency: 'annual',
     autoRenew: true,
     propertyAddress: '',
@@ -44,6 +48,7 @@ export function PolicyForm() {
 
   const selectedCustomer = canAssignCustomer ? formData.customer : user?.id
   const selectedTier = policyTiers.find((tier) => tier.id === formData.policyTierId)
+  const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(formData.vehicle))
   const isCustomPolicy = formData.policyTierId === 'custom'
   const isAutoPolicy = formData.type.startsWith('auto_')
   const customerOptions = useMemo(
@@ -131,6 +136,10 @@ export function PolicyForm() {
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target
+    const nextSelectedVehicle = name === 'vehicle'
+      ? vehicles.find((vehicle) => String(vehicle.id) === String(value))
+      : selectedVehicle
+    setQuote(null)
     if (name === 'policyTierId') {
       const tier = policyTiers.find((option) => option.id === value)
       setFormData((current) => ({
@@ -147,6 +156,10 @@ export function PolicyForm() {
     setFormData((current) => ({
       ...current,
       [name]: type === 'checkbox' ? checked : value,
+      ...(name === 'vehicle' && nextSelectedVehicle?.purchase_price ? {
+        assetValue: String(nextSelectedVehicle.purchase_price),
+        coverageLimit: String(nextSelectedVehicle.purchase_price),
+      } : {}),
       ...(name === 'customer' && !isEdit ? { vehicle: '' } : {}),
     }))
   }
@@ -156,6 +169,59 @@ export function PolicyForm() {
     setLoading(true)
     setError('')
     try {
+      const coverage = selectedTier ? {
+        ...formData.coverage,
+        policy_plan: {
+          id: selectedTier.id,
+          name: selectedTier.name,
+          category: selectedTier.category,
+          coverage_sections: selectedTier.coverageSections,
+          mandatory_covers: selectedTier.mandatoryCovers,
+          addons: selectedTier.addons,
+          base_premium_estimate_inr: selectedTier.basePremium,
+          estimate_source: 'User-provided draft; not an insurer quote',
+        },
+      } : Object.fromEntries(Object.entries(formData.coverage || {}).filter(([key]) => key !== 'policy_plan'))
+
+      if (!isEdit) {
+        if (quote) {
+          await policyService.bindPolicyQuote(quote.id)
+          navigate('/policies')
+          return
+        }
+        const selectedCustomerRecord = customers.find((customer) => String(customer.id) === String(formData.customer))
+        const quoteResult = await policyService.createPolicyQuote({
+          customer: canAssignCustomer ? Number(formData.customer) : Number(user.id),
+          policy_type: formData.type,
+          applicant_details: selectedCustomerRecord ? { name: selectedCustomerRecord.name, email: selectedCustomerRecord.email } : { name: user.name || '', email: user.email || '' },
+          asset_details: {
+            vehicle_id: formData.vehicle ? Number(formData.vehicle) : null,
+            vehicle_description: selectedVehicle?.label || '',
+            declared_value: Number(formData.assetValue),
+          },
+          risk_factors: { source: 'staff-entered demonstration score' },
+          asset_value: Number(formData.assetValue),
+          coverage_limit: Number(formData.coverageLimit),
+          deductible: Number(formData.deductible),
+          risk_score: Number(formData.riskScore),
+          policy_terms: {
+            agent: formData.agent ? Number(formData.agent) : null,
+            start_date: formData.startDate,
+            end_date: formData.endDate,
+            payment_frequency: formData.paymentFrequency,
+            auto_renew: formData.autoRenew,
+            coverage,
+            vehicle: formData.vehicle ? Number(formData.vehicle) : null,
+            property_address: formData.propertyAddress,
+            property_type: formData.propertyType,
+            property_year_built: Number(formData.propertyYearBuilt) || null,
+            property_square_footage: Number(formData.propertySquareFootage) || null,
+          },
+        })
+        setQuote(quoteResult)
+        setFormData((current) => ({ ...current, premium: quoteResult.quoted_premium }))
+        return
+      }
       const payload = {
         ...(canAssignCustomer ? { customer: Number(formData.customer) } : { customer: user.id }),
         agent: formData.agent ? Number(formData.agent) : null,
@@ -168,19 +234,7 @@ export function PolicyForm() {
         deductible: Number(formData.deductible),
         payment_frequency: formData.paymentFrequency,
         auto_renew: formData.autoRenew,
-        coverage: selectedTier ? {
-          ...formData.coverage,
-          policy_plan: {
-            id: selectedTier.id,
-            name: selectedTier.name,
-            category: selectedTier.category,
-            coverage_sections: selectedTier.coverageSections,
-            mandatory_covers: selectedTier.mandatoryCovers,
-            addons: selectedTier.addons,
-            base_premium_estimate_inr: selectedTier.basePremium,
-            estimate_source: 'User-provided draft; not an insurer quote',
-          },
-        } : Object.fromEntries(Object.entries(formData.coverage || {}).filter(([key]) => key !== 'policy_plan')),
+        coverage,
         property_address: formData.propertyAddress,
         property_type: formData.propertyType,
         property_year_built: Number(formData.propertyYearBuilt) || null,
@@ -267,14 +321,19 @@ export function PolicyForm() {
               { value: 'renters', label: 'Renters' },
               { value: 'umbrella', label: 'Umbrella' },
             ]} />}
-            <Select label="Status" name="status" value={formData.status} onChange={handleChange} options={[
+            {isEdit && <Select label="Status" name="status" value={formData.status} onChange={handleChange} options={[
               { value: 'pending', label: 'Pending' }, { value: 'active', label: 'Active' },
               { value: 'suspended', label: 'Suspended' }, { value: 'expired', label: 'Expired' }, { value: 'cancelled', label: 'Cancelled' },
-            ]} />
+            ]} />}
             <Input label="Start Date" name="startDate" type="date" value={formData.startDate} onChange={handleChange} required />
             <Input label="End Date" name="endDate" type="date" value={formData.endDate} onChange={handleChange} required />
             <Input label={selectedTier ? 'Annual premium (INR estimate)' : 'Premium'} name="premium" type="number" min="0" step="0.01" value={formData.premium} onChange={handleChange} required />
             <Input label={selectedTier ? 'Compulsory deductible (INR estimate)' : 'Deductible'} name="deductible" type="number" min="0" step="0.01" value={formData.deductible} onChange={handleChange} required />
+            {!isEdit && <>
+              <Input label="Declared asset value (INR)" name="assetValue" type="number" min="0.01" step="0.01" value={formData.assetValue} onChange={handleChange} required />
+              <Input label="Coverage limit (INR)" name="coverageLimit" type="number" min="0.01" step="0.01" value={formData.coverageLimit} onChange={handleChange} required />
+              <Input label="Underwriting risk score (0–100)" name="riskScore" type="number" min="0" max="100" step="0.01" value={formData.riskScore} onChange={handleChange} required />
+            </>}
             <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange} options={[
               { value: 'annual', label: 'Annual' }, { value: 'semi_annual', label: 'Semi-Annual' },
               { value: 'quarterly', label: 'Quarterly' }, { value: 'monthly', label: 'Monthly' },
@@ -284,6 +343,13 @@ export function PolicyForm() {
             </label>
           </div>
         </section>
+
+        {!isEdit && quote && <section className="card border border-blue-200 bg-blue-50 p-5">
+          <h2 className="card-title">Quote ready for review</h2>
+          <p className="mt-2 text-sm text-gray-700">Annual estimate: {formatCurrency(quote.quoted_premium, 'INR', 'en-IN')}</p>
+          <p className="mt-1 text-sm text-gray-700">Base {formatCurrency(quote.rating_breakdown.base_premium, 'INR', 'en-IN')} + risk {formatCurrency(quote.rating_breakdown.risk_loading, 'INR', 'en-IN')} − deductible credit {formatCurrency(quote.rating_breakdown.deductible_credit, 'INR', 'en-IN')}.</p>
+          <p className="mt-2 text-xs text-amber-800">This estimate uses demonstration rating factors, not approved insurer pricing. Review it before issuing.</p>
+        </section>}
 
         {isAutoPolicy ? (
           <section className="card">
@@ -306,9 +372,9 @@ export function PolicyForm() {
         ) : null}
 
         <div className="flex justify-end gap-3">
-          <Link to="/policies"><Button type="button" variant="ghost">Cancel</Button></Link>
+          <Button asChild variant="ghost"><Link to="/policies">Cancel</Link></Button>
           <Button type="submit" disabled={loading || (canAssignCustomer && !formData.customer) || (isAutoPolicy && vehicleOptions.length === 0)}>
-            <Save className="mr-2 h-4 w-4" /> {loading ? 'Saving…' : isEdit ? 'Update Policy' : 'Create Policy'}
+            <Save className="mr-2 h-4 w-4" /> {loading ? 'Saving…' : isEdit ? 'Update Policy' : quote ? 'Issue Active Policy' : 'Calculate Quote'}
           </Button>
         </div>
       </form>

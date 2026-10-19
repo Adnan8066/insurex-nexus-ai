@@ -13,7 +13,6 @@ const STATUS_LABELS = {
   ai_assessment: 'AI Assessment',
   investigation: 'Investigation',
   approved: 'Approved',
-  repair: 'Repair',
   repair_settlement: 'Repair Settlement',
   closed: 'Closed',
   rejected: 'Rejected',
@@ -54,7 +53,6 @@ export function AdminDashboard() {
   const claims = summary?.claims || {}
   const policies = summary?.policies || {}
   const fraud = summary?.fraud || {}
-  const repairShops = summary?.repair_shops || {}
   const settlements = summary?.settlements || {}
 
   const byStatus = claims.by_status || {}
@@ -87,7 +85,7 @@ export function AdminDashboard() {
         tension: 0.35,
       },
       {
-        label: 'Claim Amount ($)',
+        label: 'Claim Amount (INR)',
         data: trendLabels.map((m) => Math.round(monthly[m].amount)),
         borderColor: '#10b981',
         backgroundColor: 'rgba(16, 185, 129, 0.08)',
@@ -167,9 +165,6 @@ export function AdminDashboard() {
       ['Settlements Pending Approval', settlements.pending_approval || 0],
       ['Settlements Pending Payment', settlements.pending_payment || 0],
       ['Settlements Total Paid', settlements.total_paid || 0],
-      ['Repair Shops Total', repairShops.total || 0],
-      ['Repair Shops Approved', repairShops.approved || 0],
-      ['Repair Jobs Active', repairShops.active_jobs || 0],
     ]
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })

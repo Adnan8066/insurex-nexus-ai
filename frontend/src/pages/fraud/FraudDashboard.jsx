@@ -135,15 +135,8 @@ export function FraudDashboard() {
         </div>
 
         <div className="flex gap-2">
-          <Link to="/investigators">
-            <Button variant="outline">
-              <UserCheck className="w-4 h-4 mr-2" />
-              View Investigations
-            </Button>
-          </Link>
-          <Link to="/ai-decision">
-            <Button variant="primary">AI Decision Center</Button>
-          </Link>
+          <Button asChild variant="outline"><Link to="/investigators"><UserCheck className="w-4 h-4 mr-2" />View Investigations</Link></Button>
+          <Button asChild variant="primary"><Link to="/ai-decision">AI Decision Center</Link></Button>
         </div>
       </div>
 

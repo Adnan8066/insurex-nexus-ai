@@ -2,7 +2,7 @@ import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/useAuth'
 
-const allRoles = ['customer', 'employee', 'investigator', 'repair', 'admin']
+const allRoles = ['customer', 'employee', 'investigator', 'admin']
 const reviewRoles = ['employee', 'investigator', 'admin']
 const staffRoles = ['employee', 'admin']
 
@@ -30,7 +30,6 @@ const moduleGroups = [
     secondBadge: 'CLAIM SUPPORT',
     secondLinks: [
       { label: 'Investigator Workspace', to: '/investigators', roles: ['employee', 'investigator', 'admin'] },
-      { label: 'Repair Shops', to: '/repair-shops', roles: ['employee', 'repair', 'admin'] },
     ],
   },
   {
@@ -65,13 +64,13 @@ export function Footer() {
           <section className="flex flex-col items-start gap-6">
             <div className="rounded-3xl bg-white p-7 text-slate-950 shadow-2xl shadow-black/20 sm:max-w-sm">
               <p className="text-2xl font-extrabold leading-tight tracking-tight">Built around your claims workflow.</p>
-              <p className="mt-3 text-sm leading-6 text-slate-600">Manage coverage, vehicle details, assessment, investigation, repair, and settlement in one workspace.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Manage coverage, vehicle details, assessment, investigation, and settlement in one workspace.</p>
               <a href="#footer-contact" className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                 Contact Support <ArrowRight className="h-4 w-4" />
               </a>
             </div>
             <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm font-bold text-white" aria-label="InsureX dashboard">
-              <img src="/insurex-nexus-ai-logo.jpg" alt="" className="h-8 w-8 rounded-lg object-cover" />
+              <img src="/insurex-nexus-ai-logo.jpg" alt="InsureX Nexus AI logo" className="h-8 w-8 rounded-lg object-cover" />
               InsureX Nexus AI
             </Link>
           </section>
@@ -97,7 +96,7 @@ export function Footer() {
               <h2 className="text-sm font-bold text-white">Workspace support</h2>
               <p className="mt-1 text-sm leading-6 text-slate-400">For help with account access or a claim, contact your InsureX administrator or claims team.</p>
             </div>
-            <p className="text-xs leading-5 text-slate-500">InsureX Nexus AI connects the policy, vehicle, claim, AI review, investigation, repair, and settlement modules.</p>
+            <p className="text-xs leading-5 text-slate-500">InsureX Nexus AI connects the policy, vehicle, claim, AI review, investigation, and settlement workflows.</p>
             <p className="text-xs text-slate-500">© {new Date().getFullYear()} InsureX Nexus AI</p>
           </div>
         </div>

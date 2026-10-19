@@ -67,6 +67,11 @@ export function PolicyDetails() {
   const [policy, setPolicy] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [error, setError] = useState('')
+  const [endorsements, setEndorsements] = useState([])
+  const [endorsementDraft, setEndorsementDraft] = useState({ change_type: 'mid_term_adjustment', deductible: '', premium_delta: '0', asset_description: '', asset_value: '' })
+  const [endorsementError, setEndorsementError] = useState('')
+  const [savingEndorsement, setSavingEndorsement] = useState(false)
+  const canManageEndorsements = ['employee', 'admin'].includes(user?.role)
 
   useEffect(() => {
     let cancelled = false
@@ -92,6 +97,51 @@ export function PolicyDetails() {
       cancelled = true
     }
   }, [id])
+
+  useEffect(() => {
+    let active = true
+    if (!canManageEndorsements) return () => { active = false }
+    policyService.getEndorsements(id).then((rows) => {
+      if (active) setEndorsements(Array.isArray(rows) ? rows : [])
+    }).catch(() => {
+      if (active) setEndorsements([])
+    })
+    return () => { active = false }
+  }, [canManageEndorsements, id])
+
+  const submitEndorsement = async (event) => {
+    event.preventDefault()
+    setSavingEndorsement(true)
+    setEndorsementError('')
+    try {
+      const assets = endorsementDraft.asset_description.trim()
+        ? [{ description: endorsementDraft.asset_description.trim(), value: Number(endorsementDraft.asset_value) }]
+        : undefined
+      const created = await policyService.createEndorsement(id, {
+        change_type: endorsementDraft.change_type,
+        ...(endorsementDraft.deductible !== '' ? { deductible: Number(endorsementDraft.deductible) } : {}),
+        premium_delta: Number(endorsementDraft.premium_delta || 0),
+        ...(assets ? { assets_add: assets } : {}),
+      })
+      setEndorsements((current) => [created, ...current])
+      setEndorsementDraft({ change_type: 'mid_term_adjustment', deductible: '', premium_delta: '0', asset_description: '', asset_value: '' })
+    } catch (err) {
+      setEndorsementError(err.response?.data?.detail || 'Unable to submit the endorsement for review.')
+    } finally {
+      setSavingEndorsement(false)
+    }
+  }
+
+  const approveEndorsement = async (endorsementId) => {
+    try {
+      const updated = await policyService.approveEndorsement(id, endorsementId)
+      setEndorsements((current) => current.map((item) => item.id === updated.id ? updated : item))
+      const refreshed = await policyService.getPolicy(id)
+      setPolicy(mapPolicy(refreshed))
+    } catch (err) {
+      setEndorsementError(err.response?.data?.detail || 'Unable to approve this endorsement.')
+    }
+  }
 
   if (loading) {
     return (
@@ -187,6 +237,26 @@ export function PolicyDetails() {
         <div className="lg:col-span-2 space-y-6">
           {activeTab === 'overview' && (
             <>
+              {canManageEndorsements && <Card>
+                <CardHeader title="Policy endorsements" subtitle="Changes are applied only after an administrator approves them." />
+                <CardContent>
+                  <form onSubmit={submitEndorsement} className="mb-5 grid gap-3 md:grid-cols-2">
+                    <input className="input-field" aria-label="Change type" value={endorsementDraft.change_type} onChange={(event) => setEndorsementDraft((d) => ({ ...d, change_type: event.target.value }))} />
+                    <input className="input-field" aria-label="New deductible" type="number" min="0" step="0.01" placeholder="New deductible (optional)" value={endorsementDraft.deductible} onChange={(event) => setEndorsementDraft((d) => ({ ...d, deductible: event.target.value }))} />
+                    <input className="input-field" aria-label="Annual premium adjustment" type="number" step="0.01" placeholder="Annual premium change (+/−)" value={endorsementDraft.premium_delta} onChange={(event) => setEndorsementDraft((d) => ({ ...d, premium_delta: event.target.value }))} />
+                    <input className="input-field" aria-label="Additional insured asset" placeholder="Asset to add (optional)" value={endorsementDraft.asset_description} onChange={(event) => setEndorsementDraft((d) => ({ ...d, asset_description: event.target.value }))} />
+                    {endorsementDraft.asset_description && <input className="input-field" aria-label="Additional asset value" type="number" min="0.01" step="0.01" placeholder="Asset value" value={endorsementDraft.asset_value} onChange={(event) => setEndorsementDraft((d) => ({ ...d, asset_value: event.target.value }))} required />}
+                    <Button type="submit" variant="outline" disabled={savingEndorsement}>{savingEndorsement ? 'Submitting…' : 'Submit endorsement for review'}</Button>
+                  </form>
+                  {endorsementError && <p role="alert" className="mb-3 text-sm text-red-700">{endorsementError}</p>}
+                  {endorsements.length === 0 ? <p className="text-sm text-gray-500">No endorsement requests yet.</p> : <div className="space-y-3">
+                    {endorsements.map((endorsement) => <div key={endorsement.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
+                      <div><p className="font-medium text-gray-900">{endorsement.change_type} · {endorsement.status}</p><p className="text-sm text-gray-500">Annual premium change: {formatCurrency(endorsement.premium_delta)}</p></div>
+                      {user?.role === 'admin' && endorsement.status === 'pending' && <Button type="button" size="sm" onClick={() => approveEndorsement(endorsement.id)}>Approve and apply</Button>}
+                    </div>)}
+                  </div>}
+                </CardContent>
+              </Card>}
               {policy.policyPlan && (
                 <Card>
                   <CardHeader title="Selected Policy Tier" subtitle={`${policy.policyPlan.id} · ${policy.policyPlan.category}`} />
@@ -253,16 +323,16 @@ export function PolicyDetails() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Annual Premium</dt>
-                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.premium, policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}</dd>
+                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.premium)}</dd>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Deductible</dt>
-                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.deductible, policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}</dd>
+                      <dd className="mt-1 text-2xl font-bold text-gray-900">{formatCurrency(policy.deductible)}</dd>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Payment per Period</dt>
                       <dd className="mt-1 text-2xl font-bold text-gray-900">
-                        {formatCurrency((policy.paymentFrequency === 'monthly' ? (Number(policy.premium) || 0) / 12 : (Number(policy.premium) || 0)), policy.policyPlan ? 'INR' : 'USD', policy.policyPlan ? 'en-IN' : 'en-US')}
+                        {formatCurrency(policy.paymentFrequency === 'monthly' ? (Number(policy.premium) || 0) / 12 : (Number(policy.premium) || 0))}
                       </dd>
                     </div>
                   </div>

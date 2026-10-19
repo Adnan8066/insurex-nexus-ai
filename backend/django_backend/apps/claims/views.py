@@ -20,7 +20,7 @@ from common.permissions import IsOwnerOrAdmin, IsEmployee, CanIssuePolicy
 class ClaimViewSet(viewsets.ModelViewSet):
     queryset = Claim.objects.select_related(
         'customer', 'policy', 'vehicle', 'assigned_adjuster',
-        'assigned_investigator', 'assigned_repair_shop'
+        'assigned_investigator'
     ).prefetch_related('documents', 'status_history', 'timeline', 'notes')
     serializer_class = ClaimSerializer
     permission_classes = [IsAuthenticated]
@@ -52,8 +52,6 @@ class ClaimViewSet(viewsets.ModelViewSet):
             return self.queryset
         if user.role == Role.INVESTIGATOR:
             return self.queryset.filter(assigned_investigator=user)
-        if user.role == Role.REPAIR:
-            return self.queryset.filter(assigned_repair_shop__email__iexact=user.email)
         if user.role == Role.CUSTOMER:
             return self.queryset.filter(customer=user)
         return self.queryset.none()
@@ -63,7 +61,7 @@ class ClaimViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), CanIssuePolicy()]
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsOwnerOrAdmin()]
-        elif self.action in ['update_status', 'assign_adjuster', 'assign_investigator', 'assign_repair_shop']:
+        elif self.action in ['update_status', 'assign_adjuster', 'assign_investigator']:
             return [IsAuthenticated(), IsEmployee()]
         return [IsAuthenticated()]
 
@@ -80,7 +78,22 @@ class ClaimViewSet(viewsets.ModelViewSet):
         claim_number = f"CLM-{uuid.uuid4().hex[:8].upper()}"
         user = self.request.user
         customer = serializer.validated_data['policy'].customer if user.is_staff_member else user
-        claim = serializer.save(customer=customer, claim_number=claim_number)
+        submitted = serializer.validated_data
+        complexity = min(
+            1.0,
+            0.2
+            + min(max(int(submitted.get('number_of_vehicles', 1)) - 1, 0), 3) * 0.12
+            + bool(submitted.get('injuries')) * 0.2
+            + bool(submitted.get('property_damage')) * 0.12
+            + bool(submitted.get('witnesses')) * 0.08
+            + bool(submitted.get('police_report')) * 0.08,
+        )
+        claim = serializer.save(
+            customer=customer,
+            claim_number=claim_number,
+            estimated_repair_cost=submitted.get('estimated_repair_cost') or submitted['claim_amount'],
+            complexity_score=complexity,
+        )
         
         ClaimStatusHistory.objects.create(
             claim=claim,
@@ -160,11 +173,13 @@ class ClaimViewSet(viewsets.ModelViewSet):
                     from apps.settlements.models import Settlement, SettlementTimeline
 
                     assessment = claim.ai_assessment if isinstance(claim.ai_assessment, dict) else {}
-                    estimate_value = assessment.get('predicted_repair_cost') or claim.claim_amount
+                    estimate_value = claim.estimated_repair_cost or assessment.get('predicted_repair_cost') or claim.claim_amount
                     if isinstance(estimate_value, dict):
                         estimate_value = estimate_value.get('cost') or claim.claim_amount
                     estimated_amount = Decimal(str(estimate_value))
                     deductible = claim.policy.deductible
+                    from apps.settlements.services.payout import calculate_payout_for_claim
+                    payout = calculate_payout_for_claim(claim, estimated_amount)
                     Settlement.objects.get_or_create(
                         claim=claim,
                         defaults={
@@ -172,8 +187,12 @@ class ClaimViewSet(viewsets.ModelViewSet):
                             'customer': claim.customer,
                             'estimated_amount': estimated_amount,
                             'deductible': deductible,
-                            'approved_amount': max(Decimal('0.00'), estimated_amount - deductible),
-                            'notes': 'Prepared automatically when the claim was approved; review before recording payment.',
+                            'approved_amount': payout.payout,
+                            'depreciation_amount': payout.depreciation,
+                            'asset_age_years': payout.asset_age_years,
+                            'zero_depreciation_applied': payout.zero_depreciation_applied,
+                            'payout_calculation': payout.as_dict(),
+                            'notes': 'Estimated payout prepared for staff review; verify coverage and policy terms before approval.',
                         },
                     )
                     settlement = Settlement.objects.get(claim=claim)
@@ -310,44 +329,6 @@ class ClaimViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(claim)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'], url_path='assign-repair-shop')
-    def assign_repair_shop(self, request, pk=None):
-        claim = self.get_object()
-        repair_shop_id = request.data.get('repair_shop_id')
-        if not repair_shop_id:
-            return Response({'error': 'repair_shop_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        from apps.repair_shops.models import RepairJob, RepairShop
-        try:
-            repair_shop = RepairShop.objects.get(id=repair_shop_id, status__in=['approved', 'active'])
-        except RepairShop.DoesNotExist:
-            return Response({'error': 'Invalid repair shop'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        claim.assigned_repair_shop = repair_shop
-        claim.save(update_fields=['assigned_repair_shop'])
-
-        assessment = claim.ai_assessment if isinstance(claim.ai_assessment, dict) else {}
-        estimate = assessment.get('predicted_repair_cost') or claim.claim_amount
-        RepairJob.objects.update_or_create(
-            claim=claim,
-            defaults={
-                'repair_shop': repair_shop,
-                'priority': claim.priority,
-                'estimated_cost': estimate,
-            },
-        )
-        
-        ClaimTimeline.objects.create(
-            claim=claim,
-            status=claim.status,
-            title='Repair Shop Assigned',
-            description=f'Claim assigned to repair shop {repair_shop.name}',
-            user=request.user
-        )
-        
-        serializer = self.get_serializer(claim)
-        return Response(serializer.data)
-    
     @action(detail=True, methods=['post'], url_path='notes')
     def add_note(self, request, pk=None):
         claim = self.get_object()
@@ -422,7 +403,6 @@ class ClaimViewSet(viewsets.ModelViewSet):
         claims = self.get_queryset().filter(
             Q(assigned_adjuster=request.user)
             | Q(assigned_investigator=request.user)
-            | Q(assigned_repair_shop__email__iexact=request.user.email)
         ).distinct()
         serializer = self.get_serializer(claims, many=True)
         return Response(serializer.data)

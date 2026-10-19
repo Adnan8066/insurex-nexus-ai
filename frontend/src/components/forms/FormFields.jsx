@@ -1,5 +1,5 @@
 import { clsx } from 'clsx'
-import { forwardRef } from 'react'
+import { forwardRef, useId } from 'react'
 
 export const Input = forwardRef(function Input({
   label,
@@ -9,7 +9,8 @@ export const Input = forwardRef(function Input({
   id,
   ...props
 }, ref) {
-  const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
+  const generatedId = useId()
+  const inputId = id || `${label?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'input'}-${generatedId}`
 
   return (
     <div className={clsx('input-group', className)}>
@@ -51,7 +52,8 @@ export const Textarea = forwardRef(function Textarea({
   rows = 4,
   ...props
 }, ref) {
-  const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
+  const generatedId = useId()
+  const inputId = id || `${label?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'textarea'}-${generatedId}`
 
   return (
     <div className={clsx('input-group', className)}>
@@ -95,7 +97,8 @@ export const Select = forwardRef(function Select({
   id,
   ...props
 }, ref) {
-  const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
+  const generatedId = useId()
+  const inputId = id || `${label?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'select'}-${generatedId}`
 
   return (
     <div className={clsx('input-group', className)}>

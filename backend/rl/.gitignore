@@ -1,0 +1,4 @@
+models/
+*.zip
+*.json
+!README.md

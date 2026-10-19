@@ -35,9 +35,9 @@ lightgbm>=4.3.0
 # ML Experiment Tracking - comment out for now
 # mlflow==2.13.1
 
-# Reinforcement Learning - comment out for now
-# gymnasium==0.29.1
-# stable-baselines3==2.3.2
+# Reinforcement learning advisory simulator
+gymnasium==1.4.0
+stable-baselines3==2.9.0
 
 # Task Queue (optional for async)
 celery==5.4.0

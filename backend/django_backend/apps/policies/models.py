@@ -93,6 +93,62 @@ class Policy(models.Model):
             return max(0, delta.days)
         return 0
 
+
+class PolicyApplication(models.Model):
+    """Underwriting intake and versioned premium quote before policy binding."""
+
+    class Status(models.TextChoices):
+        QUOTED = 'quoted', _('Quoted')
+        BOUND = 'bound', _('Bound')
+        DECLINED = 'declined', _('Declined')
+
+    customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='policy_applications')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_policy_applications')
+    policy_type = models.CharField(_('policy type'), max_length=30, choices=PolicyType.choices)
+    applicant_details = models.JSONField(_('applicant details'), default=dict)
+    asset_details = models.JSONField(_('asset details'), default=dict)
+    risk_factors = models.JSONField(_('risk factors'), default=dict)
+    asset_value = models.DecimalField(_('asset value'), max_digits=12, decimal_places=2)
+    coverage_limit = models.DecimalField(_('coverage limit'), max_digits=12, decimal_places=2)
+    deductible = models.DecimalField(_('deductible'), max_digits=10, decimal_places=2)
+    risk_score = models.DecimalField(_('risk score (0–100)'), max_digits=5, decimal_places=2)
+    quoted_premium = models.DecimalField(_('quoted annual premium'), max_digits=12, decimal_places=2)
+    rating_breakdown = models.JSONField(_('rating breakdown'), default=dict)
+    policy_terms = models.JSONField(_('requested policy terms'), default=dict)
+    status = models.CharField(_('status'), max_length=12, choices=Status.choices, default=Status.QUOTED)
+    bound_policy = models.OneToOneField(Policy, on_delete=models.SET_NULL, null=True, blank=True, related_name='source_application')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'policy_applications'
+        ordering = ['-created_at']
+
+
+class PolicyEndorsement(models.Model):
+    """Proposed policy changes with before/after audit snapshots."""
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', _('Pending review')
+        APPROVED = 'approved', _('Approved and applied')
+        REJECTED = 'rejected', _('Rejected')
+
+    policy = models.ForeignKey(Policy, on_delete=models.CASCADE, related_name='endorsements')
+    change_type = models.CharField(_('change type'), max_length=40)
+    proposed_changes = models.JSONField(_('proposed changes'), default=dict)
+    premium_delta = models.DecimalField(_('annual premium change'), max_digits=12, decimal_places=2, default=0)
+    before_snapshot = models.JSONField(_('before snapshot'), default=dict)
+    after_snapshot = models.JSONField(_('after snapshot'), default=dict)
+    status = models.CharField(_('status'), max_length=12, choices=Status.choices, default=Status.PENDING)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_policy_endorsements')
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_policy_endorsements')
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = 'policy_endorsements'
+        ordering = ['-created_at']
+
 class PolicyCoverage(models.Model):
     policy = models.OneToOneField(Policy, on_delete=models.CASCADE, related_name='coverage_details')
     liability = models.DecimalField(_('liability'), max_digits=12, decimal_places=2, default=0)

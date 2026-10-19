@@ -37,6 +37,7 @@ class SettlementSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'settlement_number', 'claim', 'claim_number', 'customer',
             'customer_name', 'customer_email', 'estimated_amount', 'deductible',
+            'depreciation_amount', 'asset_age_years', 'zero_depreciation_applied', 'payout_calculation',
             'approved_amount', 'status', 'payment_status', 'payment_method',
             'payment_reference', 'bank_account', 'approved_by', 'approved_by_name',
             'approved_at', 'paid_by', 'paid_by_name', 'paid_at', 'notes',

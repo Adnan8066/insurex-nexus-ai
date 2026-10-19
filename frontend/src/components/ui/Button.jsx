@@ -19,6 +19,7 @@ export function Button({
   const variantClasses = `btn-${variant}`
   const sizeClasses = size !== 'md' ? `btn-${size}` : ''
   const widthClass = fullWidth ? 'w-full' : ''
+  const isDisabled = disabled || loading
   const combinedClassName = clsx(
     baseClasses,
     variantClasses,
@@ -29,16 +30,28 @@ export function Button({
 
   if (asChild && isValidElement(children)) {
     return cloneElement(children, {
-      className: clsx(combinedClassName, children.props.className),
-      'aria-disabled': disabled || loading || undefined,
       ...props,
+      className: clsx(combinedClassName, children.props.className),
+      'aria-disabled': isDisabled || undefined,
+      'aria-busy': loading || undefined,
+      tabIndex: isDisabled ? -1 : children.props.tabIndex,
+      onClick: (event) => {
+        if (isDisabled) {
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        children.props.onClick?.(event)
+        props.onClick?.(event)
+      },
     })
   }
 
   return (
     <button
       type={type}
-      disabled={disabled || loading}
+      disabled={isDisabled}
+      aria-busy={loading || undefined}
       className={combinedClassName}
       {...props}
     >

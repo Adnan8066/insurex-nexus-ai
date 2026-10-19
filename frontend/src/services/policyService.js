@@ -21,6 +21,31 @@ export const policyService = {
     return response.data
   },
 
+  async createPolicyQuote(data) {
+    const response = await api.post('/policies/quote/', data)
+    return response.data
+  },
+
+  async bindPolicyQuote(applicationId) {
+    const response = await api.post('/policies/bind-quote/', { application_id: applicationId })
+    return response.data
+  },
+
+  async createEndorsement(policyId, data) {
+    const response = await api.post(`/policies/${policyId}/endorsements/`, data)
+    return response.data
+  },
+
+  async getEndorsements(policyId) {
+    const response = await api.get(`/policies/${policyId}/endorsements/`)
+    return response.data
+  },
+
+  async approveEndorsement(policyId, endorsementId) {
+    const response = await api.post(`/policies/${policyId}/endorsements/${endorsementId}/approve/`)
+    return response.data
+  },
+
   async updatePolicy(id, data) {
     const response = await api.patch(`/policies/${id}/`, data)
     return response.data

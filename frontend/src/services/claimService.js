@@ -65,12 +65,6 @@ export const claimService = {
     return response.data
   },
 
-  async assignRepairShop(claimId, repairShopId) {
-    const response = await api.post(`/claims/${claimId}/assign-repair-shop/`, {
-      repair_shop_id: repairShopId,
-    })
-    return response.data
-  },
 }
 
 export default claimService

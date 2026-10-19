@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: insurex-nexus-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt && python backend/django_backend/manage.py collectstatic --no-input && python backend/django_backend/manage.py migrate
+    startCommand: python -m gunicorn config.wsgi:application --chdir backend/django_backend --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/health/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11
+      - key: DEBUG
+        value: "False"
+      - key: SECURE_SSL_REDIRECT
+        value: "True"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        fromService:
+          type: web
+          name: insurex-nexus-api
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://frontend-omega-murex-45.vercel.app
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://frontend-omega-murex-45.vercel.app
+      - key: FRONTEND_URL
+        value: https://frontend-omega-murex-45.vercel.app
+      - key: USE_X_FORWARDED_PROTO
+        value: "True"
+      - key: CLAIM_ROUTING_ENFORCE_EVALUATION_GATE
+        value: "True"

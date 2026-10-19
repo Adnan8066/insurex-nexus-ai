@@ -396,11 +396,7 @@ export function InvestigatorDashboard() {
                             <MessageSquare className="w-3.5 h-3.5 mr-1" />
                             Notes
                           </Button>
-                          <Link to={`/claims/${inv.claim}`}>
-                            <Button variant="outline" size="sm">
-                              Details
-                            </Button>
-                          </Link>
+                          <Button asChild variant="outline" size="sm"><Link to={`/claims/${inv.claim}`}>Details</Link></Button>
                         </div>
                       </TableCell>
                     </TableRow>

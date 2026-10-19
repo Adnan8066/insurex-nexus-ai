@@ -33,7 +33,9 @@ export function Profile() {
   })
 
   const [savingProfile, setSavingProfile] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
   const [profileSuccess, setProfileSuccess] = useState('')
+  const [profileError, setProfileError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
   const [passwordError, setPasswordError] = useState('')
 
@@ -46,11 +48,19 @@ export function Profile() {
     e.preventDefault()
     setSavingProfile(true)
     setProfileSuccess('')
-    const res = await updateProfile(formData)
-    setSavingProfile(false)
-    if (res.success) {
-      setProfileSuccess('Profile details updated successfully.')
-      setTimeout(() => setProfileSuccess(''), 3000)
+    setProfileError('')
+    try {
+      const res = await updateProfile(formData)
+      if (res.success) {
+        setProfileSuccess('Profile details updated successfully.')
+        setTimeout(() => setProfileSuccess(''), 3000)
+      } else {
+        setProfileError(res.error || 'Failed to update profile.')
+      }
+    } catch {
+      setProfileError('Failed to update profile. Please try again.')
+    } finally {
+      setSavingProfile(false)
     }
   }
 
@@ -68,13 +78,20 @@ export function Profile() {
       return
     }
 
-    const res = await changePassword(passwordData)
-    if (res.success) {
-      setPasswordSuccess('Password changed successfully.')
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
-      setTimeout(() => setPasswordSuccess(''), 3000)
-    } else {
-      setPasswordError(res.error || 'Failed to update password')
+    setSavingPassword(true)
+    try {
+      const res = await changePassword(passwordData)
+      if (res.success) {
+        setPasswordSuccess('Password changed successfully.')
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
+        setTimeout(() => setPasswordSuccess(''), 3000)
+      } else {
+        setPasswordError(res.error || 'Failed to update password')
+      }
+    } catch {
+      setPasswordError('Failed to update password. Please try again.')
+    } finally {
+      setSavingPassword(false)
     }
   }
 
@@ -110,6 +127,7 @@ export function Profile() {
           <CardHeader title="Personal Information" />
           <CardContent className="p-6">
             <form onSubmit={handleSaveProfile} className="space-y-4">
+              {profileError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{profileError}</p>}
               {profileSuccess && (
                 <div className="p-3 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-medium flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
@@ -149,7 +167,7 @@ export function Profile() {
                 onChange={handleProfileChange}
               />
 
-              <Button type="submit" variant="primary" loading={savingProfile}>
+              <Button type="submit" variant="primary" loading={savingProfile} disabled={savingProfile}>
                 <Save className="w-4 h-4 mr-2" />
                 Save Profile
               </Button>
@@ -202,7 +220,7 @@ export function Profile() {
                 required
               />
 
-              <Button type="submit" variant="secondary">
+              <Button type="submit" variant="secondary" loading={savingPassword} disabled={savingPassword}>
                 <Lock className="w-4 h-4 mr-2" />
                 Change Password
               </Button>

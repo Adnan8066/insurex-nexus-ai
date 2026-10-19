@@ -218,3 +218,68 @@ class ModelPerformance(models.Model):
     
     def __str__(self):
         return f"{self.get_model_type_display()} v{self.version}"
+
+
+class RoutingAgentProfile(models.Model):
+    """Admin-maintained routing capability and availability for a staff user."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='routing_profile',
+    )
+    skill_tier = models.PositiveSmallIntegerField(
+        _('skill tier'),
+        choices=[(tier, str(tier)) for tier in range(1, 6)],
+        default=3,
+    )
+    is_available = models.BooleanField(_('available for routing advice'), default=True)
+    is_demo = models.BooleanField(_('demo profile'), default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'routing_agent_profiles'
+        verbose_name = _('routing agent profile')
+        verbose_name_plural = _('routing agent profiles')
+        ordering = ['user__last_name', 'user__first_name', 'user__email']
+
+    def __str__(self):
+        return f"{self.user.get_full_name() or self.user.email} (tier {self.skill_tier})"
+
+
+class RoutingRecommendationReview(models.Model):
+    """Explicit human feedback on advice; never represents a claim assignment."""
+
+    class Decision(models.TextChoices):
+        ACCEPTED = 'accepted', _('Useful; accepted for consideration')
+        REJECTED = 'rejected', _('Not useful; rejected')
+
+    recommendation_id = models.UUIDField(_('recommendation ID'), unique=True)
+    claim = models.ForeignKey(
+        'claims.Claim',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='routing_recommendation_reviews',
+    )
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='routing_recommendation_reviews',
+    )
+    decision = models.CharField(_('review decision'), max_length=10, choices=Decision.choices)
+    notes = models.TextField(_('review notes'), blank=True, max_length=2000)
+    claim_data = models.JSONField(_('claim feature snapshot'), default=dict)
+    agent_status = models.JSONField(_('agent status snapshot'), default=list)
+    recommendation = models.JSONField(_('recommendation snapshot'), default=dict)
+    created_at = models.DateTimeField(_('reviewed at'), auto_now_add=True)
+
+    class Meta:
+        db_table = 'routing_recommendation_reviews'
+        verbose_name = _('routing recommendation review')
+        verbose_name_plural = _('routing recommendation reviews')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.recommendation_id}: {self.get_decision_display()}"

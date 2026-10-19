@@ -37,8 +37,6 @@ class VehicleViewSet(viewsets.ModelViewSet):
             return self.queryset
         if user.role == Role.INVESTIGATOR:
             return self.queryset.filter(claims__assigned_investigator=user).distinct()
-        if user.role == Role.REPAIR:
-            return self.queryset.filter(claims__assigned_repair_shop__email__iexact=user.email).distinct()
         if user.role == Role.CUSTOMER:
             return self.queryset.filter(customer=user)
         return self.queryset.none()

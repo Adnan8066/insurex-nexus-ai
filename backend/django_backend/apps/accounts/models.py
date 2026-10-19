@@ -7,7 +7,6 @@ class Role(models.TextChoices):
     CUSTOMER = 'customer', _('Customer')
     EMPLOYEE = 'employee', _('Insurance Employee')
     INVESTIGATOR = 'investigator', _('Investigator')
-    REPAIR = 'repair', _('Repair Shop')
     ADMIN = 'admin', _('Administrator')
 
 class User(AbstractUser):
@@ -54,10 +53,6 @@ class User(AbstractUser):
     @property
     def is_investigator(self):
         return self.role == Role.INVESTIGATOR
-    
-    @property
-    def is_repair(self):
-        return self.role == Role.REPAIR
     
     @property
     def is_admin(self):

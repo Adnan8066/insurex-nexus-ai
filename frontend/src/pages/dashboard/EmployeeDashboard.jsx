@@ -25,7 +25,7 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
+import { formatCurrency, formatCurrencyCompact, formatDate, formatRelativeTime } from '../../utils/helpers'
 import { policyService, claimService, vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
@@ -100,7 +100,6 @@ export function EmployeeDashboard() {
     submittedAt: c.submitted_at,
     assignedAdjuster: c.assigned_adjuster_name,
     assignedInvestigator: c.assigned_investigator_name,
-    assignedRepairShop: c.assigned_repair_shop_name,
     fraudRiskScore: c.fraud_risk_score,
     totalLossProbability: c.total_loss_probability,
     aiAssessment: c.ai_assessment ? {
@@ -607,11 +606,6 @@ export function EmployeeDashboard() {
   )
 }
 
-function formatCurrencyCompact(amount) {
-  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`
-  if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`
-  return `$${amount.toFixed(0)}`
-}
 
 export default EmployeeDashboard
 

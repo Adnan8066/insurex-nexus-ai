@@ -71,6 +71,8 @@ class Claim(models.Model):
     police_report = models.BooleanField(_('police report'), default=False)
     police_report_number = models.CharField(_('police report number'), max_length=50, blank=True)
     claim_amount = models.DecimalField(_('claim amount'), max_digits=12, decimal_places=2)
+    estimated_repair_cost = models.DecimalField(_('estimated repair cost'), max_digits=12, decimal_places=2, blank=True, null=True)
+    complexity_score = models.DecimalField(_('routing complexity score'), max_digits=4, decimal_places=3, default=0)
     description = models.TextField(_('description'), blank=True)
     status = models.CharField(_('status'), max_length=20, choices=ClaimStatus.choices, default=ClaimStatus.SUBMITTED)
     priority = models.CharField(_('priority'), max_length=20, choices=ClaimPriority.choices, default=ClaimPriority.MEDIUM)
@@ -87,13 +89,6 @@ class Claim(models.Model):
         null=True,
         blank=True,
         related_name='investigated_claims'
-    )
-    assigned_repair_shop = models.ForeignKey(
-        'repair_shops.RepairShop',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='assigned_claims'
     )
     ai_assessment = models.JSONField(_('AI assessment'), default=dict, blank=True)
     fraud_risk_score = models.DecimalField(_('fraud risk score'), max_digits=5, decimal_places=2, default=0)

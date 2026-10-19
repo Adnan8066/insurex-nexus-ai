@@ -41,14 +41,24 @@ export function TableBody({ children, className = '', ...props }) {
   )
 }
 
-export function TableRow({ children, className = '', selected = false, clickable = false, ...props }) {
+export function TableRow({ children, className = '', selected = false, clickable = false, onClick, onKeyDown, ...props }) {
   return (
     <tr
       className={clsx(
         selected && 'bg-primary/5',
-        clickable && 'cursor-pointer hover:bg-gray-50',
+        clickable && 'cursor-pointer hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
         className
       )}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={clickable ? (event) => {
+        onKeyDown?.(event)
+        if (event.defaultPrevented || event.target !== event.currentTarget) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick?.(event)
+        }
+      } : onKeyDown}
       {...props}
     >
       {children}
@@ -56,7 +66,8 @@ export function TableRow({ children, className = '', selected = false, clickable
   )
 }
 
-export function TableHead({ children, className = '', width, align = 'left', ...props }) {
+export function TableHead({ children, className = '', width, align = 'left', onClick, onKeyDown, ...props }) {
+  const isSortable = typeof onClick === 'function'
   return (
     <th
       className={clsx(
@@ -68,7 +79,11 @@ export function TableHead({ children, className = '', width, align = 'left', ...
       style={width ? { width } : undefined}
       {...props}
     >
-      {children}
+      {isSortable ? (
+        <button type="button" className="table-sort-trigger" onClick={onClick} onKeyDown={onKeyDown}>
+          {children}
+        </button>
+      ) : children}
     </th>
   )
 }

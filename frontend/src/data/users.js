@@ -14,7 +14,6 @@ export const mockEmployees = [
   { id: 2, name: 'Michael Chen', role: 'employee', email: 'michael.chen@insurex.com', department: 'Underwriting' },
   { id: 3, name: 'Emily Rodriguez', role: 'investigator', email: 'emily.rodriguez@insurex.com', department: 'Investigations' },
   { id: 4, name: 'David Park', role: 'investigator', email: 'david.park@insurex.com', department: 'Investigations' },
-  { id: 5, name: 'Lisa Thompson', role: 'repair', email: 'lisa.thompson@autofix.com', department: 'AutoFix Repair' },
   { id: 6, name: 'James Wilson', role: 'admin', email: 'james.wilson@insurex.com', department: 'Administration' },
 ]
 
@@ -22,7 +21,6 @@ export const mockRoles = [
   { value: 'customer', label: 'Customer' },
   { value: 'employee', label: 'Insurance Employee' },
   { value: 'investigator', label: 'Investigator' },
-  { value: 'repair', label: 'Repair Shop' },
   { value: 'admin', label: 'Administrator' },
 ]
 
