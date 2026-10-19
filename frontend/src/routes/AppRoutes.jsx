@@ -5,7 +5,6 @@ import ErrorBoundary from '../components/ui/ErrorBoundary'
 
 const Login = lazy(() => import('../pages/auth/Login').then((module) => ({ default: module.Login })))
 const Register = lazy(() => import('../pages/auth/Register').then((module) => ({ default: module.Register })))
-const LandingPage = lazy(() => import('../pages/auth/LandingPage').then((module) => ({ default: module.LandingPage })))
 const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword').then((module) => ({ default: module.ForgotPassword })))
 const MainLayout = lazy(() => import('../layouts/MainLayout').then((module) => ({ default: module.MainLayout })))
 const CustomerDashboard = lazy(() => import('../pages/dashboard/CustomerDashboard').then((module) => ({ default: module.CustomerDashboard })))
@@ -62,7 +61,6 @@ export default function AppRoutes() {
   return (
     <Suspense fallback={<div className="p-8 text-center text-gray-500" role="status">Loading page…</div>}>
     <Routes>
-      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
