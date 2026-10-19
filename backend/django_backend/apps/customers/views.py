@@ -1,17 +1,31 @@
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from apps.accounts.models import Role
 
-from .models import Customer, CustomerDocument
+from .models import CallbackRequest, Customer, CustomerDocument
 from .serializers import (
     CustomerSerializer, CustomerCreateSerializer,
-    CustomerUpdateSerializer, CustomerDocumentSerializer
+    CustomerUpdateSerializer, CustomerDocumentSerializer, CallbackRequestSerializer
 )
 from common.permissions import IsOwnerOrAdmin, IsStaffMember
+
+
+class CallbackRequestViewSet(viewsets.ModelViewSet):
+    queryset = CallbackRequest.objects.all()
+    serializer_class = CallbackRequestSerializer
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsAuthenticated(), IsStaffMember()]
+
+    def get_queryset(self):
+        return CallbackRequest.objects.all() if self.request.user.is_authenticated else CallbackRequest.objects.none()
 
 
 class CustomerViewSet(viewsets.ModelViewSet):

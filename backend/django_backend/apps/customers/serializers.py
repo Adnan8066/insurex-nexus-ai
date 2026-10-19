@@ -1,5 +1,23 @@
 from rest_framework import serializers
-from .models import Customer, CustomerDocument
+from .models import CallbackRequest, Customer, CustomerDocument
+
+
+class CallbackRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CallbackRequest
+        fields = ['id', 'name', 'phone', 'vehicle_type', 'consent', 'status', 'created_at']
+        read_only_fields = ['id', 'status', 'created_at']
+
+    def validate_phone(self, value):
+        normalized = ''.join(character for character in value if character.isdigit())
+        if not 7 <= len(normalized) <= 15:
+            raise serializers.ValidationError('Enter a valid contact number.')
+        return value.strip()
+
+    def validate_consent(self, value):
+        if not value:
+            raise serializers.ValidationError('Consent is required so our team can contact you.')
+        return value
 
 class CustomerDocumentSerializer(serializers.ModelSerializer):
     class Meta:

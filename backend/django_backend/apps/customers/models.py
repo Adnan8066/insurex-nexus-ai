@@ -60,3 +60,33 @@ class CustomerDocument(models.Model):
     
     def __str__(self):
         return f"{self.customer} - {self.get_document_type_display()}"
+
+
+class CallbackRequest(models.Model):
+    VEHICLE_TYPES = [
+        ('car', _('Car')),
+        ('two_wheeler', _('Two-wheeler')),
+        ('commercial', _('Commercial vehicle')),
+        ('other', _('Other')),
+    ]
+    STATUSES = [
+        ('new', _('New')),
+        ('contacted', _('Contacted')),
+        ('closed', _('Closed')),
+    ]
+
+    name = models.CharField(_('name'), max_length=120)
+    phone = models.CharField(_('contact number'), max_length=20)
+    vehicle_type = models.CharField(_('vehicle type'), max_length=20, choices=VEHICLE_TYPES)
+    consent = models.BooleanField(_('consent to be contacted'))
+    status = models.CharField(_('status'), max_length=20, choices=STATUSES, default='new')
+    created_at = models.DateTimeField(_('requested at'), auto_now_add=True)
+
+    class Meta:
+        db_table = 'callback_requests'
+        ordering = ['-created_at']
+        verbose_name = _('callback request')
+        verbose_name_plural = _('callback requests')
+
+    def __str__(self):
+        return f"{self.name} - {self.phone} ({self.get_status_display()})"

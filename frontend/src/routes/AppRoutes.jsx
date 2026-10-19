@@ -32,6 +32,7 @@ const AIOperations = lazy(() => import('../pages/operations/AIOperations').then(
 const Notifications = lazy(() => import('../pages/notifications/Notifications').then((module) => ({ default: module.Notifications })))
 const Profile = lazy(() => import('../pages/profile/Profile').then((module) => ({ default: module.Profile })))
 const Settings = lazy(() => import('../pages/settings/Settings').then((module) => ({ default: module.Settings })))
+const LandingPage = lazy(() => import('../pages/LandingPage').then((module) => ({ default: module.LandingPage })))
 
 function ProtectedRoute({ children, roles }) {
   const { isAuthenticated, user, hasRole, loading } = useAuth()
@@ -50,6 +51,13 @@ function RoleBasedDashboard() {
   return <CustomerDashboard />
 }
 
+function PublicHome() {
+  const { isAuthenticated, loading } = useAuth()
+  if (loading) return <div className="p-8 text-center text-gray-500" role="status">Loading…</div>
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  return <LandingPage />
+}
+
 export default function AppRoutes() {
   return (
     <Suspense fallback={<div className="p-8 text-center text-gray-500" role="status">Loading page…</div>}>
@@ -58,6 +66,7 @@ export default function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/" element={<PublicHome />} />
 
       <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
         <Route path="dashboard" element={<RoleBasedDashboard />} />

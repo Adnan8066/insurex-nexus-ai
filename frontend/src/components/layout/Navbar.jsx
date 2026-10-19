@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
   BarChart3,
@@ -46,6 +46,7 @@ const moduleItems = [
 
 export function Navbar() {
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -112,6 +113,8 @@ export function Navbar() {
 
   const handleLogout = async () => {
     await logout()
+    setShowUserMenu(false)
+    navigate('/', { replace: true })
   }
 
   const markAllNotificationsRead = async () => {
