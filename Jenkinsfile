@@ -5,25 +5,22 @@ pipeline {
         stage('Frontend Checks') {
             steps {
                 dir('frontend') {
-                    sh 'npm ci'
-                    sh 'npm run lint'
-                    sh 'npm run build'
+                    bat 'npm ci'
+                    bat 'npm run lint'
+                    bat 'npm run build'
                 }
             }
         }
 
         stage('Backend Checks') {
             steps {
-                dir('backend/django_backend') {
-                    sh '''
-                        python3 -m venv .venv
-                        . .venv/bin/activate
-                        python -m pip install --upgrade pip
-                        pip install -r requirements.txt
-                        python manage.py check
-                        python manage.py spectacular --validate --file /tmp/insurex-openapi-schema.yml
-                        python manage.py test
-                    '''
+                dir('backend\\django_backend') {
+                    bat 'py -3.12 -m venv .venv'
+                    bat '.venv\\Scripts\\python.exe -m pip install --upgrade pip'
+                    bat '.venv\\Scripts\\python.exe -m pip install -r requirements.txt'
+                    bat '.venv\\Scripts\\python.exe manage.py check'
+                    bat '.venv\\Scripts\\python.exe manage.py spectacular --validate --file "%TEMP%\\insurex-openapi-schema.yml"'
+                    bat '.venv\\Scripts\\python.exe manage.py test'
                 }
             }
         }
