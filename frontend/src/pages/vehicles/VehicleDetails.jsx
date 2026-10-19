@@ -36,7 +36,9 @@ const mapVehicle = (v) => ({
   fuelType: v.fuel_type,
   transmission: v.transmission,
   status: v.status,
+  customerId: v.customer,
   customerName: v.customer_name,
+  customerEmail: v.customer_email,
   policyNumber: v.policy_number,
   policyId: v.policy,
   documents: (v.documents || []).map((d) => ({
@@ -243,6 +245,11 @@ export function VehicleDetails() {
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Purchase Price</dt>
                       <dd className="mt-1 text-gray-900">{formatCurrency(vehicle.purchasePrice)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Customer</dt>
+                      <dd className="mt-1 text-gray-900">{vehicle.customerName || 'Customer details unavailable'}</dd>
+                      {vehicle.customerEmail && <dd className="text-sm text-gray-500">{vehicle.customerEmail}</dd>}
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Linked Policy</dt>

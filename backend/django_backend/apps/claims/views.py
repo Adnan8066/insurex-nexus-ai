@@ -117,20 +117,18 @@ class ClaimViewSet(viewsets.ModelViewSet):
             link=f'/claims/{claim.id}', related_object_type='claim', related_object_id=claim.id,
         )
     
-    @action(detail=True, methods=['post'], url_path='documents')
-    def upload_document(self, request, pk=None):
+    @action(detail=True, methods=['get', 'post'], url_path='documents')
+    def documents(self, request, pk=None):
         claim = self.get_object()
-        serializer = ClaimDocumentSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(claim=claim, uploaded_by=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='documents')
-    def list_documents(self, request, pk=None):
-        claim = self.get_object()
+        if request.method == 'POST':
+            serializer = ClaimDocumentSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save(claim=claim, uploaded_by=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         documents = claim.documents.all()
-        serializer = ClaimDocumentSerializer(documents, many=True)
+        serializer = ClaimDocumentSerializer(documents, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['post', 'patch'], url_path='update-status')

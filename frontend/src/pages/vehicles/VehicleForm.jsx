@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Save } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
@@ -28,13 +28,14 @@ function formatApiError(payload) {
 export function VehicleForm() {
   const navigate = useNavigate()
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
   const isEdit = Boolean(id)
   const canAssignCustomer = ['admin', 'employee'].includes(user?.role)
   const [customers, setCustomers] = useState([])
   const [policies, setPolicies] = useState([])
   const [formData, setFormData] = useState({
-    customer: '', policy: '', make: '', model: '', year: new Date().getFullYear(),
+    customer: searchParams.get('customer') || '', policy: '', make: '', model: '', year: new Date().getFullYear(),
     vin: '', licensePlate: '', color: '', fuelType: 'gasoline', transmission: 'automatic',
     currentMileage: '', registrationExpiry: '', purchaseDate: '', purchasePrice: '', status: 'active',
   })
@@ -78,6 +79,8 @@ export function VehicleForm() {
             purchasePrice: vehicle.purchase_price || '',
             status: vehicle.status,
           }))
+        } else if (canAssignCustomer && active && searchParams.get('customer')) {
+          setFormData((current) => ({ ...current, customer: searchParams.get('customer') }))
         } else if (!canAssignCustomer && active) {
           setFormData((current) => ({ ...current, customer: String(user?.id || '') }))
         }
@@ -87,7 +90,7 @@ export function VehicleForm() {
     }
     loadForm()
     return () => { active = false }
-  }, [canAssignCustomer, id, isEdit, user?.id])
+  }, [canAssignCustomer, id, isEdit, searchParams, user?.id])
 
   useEffect(() => {
     let active = true
@@ -152,7 +155,11 @@ export function VehicleForm() {
       }
       if (isEdit) await vehicleService.updateVehicle(id, payload)
       else await vehicleService.createVehicle(payload)
-      navigate('/vehicles')
+      if (!isEdit && searchParams.get('returnTo') === 'policy' && formData.customer) {
+        navigate(`/policies/new?customer=${encodeURIComponent(formData.customer)}`)
+      } else {
+        navigate('/vehicles')
+      }
     } catch (err) {
       const message = formatApiError(err.response?.data)
       setError(message || (err.response
@@ -169,7 +176,7 @@ export function VehicleForm() {
         <div>
           <Link to="/vehicles" className="mb-2 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" />Back to Vehicles</Link>
           <h1 className="page-title">{isEdit ? 'Edit Vehicle' : 'Add Vehicle'}</h1>
-          <p className="page-subtitle">Link the vehicle to its customer and, when available, its policy.</p>
+          <p className="page-subtitle">Link the vehicle to its customer. A policy is optional and can be assigned later.</p>
         </div>
       </div>
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
@@ -179,7 +186,7 @@ export function VehicleForm() {
           <div className="card-header"><h2 className="card-title">Vehicle Information</h2></div>
           <div className="card-content grid grid-cols-1 gap-4 md:grid-cols-2">
             {canAssignCustomer && <Select label="Customer" name="customer" value={formData.customer} onChange={handleChange} options={customerOptions} placeholder="Select customer" required disabled={isEdit} />}
-            <Select label="Insuring Policy" name="policy" value={formData.policy} onChange={handleChange} options={policyOptions} placeholder="No policy linked yet" />
+            <Select label="Insuring Policy (optional)" name="policy" value={formData.policy} onChange={handleChange} options={policyOptions} placeholder="Save without a policy" />
             <Input label="Make" name="make" value={formData.make} onChange={handleChange} required />
             <Input label="Model" name="model" value={formData.model} onChange={handleChange} required />
             <Input label="Year" name="year" type="number" min="1900" value={formData.year} onChange={handleChange} required />

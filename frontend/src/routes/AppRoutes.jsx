@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
+import ErrorBoundary from '../components/ui/ErrorBoundary'
 
 const Login = lazy(() => import('../pages/auth/Login').then((module) => ({ default: module.Login })))
 const Register = lazy(() => import('../pages/auth/Register').then((module) => ({ default: module.Register })))
@@ -76,10 +77,10 @@ export default function AppRoutes() {
         <Route path="routing-advisory" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><RoutingAdvisory /></ProtectedRoute>} />
         <Route path="fraud" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><FraudDashboard /></ProtectedRoute>} />
         <Route path="investigators" element={<InvestigatorDashboard />} />
-        <Route path="settlements" element={<ProtectedRoute roles={['employee', 'admin']}><SettlementDashboard /></ProtectedRoute>} />
+        <Route path="settlements" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><SettlementDashboard /></ProtectedRoute>} />
         <Route path="analytics" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="admin/users" element={<ProtectedRoute roles={['admin']}><UserManagement /></ProtectedRoute>} />
-        <Route path="ai-decision" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIDecisionCenter /></ProtectedRoute>} />
+        <Route path="ai-decision" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><ErrorBoundary><AIDecisionCenter /></ErrorBoundary></ProtectedRoute>} />
         <Route path="operations" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIOperations /></ProtectedRoute>} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="profile" element={<Profile />} />

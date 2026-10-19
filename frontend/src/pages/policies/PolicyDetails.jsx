@@ -72,6 +72,22 @@ export function PolicyDetails() {
   const [endorsementError, setEndorsementError] = useState('')
   const [savingEndorsement, setSavingEndorsement] = useState(false)
   const canManageEndorsements = ['employee', 'admin'].includes(user?.role)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+
+  const downloadCertificate = () => {
+    const certificate = window.open('', '_blank', 'width=900,height=700')
+    if (!certificate) return
+    certificate.document.write(`<!doctype html><html><head><title>Policy Certificate ${policy.policyNumber || ''}</title><style>body{font:16px Arial,sans-serif;color:#172033;margin:48px}h1{color:#1e3a5f}table{border-collapse:collapse;width:100%;margin-top:24px}td{padding:12px;border:1px solid #d1d5db}small{color:#6b7280}@media print{button{display:none}}</style></head><body><h1>Insurance Certificate</h1><p>This document confirms the policy details shown below.</p><table><tr><td>Policy number</td><td>${policy.policyNumber || '—'}</td></tr><tr><td>Policy holder</td><td>${policy.customerName || '—'}</td></tr><tr><td>Policy type</td><td>${policy.policyPlan?.name || policy.type || '—'}</td></tr><tr><td>Effective date</td><td>${formatDate(policy.startDate)}</td></tr><tr><td>Expiration date</td><td>${formatDate(policy.endDate)}</td></tr><tr><td>Status</td><td>${policy.status || '—'}</td></tr><tr><td>Annual premium</td><td>${formatCurrency(policy.premium)}</td></tr></table><p><small>Generated from InsureX Nexus AI policy records.</small></p><button onclick="window.print()">Print / Save as PDF</button></body></html>`)
+    certificate.document.close()
+  }
+
+  const installmentsPerYear = ({ monthly: 12, quarterly: 4, semi_annual: 2, annual: 1 }[policy?.paymentFrequency] || 1)
+  const installmentAmount = (Number(policy?.premium) || 0) / installmentsPerYear
+  const paymentSchedule = Array.from({ length: installmentsPerYear }, (_, index) => {
+    const date = new Date(`${policy?.startDate || new Date().toISOString().slice(0, 10)}T00:00:00`)
+    date.setMonth(date.getMonth() + Math.round(index * 12 / installmentsPerYear))
+    return { date, amount: installmentAmount }
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -203,7 +219,7 @@ export function PolicyDetails() {
           <p className="page-subtitle">{policy.policyPlan?.name || policy.type || ''} • {policy.customerName || ''}</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={downloadCertificate}>
             <Download className="w-4 h-4 mr-2" />
             Download
           </Button>
@@ -461,11 +477,11 @@ export function PolicyDetails() {
                     Edit Policy
                   </Link>
                 </Button>}
-                <Button variant="outline" className="w-full justify-start gap-3">
+                <Button variant="outline" className="w-full justify-start gap-3" onClick={downloadCertificate}>
                   <Download className="w-4 h-4" />
                   Download Certificate
                 </Button>
-                <Button variant="outline" className="w-full justify-start gap-3">
+                <Button variant="outline" className="w-full justify-start gap-3" onClick={() => setScheduleOpen(true)}>
                   <Calendar className="w-4 h-4" />
                   View Payment Schedule
                 </Button>
@@ -509,6 +525,16 @@ export function PolicyDetails() {
           </Card>
         </div>
       </div>
+      {scheduleOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setScheduleOpen(false) }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="payment-schedule-title" className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4"><div><h2 id="payment-schedule-title" className="text-xl font-semibold">Payment Schedule</h2><p className="mt-1 text-sm text-gray-500">{policy.policyNumber} · {policy.paymentFrequency?.replace(/_/g, ' ') || 'annual'} installments</p></div><button className="text-gray-500" onClick={() => setScheduleOpen(false)} aria-label="Close payment schedule">×</button></div>
+            <div className="mt-5 divide-y divide-gray-100">{paymentSchedule.map((payment, index) => <div key={index} className="flex justify-between py-3"><span>Installment {index + 1} · {formatDate(payment.date)}</span><strong>{formatCurrency(payment.amount)}</strong></div>)}</div>
+            <p className="mt-4 text-sm text-gray-500">This schedule is calculated from the policy premium and frequency. Contact your insurer to arrange or confirm payment.</p>
+            <div className="mt-5 flex justify-end"><Button variant="primary" onClick={() => setScheduleOpen(false)}>Done</Button></div>
+          </section>
+        </div>
+      )}
     </div>
   )
 }

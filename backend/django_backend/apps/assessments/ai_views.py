@@ -7,12 +7,13 @@ from rest_framework import status
 from django.core.serializers.json import DjangoJSONEncoder
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from time import perf_counter
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 
 from apps.claims.models import Claim
 from .models import ClaimAssessment, AgentOutput, DecisionFlow, AssessmentType, AssessmentStatus
-from .serializers import ClaimAssessmentSerializer, DecisionFlowSerializer
+from .serializers import AgentOutputSerializer, ClaimAssessmentSerializer, DecisionFlowSerializer
 from ml_service import (
     detect_fraud_ml,
     predict_repair_cost_ml,
@@ -231,6 +232,32 @@ def run_agent(request, agent_type):
     
     claim = get_object_or_404(Claim, id=claim_id)
 
+    policy = claim.policy
+    vehicle = claim.vehicle
+    telemetry = {
+        'claim_number': claim.claim_number,
+        'incident_date': claim.incident_date.isoformat() if claim.incident_date else None,
+        'incident_type': claim.incident_type,
+        'incident_severity': claim.incident_severity,
+        'claim_amount': float(claim.claim_amount or 0),
+        'injuries_reported': claim.injuries,
+        'property_damage_reported': claim.property_damage,
+        'policy_number': policy.policy_number,
+        'policy_status': policy.status,
+        'policy_start_date': policy.start_date.isoformat() if policy.start_date else None,
+        'policy_end_date': policy.end_date.isoformat() if policy.end_date else None,
+        'deductible': float(policy.deductible or 0),
+        'vehicle': {
+            'year': vehicle.year,
+            'make': vehicle.make,
+            'model': vehicle.model,
+        } if vehicle else None,
+    }
+    if isinstance(input_data, dict):
+        telemetry.update(input_data)
+    else:
+        telemetry['provided_input'] = input_data
+
     agent_output, created = AgentOutput.objects.get_or_create(
         claim=claim,
         agent_type=agent_type,
@@ -238,9 +265,11 @@ def run_agent(request, agent_type):
     )
     
     agent_output.status = 'running'
-    agent_output.input_data = input_data
+    agent_output.input_data = telemetry
+    agent_output.error_message = ''
     agent_output.save()
     
+    started_at = perf_counter()
     try:
         output_data = {}
         if agent_type == 'claim_agent':
@@ -297,8 +326,8 @@ def run_agent(request, agent_type):
         output_data = json_safe(output_data)
         agent_output.output_data = output_data
         agent_output.status = 'completed'
-        agent_output.confidence = None
-        agent_output.processing_time_seconds = None
+        agent_output.confidence = None  # No calibrated confidence model is configured.
+        agent_output.processing_time_seconds = max(0.01, round(perf_counter() - started_at, 2))
         agent_output.completed_at = timezone.now()
         agent_output.save()
 

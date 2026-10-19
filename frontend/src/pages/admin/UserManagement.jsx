@@ -21,6 +21,7 @@ const roleLabels = {
   customer: 'Customer',
   investigator: 'Investigator',
   employee: 'Insurance Employee',
+  repair: 'Repair Shop',
 }
 
 const roleOptions = Object.entries(roleLabels).map(([value, label]) => ({ value, label }))
@@ -78,7 +79,7 @@ export function UserManagement() {
           <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><Users className="h-6 w-6" /></div>
           <div>
             <h1 className="page-title">User Management</h1>
-            <p className="page-subtitle">Create customer, investigator, and employee accounts.</p>
+            <p className="page-subtitle">Create customer, investigator, employee, and repair shop accounts.</p>
           </div>
         </div>
       </div>
@@ -94,6 +95,7 @@ export function UserManagement() {
             <Input label="Last name" name="last_name" value={form.last_name} onChange={handleChange} />
             <Input label="Email" name="email" type="email" autoComplete="email" value={form.email} onChange={handleChange} required />
             <Select label="Role" name="role" value={form.role} onChange={handleChange} options={roleOptions} required />
+            {form.role === 'repair' && <p className="md:col-span-2 -mt-2 text-sm text-amber-800">Use the same email address registered on the repair shop record so the account can access jobs assigned to that shop.</p>}
             <Input label="Phone (optional)" name="phone" type="tel" value={form.phone} onChange={handleChange} />
             {form.role !== 'customer' && <Input label="Department (optional)" name="department" value={form.department} onChange={handleChange} />}
             <Input label="Initial password" name="password" type="password" autoComplete="new-password" value={form.password} onChange={handleChange} hint="Use a strong password that meets the account security rules." required />
@@ -111,7 +113,7 @@ export function UserManagement() {
       <Card>
         <CardHeader
           title="Managed Accounts"
-          subtitle={`${users.length} customer, investigator, and employee account${users.length === 1 ? '' : 's'}`}
+          subtitle={`${users.length} managed account${users.length === 1 ? '' : 's'}`}
           action={<Button variant="outline" size="sm" onClick={loadUsers} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>}
         />
         <CardContent>

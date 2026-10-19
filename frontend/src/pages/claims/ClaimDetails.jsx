@@ -151,6 +151,66 @@ export function ClaimDetails() {
     })
   }
 
+  const refreshDocuments = async () => {
+    setDocumentsLoading(true)
+    try {
+      const response = await claimService.getClaimDocuments(id)
+      const rows = Array.isArray(response) ? response : (response.results || [])
+      setClaim((current) => current ? {
+        ...current,
+        documents: rows.map((document) => ({
+          id: document.id,
+          name: document.original_name,
+          type: document.document_type,
+          description: document.description,
+          file: document.file,
+          uploadedAt: document.uploaded_at,
+          uploadedByName: document.uploaded_by_name,
+          verified: document.verified,
+        })),
+      } : current)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Unable to load claim attachments.')
+    } finally {
+      setDocumentsLoading(false)
+    }
+  }
+
+  const uploadDocuments = async () => {
+    if (!documentFiles.length) return
+    setDocumentUploading(true)
+    setDocumentUploadError('')
+    const failedFiles = []
+    const uploadErrors = []
+    for (const file of documentFiles) {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('document_type', documentType)
+      formData.append('original_name', file.name)
+      formData.append('description', '')
+      try {
+        await claimService.uploadClaimDocument(id, formData)
+      } catch (error) {
+        failedFiles.push(file)
+        const payload = error.response?.data
+        const details = payload?.error?.details
+        const detailText = typeof details === 'string'
+          ? details
+          : details && typeof details === 'object'
+            ? Object.entries(details).map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`).join('; ')
+            : ''
+        uploadErrors.push(`${file.name}: ${detailText || payload?.detail || payload?.error?.message || error.message || 'upload request failed'}`)
+      }
+    }
+    setDocumentFiles(failedFiles)
+    if (failedFiles.length) {
+      setDocumentUploadError(`Could not upload. ${uploadErrors.join(' | ')}`)
+    } else {
+      await refreshDocuments()
+    }
+    setDocumentUploading(false)
+  }
+
   useEffect(() => {
     if (!canManageAssignments) return
     let active = true
@@ -361,7 +421,10 @@ export function ClaimDetails() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id)
+                if (tab.id === 'documents') refreshDocuments()
+              }}
               className={clsx(
                 'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors',
                 activeTab === tab.id
@@ -673,6 +736,11 @@ export function ClaimDetails() {
                     {claim.documents.map((doc) => (
                       <div key={doc.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition">
                         <div className="flex items-center gap-3">
+                          {/\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(doc.file || doc.name || '') && (
+                            <a href={doc.file} target="_blank" rel="noreferrer" aria-label={`View ${doc.name}`}>
+                              <img src={doc.file} alt={doc.name} className="h-16 w-16 rounded-lg border border-gray-200 object-cover" />
+                            </a>
+                          )}
                           <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
                             <FileText className="w-5 h-5" />
                           </div>

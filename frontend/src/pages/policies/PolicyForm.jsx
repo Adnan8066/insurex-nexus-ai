@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Save } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
@@ -14,6 +14,7 @@ const nextYear = () => new Date(new Date().setFullYear(new Date().getFullYear() 
 export function PolicyForm() {
   const navigate = useNavigate()
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
   const isEdit = Boolean(id)
   const canAssignCustomer = ['admin', 'employee'].includes(user?.role)
@@ -24,7 +25,7 @@ export function PolicyForm() {
   const [error, setError] = useState('')
   const [quote, setQuote] = useState(null)
   const [formData, setFormData] = useState({
-    customer: '',
+    customer: searchParams.get('customer') || '',
     agent: user?.role === 'employee' ? String(user.id) : '',
     vehicle: '',
     policyTierId: '',
@@ -356,7 +357,17 @@ export function PolicyForm() {
             <div className="card-header"><h2 className="card-title">Covered Vehicle</h2></div>
             <div className="card-content">
               <Select label="Vehicle belonging to this customer" name="vehicle" value={formData.vehicle} onChange={handleChange} options={vehicleOptions} placeholder={selectedCustomer ? 'Select an unassigned vehicle' : 'Choose a customer first'} required />
-              {selectedCustomer && vehicleOptions.length === 0 && <p className="mt-2 text-sm text-amber-700">This customer has no unassigned vehicles. Add a vehicle to the customer before issuing an auto policy.</p>}
+              {selectedCustomer && vehicleOptions.length === 0 && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p>This customer has no unassigned vehicles. Add the vehicle first; a policy is not required to save it.</p>
+                  <Link
+                    className="mt-2 inline-flex font-semibold text-blue-800 underline hover:text-blue-950"
+                    to={`/vehicles/new?customer=${encodeURIComponent(selectedCustomer)}&returnTo=policy`}
+                  >
+                    Add vehicle for this customer
+                  </Link>
+                </div>
+              )}
             </div>
           </section>
         ) : ['homeowners', 'renters'].includes(formData.type) ? (

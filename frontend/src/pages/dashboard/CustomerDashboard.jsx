@@ -31,7 +31,6 @@ import ErrorBoundary, {
 
 import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/toastHooks'
-import { analyticsService } from '../../services/analyticsService'
 
 const claimStatusConfig = {
   submitted: { label: 'Submitted', color: 'info' },
@@ -246,8 +245,14 @@ export function CustomerDashboard() {
 
   const handleExport = async () => {
     try {
-      const report = await analyticsService.exportReport('csv', { timeframe, claims: claims.length, policies: policies.length })
-      const blob = new Blob([report], { type: 'text/csv' })
+      const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+      const rows = [
+        ['Record Type', 'Reference', 'Status', 'Date', 'Details', 'Amount'],
+        ...policies.map((policy) => ['Policy', policy.policyNumber, policy.status, policy.startDate, policy.type, policy.premium]),
+        ...claims.map((claim) => ['Claim', claim.claimNumber, claim.status, claim.submittedAt, claim.incidentType, claim.claimAmount]),
+      ]
+      const report = rows.map((row) => row.map(escapeCsv).join(',')).join('\r\n')
+      const blob = new Blob([report], { type: 'text/csv;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -255,7 +260,7 @@ export function CustomerDashboard() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       toast.showSuccess('Report exported successfully')
     } catch (err) {
       toast.showError('Failed to export report')
@@ -299,7 +304,7 @@ export function CustomerDashboard() {
 
   const quickActions = [
     { label: 'File a Claim', href: '/claims/new', icon: FilePlus2, color: 'bg-blue-50 text-blue-700 hover:bg-blue-100', description: 'Start a new claim' },
-    { label: 'Make a Payment', href: '/settlements', icon: DollarSign, color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', description: 'Review payments and settlements' },
+    { label: 'View Payments', href: '/settlements', icon: DollarSign, color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', description: 'Review your claim payment and settlement records' },
     { label: 'Get Support', href: '/notifications', icon: Headphones, color: 'bg-violet-50 text-violet-700 hover:bg-violet-100', description: 'View updates about your account' },
   ]
 

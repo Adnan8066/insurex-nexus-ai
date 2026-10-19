@@ -23,6 +23,7 @@ import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { ChartCard, BarChart } from '../../components/charts/ChartComponents'
+import { formatCurrency } from '../../utils/helpers'
 
 export function AIOperations() {
   const [models, setModels] = useState([])
