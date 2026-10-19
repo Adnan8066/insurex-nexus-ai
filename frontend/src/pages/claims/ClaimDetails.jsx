@@ -12,6 +12,7 @@ import {
   Shield,
   Brain,
   Download,
+  Upload,
   Activity,
   ChevronRight,
   UserCheck,
@@ -127,6 +128,11 @@ export function ClaimDetails() {
   const canViewAI = ['admin', 'employee', 'investigator'].includes(user?.role)
   const canManageAssignments = ['admin', 'employee'].includes(user?.role)
   const [claim, setClaim] = useState(null)
+  const [documentsLoading, setDocumentsLoading] = useState(false)
+  const [documentFiles, setDocumentFiles] = useState([])
+  const [documentType, setDocumentType] = useState('photos')
+  const [documentUploading, setDocumentUploading] = useState(false)
+  const [documentUploadError, setDocumentUploadError] = useState('')
   const [statusDraft, setStatusDraft] = useState('')
   const [savingStatus, setSavingStatus] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -147,6 +153,66 @@ export function ClaimDetails() {
       investigator: String(result.assignedInvestigatorId || ''),
       repairShop: String(result.assignedRepairShopId || ''),
     })
+  }
+
+  const refreshDocuments = async () => {
+    setDocumentsLoading(true)
+    try {
+      const response = await claimService.getClaimDocuments(id)
+      const rows = Array.isArray(response) ? response : (response.results || [])
+      setClaim((current) => current ? {
+        ...current,
+        documents: rows.map((document) => ({
+          id: document.id,
+          name: document.original_name,
+          type: document.document_type,
+          description: document.description,
+          file: document.file,
+          uploadedAt: document.uploaded_at,
+          uploadedByName: document.uploaded_by_name,
+          verified: document.verified,
+        })),
+      } : current)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Unable to load claim attachments.')
+    } finally {
+      setDocumentsLoading(false)
+    }
+  }
+
+  const uploadDocuments = async () => {
+    if (!documentFiles.length) return
+    setDocumentUploading(true)
+    setDocumentUploadError('')
+    const failedFiles = []
+    const uploadErrors = []
+    for (const file of documentFiles) {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('document_type', documentType)
+      formData.append('original_name', file.name)
+      formData.append('description', '')
+      try {
+        await claimService.uploadClaimDocument(id, formData)
+      } catch (error) {
+        failedFiles.push(file)
+        const payload = error.response?.data
+        const details = payload?.error?.details
+        const detailText = typeof details === 'string'
+          ? details
+          : details && typeof details === 'object'
+            ? Object.entries(details).map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`).join('; ')
+            : ''
+        uploadErrors.push(`${file.name}: ${detailText || payload?.detail || payload?.error?.message || error.message || 'upload request failed'}`)
+      }
+    }
+    setDocumentFiles(failedFiles)
+    if (failedFiles.length) {
+      setDocumentUploadError(`Could not upload. ${uploadErrors.join(' | ')}`)
+    } else {
+      await refreshDocuments()
+    }
+    setDocumentUploading(false)
   }
 
   useEffect(() => {
@@ -339,7 +405,10 @@ export function ClaimDetails() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id)
+                if (tab.id === 'documents') refreshDocuments()
+              }}
               className={clsx(
                 'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors',
                 activeTab === tab.id
@@ -614,11 +683,62 @@ export function ClaimDetails() {
             <Card>
               <CardHeader title="Attached Documents & Evidence" />
               <CardContent className="p-6">
-                {claim.documents && claim.documents.length > 0 ? (
+                <div className="mb-5 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4">
+                  <div className="grid gap-4 sm:grid-cols-[minmax(180px,1fr)_minmax(220px,2fr)_auto] sm:items-end">
+                    <Select
+                      label="Document type"
+                      value={documentType}
+                      onChange={(event) => setDocumentType(event.target.value)}
+                      options={[
+                        { value: 'photos', label: 'Damage photos' },
+                        { value: 'estimate', label: 'Repair estimate' },
+                        { value: 'police_report', label: 'Police report' },
+                        { value: 'medical', label: 'Medical records' },
+                        { value: 'receipt', label: 'Receipt' },
+                        { value: 'other', label: 'Other document' },
+                      ]}
+                    />
+                    <div>
+                      <label htmlFor="claim-followup-documents" className="mb-1 block text-sm font-medium text-gray-700">Add files (PNG, JPG, or PDF; up to 25 MB each)</label>
+                      <input
+                        id="claim-followup-documents"
+                        type="file"
+                        accept="image/png,image/jpeg,application/pdf"
+                        multiple
+                        disabled={documentUploading}
+                        className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:font-medium file:text-blue-700 hover:file:bg-blue-100"
+                        onChange={(event) => {
+                          const selected = Array.from(event.target.files || [])
+                          const invalid = selected.find((file) => file.size === 0 || file.size > 25 * 1024 * 1024)
+                          if (invalid) {
+                            setDocumentUploadError(`${invalid.name} is empty or larger than 25 MB.`)
+                          } else {
+                            setDocumentUploadError('')
+                            setDocumentFiles((current) => [...current, ...selected])
+                          }
+                          event.target.value = ''
+                        }}
+                      />
+                    </div>
+                    <Button type="button" onClick={uploadDocuments} disabled={documentUploading || documentFiles.length === 0}>
+                      <Upload className="mr-2 h-4 w-4" />{documentUploading ? 'Uploading…' : `Upload ${documentFiles.length || ''} file${documentFiles.length === 1 ? '' : 's'}`}
+                    </Button>
+                  </div>
+                  {documentFiles.length > 0 && <p className="mt-2 text-sm text-gray-600">Ready to upload: {documentFiles.map((file) => file.name).join(', ')}</p>}
+                  {documentUploadError && <p className="mt-2 text-sm text-red-700" role="alert">{documentUploadError}</p>}
+                </div>
+                {documentsLoading ? (
+                  <p className="py-8 text-center text-sm text-gray-500">Loading uploaded documents…</p>
+                ) : claim.documents && claim.documents.length > 0 ? (
                   <div className="space-y-3">
                     {claim.documents.map((doc) => (
                       <div key={doc.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition">
                         <div className="flex items-center gap-3">
+                          {/\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(doc.file || doc.name || '') && (
+                            <a href={doc.file} target="_blank" rel="noreferrer" aria-label={`View ${doc.name}`}>
+                              <img src={doc.file} alt={doc.name} className="h-16 w-16 rounded-lg border border-gray-200 object-cover" />
+                            </a>
+                          )}
                           <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
                             <FileText className="w-5 h-5" />
                           </div>

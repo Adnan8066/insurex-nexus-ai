@@ -102,6 +102,7 @@ export function VehicleList() {
         (v) =>
           (v.make || '').toLowerCase().includes(searchLower) ||
           (v.model || '').toLowerCase().includes(searchLower) ||
+          (v.customerName || '').toLowerCase().includes(searchLower) ||
           (v.licensePlate || '').toLowerCase().includes(searchLower) ||
           (v.vin || '').toLowerCase().includes(searchLower)
       )
@@ -221,6 +222,9 @@ export function VehicleList() {
                       <TableHead onClick={() => handleSort('year')} className="cursor-pointer">
                         Vehicle {sortConfig.key === 'year' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </TableHead>
+                      <TableHead onClick={() => handleSort('customerName')} className="cursor-pointer">
+                        Customer {sortConfig.key === 'customerName' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </TableHead>
                       <TableHead onClick={() => handleSort('licensePlate')} className="cursor-pointer">
                         License Plate {sortConfig.key === 'licensePlate' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </TableHead>
@@ -257,6 +261,7 @@ export function VehicleList() {
                             </div>
                           </div>
                         </TableCell>
+                        <TableCell className="font-medium text-gray-700">{vehicle.customerName || '—'}</TableCell>
                         <TableCell className="font-mono font-medium">{vehicle.licensePlate}</TableCell>
                         <TableCell className="font-mono text-sm">{vehicle.vin}</TableCell>
                         <TableCell><StatusBadge status={vehicle.status} /></TableCell>
