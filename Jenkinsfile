@@ -10,12 +10,14 @@ pipeline {
         stage('Checkout') {
             steps {
                 retry(3) {
-                    try {
-                        deleteDir()
-                        checkout scm
-                    } catch (err) {
-                        sleep time: 5, unit: 'SECONDS'
-                        throw err
+                    script {
+                        try {
+                            deleteDir()
+                            checkout scm
+                        } catch (err) {
+                            sleep time: 5, unit: 'SECONDS'
+                            throw err
+                        }
                     }
                 }
             }
@@ -25,11 +27,13 @@ pipeline {
             steps {
                 dir('frontend') {
                     retry(3) {
-                        try {
-                            bat 'npm ci'
-                        } catch (err) {
-                            sleep time: 5, unit: 'SECONDS'
-                            throw err
+                        script {
+                            try {
+                                bat 'npm ci'
+                            } catch (err) {
+                                sleep time: 5, unit: 'SECONDS'
+                                throw err
+                            }
                         }
                     }
                     bat 'npm run lint'
