@@ -1,11 +1,37 @@
 pipeline {
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+    }
+
     stages {
+        stage('Checkout') {
+            steps {
+                retry(3) {
+                    try {
+                        deleteDir()
+                        checkout scm
+                    } catch (err) {
+                        sleep time: 5, unit: 'SECONDS'
+                        throw err
+                    }
+                }
+            }
+        }
+
         stage('Frontend Checks') {
             steps {
                 dir('frontend') {
-                    bat 'npm ci'
+                    retry(3) {
+                        try {
+                            bat 'npm ci'
+                        } catch (err) {
+                            sleep time: 5, unit: 'SECONDS'
+                            throw err
+                        }
+                    }
                     bat 'npm run lint'
                     bat 'npm run build'
                 }
