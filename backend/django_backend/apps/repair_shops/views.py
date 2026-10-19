@@ -113,20 +113,22 @@ class RepairJobViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return RepairJobCreateSerializer
         elif self.action in ['update', 'partial_update']:
-            if self.request.user.role == Role.REPAIR:
+            user = getattr(self.request, 'user', None)
+            if getattr(user, 'role', None) == Role.REPAIR:
                 return RepairJobPartnerUpdateSerializer
             return RepairJobUpdateSerializer
         return RepairJobSerializer
     
     def get_queryset(self):
-        user = self.request.user
-        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
+        user = getattr(self.request, 'user', None)
+        role = getattr(user, 'role', None)
+        if role in [Role.ADMIN, Role.EMPLOYEE]:
             return self.queryset
-        if user.role == Role.INVESTIGATOR:
+        if role == Role.INVESTIGATOR:
             return self.queryset.filter(claim__assigned_investigator=user)
-        if user.role == 'repair':
+        if role == Role.REPAIR:
             return self.queryset.filter(repair_shop__email__iexact=user.email)
-        if user.role == Role.CUSTOMER:
+        if role == Role.CUSTOMER:
             return self.queryset.filter(claim__customer=user)
         return self.queryset.none()
     
