@@ -2,22 +2,28 @@ pipeline {
     agent any
 
     stages {
-        stage('Build Frontend (React)') {
+        stage('Frontend Checks') {
             steps {
                 dir('frontend') {
-                    sh 'npm install'
+                    sh 'npm ci'
+                    sh 'npm run lint'
                     sh 'npm run build'
                 }
             }
         }
 
-        stage('Test Backend (Django)') {
+        stage('Backend Checks') {
             steps {
-                dir('backend') {
-                    // Adjust 'django_backend' if manage.py is nested deeper inside another folder
-                    sh 'python -m venv venv'
-                    sh '. venv/bin/activate && pip install -r requirements.txt || true'
-                    sh '. venv/bin/activate && python manage.py test || true'
+                dir('backend/django_backend') {
+                    sh '''
+                        python3 -m venv .venv
+                        . .venv/bin/activate
+                        python -m pip install --upgrade pip
+                        pip install -r requirements.txt
+                        python manage.py check
+                        python manage.py spectacular --validate --file /tmp/insurex-openapi-schema.yml
+                        python manage.py test
+                    '''
                 }
             }
         }
