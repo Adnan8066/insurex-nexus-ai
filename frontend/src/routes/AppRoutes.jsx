@@ -66,7 +66,7 @@ export default function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/" element={<PublicHome />} />
 
-      <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+      <Route element={<ProtectedRoute><ErrorBoundary><MainLayout /></ErrorBoundary></ProtectedRoute>}>
         <Route path="dashboard" element={<RoleBasedDashboard />} />
         <Route path="policies" element={<PolicyList />} />
         <Route path="policies/new" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />

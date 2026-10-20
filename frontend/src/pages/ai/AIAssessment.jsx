@@ -44,6 +44,27 @@ const normalizeFactors = (factors) => {
   })
 }
 
+const getErrorMessage = (error, fallback) => {
+  const payload = error?.response?.data?.error
+    ?? error?.response?.data?.detail
+    ?? error?.response?.data?.message
+    ?? error?.message
+
+  if (typeof payload === 'string' && payload.trim()) return payload
+  if (payload && typeof payload === 'object') {
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      const details = typeof payload.details === 'string' ? payload.details.trim() : ''
+      return details ? `${payload.message} (${details})` : payload.message
+    }
+    try {
+      return JSON.stringify(payload)
+    } catch {
+      return fallback
+    }
+  }
+  return fallback
+}
+
 export function AIAssessment() {
   const [searchParams, setSearchParams] = useSearchParams()
   const claimParam = searchParams.get('claim') || ''
@@ -76,7 +97,7 @@ export function AIAssessment() {
       }
     } catch (err) {
       console.error('Failed to load AI assessment data:', err)
-      setError(err.response?.data?.error || err.response?.data?.detail || err.message || 'Failed to load assessments. Please try again.')
+      setError(getErrorMessage(err, 'Failed to load assessments. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -109,7 +130,7 @@ export function AIAssessment() {
       setAssessments(Array.isArray(assessmentsRes) ? assessmentsRes : assessmentsRes.results || [])
     } catch (err) {
       console.error('Failed to run AI assessment:', err)
-      setError(err.response?.data?.error || err.response?.data?.detail || err.message || 'Failed to run AI assessment.')
+      setError(getErrorMessage(err, 'Failed to run AI assessment.'))
     } finally {
       setAnalyzing(false)
     }

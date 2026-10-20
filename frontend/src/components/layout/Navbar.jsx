@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
   BarChart3,
@@ -47,6 +47,7 @@ const moduleItems = [
 export function Navbar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -57,9 +58,41 @@ export function Navbar() {
     return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
   })
   const moduleNavRef = useRef(null)
+  const moduleLinkRefs = useRef([])
   const userMenuRef = useRef(null)
   const notificationsRef = useRef(null)
   const visibleModules = moduleItems.filter((item) => item.roles.includes(user?.role))
+  const activeModuleIndex = visibleModules.reduce((activeIndex, item, index) => {
+    const matches = location.pathname === item.to
+      || (item.to !== '/dashboard' && location.pathname.startsWith(`${item.to}/`))
+    if (!matches) return activeIndex
+    if (activeIndex === -1 || item.to.length > visibleModules[activeIndex].to.length) return index
+    return activeIndex
+  }, -1)
+  const [activeIndicator, setActiveIndicator] = useState({ left: 0, width: 0, ready: false })
+
+  useLayoutEffect(() => {
+    const nav = moduleNavRef.current
+    const activeLink = moduleLinkRefs.current[activeModuleIndex]
+    if (!nav || !activeLink) {
+      setActiveIndicator((current) => ({ ...current, ready: false }))
+      return undefined
+    }
+
+    const updateIndicator = () => {
+      setActiveIndicator({ left: activeLink.offsetLeft, width: activeLink.offsetWidth, ready: true })
+    }
+
+    updateIndicator()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateIndicator)
+    observer?.observe(nav)
+    moduleLinkRefs.current.forEach((link) => link && observer?.observe(link))
+    window.addEventListener('resize', updateIndicator)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', updateIndicator)
+    }
+  }, [activeModuleIndex, visibleModules.length])
 
   useEffect(() => {
     if (!user?.id) return undefined
@@ -201,14 +234,21 @@ export function Navbar() {
       <div className="border-t border-slate-100">
         <div className="mx-auto flex max-w-[1600px] items-center px-1 sm:px-4 lg:px-6">
           <button onClick={() => scrollModules(-1)} className="shrink-0 rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700" aria-label="Scroll modules left"><ChevronLeft className="h-4 w-4" /></button>
-          <nav ref={moduleNavRef} className="module-nav-scroll flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain scroll-smooth px-2 py-2" aria-label="Dashboard modules">
-            {visibleModules.map(({ label, to, Icon }) => (
+          <nav
+            ref={moduleNavRef}
+            className="module-nav-scroll module-nav-track flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain scroll-smooth px-2 py-2"
+            aria-label="Dashboard modules"
+            style={{ '--module-active-left': `${activeIndicator.left}px`, '--module-active-width': `${activeIndicator.width}px` }}
+          >
+            <span aria-hidden="true" className={`module-nav-active-indicator${activeIndicator.ready ? ' is-ready' : ''}`} />
+            {visibleModules.map(({ label, to, Icon }, index) => (
               <NavLink
                 key={label}
+                ref={(element) => { moduleLinkRefs.current[index] = element }}
                 to={to}
                 end={to === '/dashboard'}
                 title={label}
-                className={({ isActive }) => `flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition sm:px-3.5 sm:text-sm ${isActive ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'}`}
+                className={({ isActive }) => `module-nav-link flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition sm:px-3.5 sm:text-sm ${isActive ? 'is-active' : 'text-slate-600 hover:bg-white/80 hover:text-slate-950'}`}
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>{label}</span>
