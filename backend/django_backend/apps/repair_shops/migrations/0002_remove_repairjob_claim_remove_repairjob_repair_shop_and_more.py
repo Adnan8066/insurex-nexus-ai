@@ -11,6 +11,13 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # Remove the claim index before dropping the field. SQLite rebuilds
+        # the table for RemoveField, and otherwise tries to recreate this
+        # index against a model state that no longer has the claim field.
+        migrations.RemoveIndex(
+            model_name='repairjob',
+            name='repair_jobs_claim_i_5e52dc_idx',
+        ),
         migrations.RemoveField(
             model_name='repairjob',
             name='claim',
