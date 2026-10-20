@@ -1,11 +1,19 @@
 pipeline {
     agent any
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> 119704a7a711943a9ae0da29a0ea6125a5eb65ca
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
     }
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> 119704a7a711943a9ae0da29a0ea6125a5eb65ca
     stages {
         stage('Checkout') {
             steps {
@@ -22,7 +30,11 @@ pipeline {
                 }
             }
         }
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> 119704a7a711943a9ae0da29a0ea6125a5eb65ca
         stage('Frontend Checks') {
             steps {
                 dir('frontend') {

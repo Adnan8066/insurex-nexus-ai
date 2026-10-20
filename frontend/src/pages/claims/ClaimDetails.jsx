@@ -128,10 +128,11 @@ export function ClaimDetails() {
   const lifecycleStatus = (claim?.status || '').replace(/_/g, '-')
   const [statusDraft, setStatusDraft] = useState('')
   const [savingStatus, setSavingStatus] = useState(false)
-  const [documentFile, setDocumentFile] = useState(null)
+  const [documentFiles, setDocumentFiles] = useState([])
   const [documentType, setDocumentType] = useState('photos')
-  const [uploadingDocument, setUploadingDocument] = useState(false)
-  const [documentError, setDocumentError] = useState('')
+  const [documentUploading, setDocumentUploading] = useState(false)
+  const [documentUploadError, setDocumentUploadError] = useState('')
+  const [documentsLoading, setDocumentsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
@@ -177,11 +178,17 @@ export function ClaimDetails() {
   }
 
   const uploadDocuments = async () => {
-    if (!documentFiles.length) return
+    if (!documentFiles.length || !claim) return
+    const oversizedFiles = documentFiles.filter((file) => file.size > 25 * 1024 * 1024)
+    if (oversizedFiles.length) {
+      setDocumentUploadError(`These files exceed 25 MB: ${oversizedFiles.map((file) => file.name).join(', ')}`)
+      return
+    }
     setDocumentUploading(true)
     setDocumentUploadError('')
     const failedFiles = []
     const uploadErrors = []
+    let uploadedCount = 0
     for (const file of documentFiles) {
       const formData = new FormData()
       formData.append('file', file)
@@ -190,6 +197,7 @@ export function ClaimDetails() {
       formData.append('description', '')
       try {
         await claimService.uploadClaimDocument(id, formData)
+        uploadedCount += 1
       } catch (error) {
         failedFiles.push(file)
         const payload = error.response?.data
@@ -205,8 +213,11 @@ export function ClaimDetails() {
     setDocumentFiles(failedFiles)
     if (failedFiles.length) {
       setDocumentUploadError(`Could not upload. ${uploadErrors.join(' | ')}`)
-    } else {
-      await refreshDocuments()
+    }
+    if (uploadedCount > 0) await refreshDocuments()
+    if (!failedFiles.length) {
+      const input = document.getElementById('claim-detail-document')
+      if (input) input.value = ''
     }
     setDocumentUploading(false)
   }
@@ -272,37 +283,6 @@ export function ClaimDetails() {
       setError(typeof message === 'string' ? message : 'Unable to update claim status.')
     } finally {
       setSavingStatus(false)
-    }
-  }
-
-  const uploadDocument = async () => {
-    if (!documentFile || !claim) return
-    if (documentFile.size > 25 * 1024 * 1024) {
-      setDocumentError('Choose a file that is 25 MB or smaller.')
-      return
-    }
-
-    setUploadingDocument(true)
-    setDocumentError('')
-    try {
-      const formData = new FormData()
-      formData.append('file', documentFile)
-      formData.append('document_type', documentType)
-      formData.append('original_name', documentFile.name)
-      formData.append('description', '')
-      await claimService.uploadClaimDocument(claim.id, formData)
-      await refreshClaim()
-      setDocumentFile(null)
-      const input = document.getElementById('claim-detail-document')
-      if (input) input.value = ''
-    } catch (err) {
-      const detail = err.response?.data?.detail || err.response?.data
-      const message = typeof detail === 'string'
-        ? detail
-        : Object.entries(detail || {}).map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(', ') : value}`).join('; ')
-      setDocumentError(message || 'The document could not be uploaded. Please try again.')
-    } finally {
-      setUploadingDocument(false)
     }
   }
 
@@ -705,33 +685,36 @@ export function ClaimDetails() {
                       ]}
                     />
                     <div>
-                      <label htmlFor="claim-detail-document" className="mb-1 block text-sm font-medium text-gray-700">Choose a file</label>
+                      <label htmlFor="claim-detail-document" className="mb-1 block text-sm font-medium text-gray-700">Add files</label>
                       <input
                         id="claim-detail-document"
                         type="file"
+                        multiple
                         accept="image/png,image/jpeg,application/pdf"
                         className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:font-medium file:text-blue-700 hover:file:bg-blue-100"
                         onChange={(event) => {
-                          setDocumentFile(event.target.files?.[0] || null)
-                          setDocumentError('')
+                          setDocumentFiles(Array.from(event.target.files || []))
+                          setDocumentUploadError('')
                         }}
                       />
-                      <p className="mt-1 text-xs text-gray-500">PNG, JPG, or PDF up to 25 MB</p>
+                      <p className="mt-1 text-xs text-gray-500">PNG, JPG, or PDF up to 25 MB per file</p>
                     </div>
                     <Button
                       variant="primary"
-                      onClick={uploadDocument}
-                      loading={uploadingDocument}
-                      disabled={!documentFile || uploadingDocument}
+                      onClick={uploadDocuments}
+                      loading={documentUploading}
+                      disabled={!documentFiles.length || documentUploading}
                       leftIcon={<Upload className="h-4 w-4" />}
                     >
-                      Upload
+                      Upload {documentFiles.length ? `${documentFiles.length} file${documentFiles.length === 1 ? '' : 's'}` : 'files'}
                     </Button>
                   </div>
-                  {documentFile && <p className="mt-2 text-sm text-gray-600">Selected: {documentFile.name}</p>}
-                  {documentError && <p className="mt-2 text-sm text-red-600" role="alert">{documentError}</p>}
+                  {documentFiles.length > 0 && <p className="mt-2 text-sm text-gray-600">Ready to upload: {documentFiles.map((file) => file.name).join(', ')}</p>}
+                  {documentUploadError && <p className="mt-2 text-sm text-red-600" role="alert">{documentUploadError}</p>}
                 </div>
-                {claim.documents && claim.documents.length > 0 ? (
+                {documentsLoading ? (
+                  <p className="py-8 text-center text-sm text-gray-500" role="status">Loading claim documents…</p>
+                ) : claim.documents && claim.documents.length > 0 ? (
                   <div className="space-y-3">
                     {claim.documents.map((doc) => (
                       <div key={doc.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition">
