@@ -10,7 +10,7 @@ from drf_spectacular.generators import SchemaGenerator
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import RoutingAgentProfile, RoutingRecommendationReview
+from apps.assessments.models import RoutingAgentProfile, RoutingRecommendationReview
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"], SECURE_SSL_REDIRECT=False)
