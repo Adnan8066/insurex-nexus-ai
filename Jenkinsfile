@@ -48,8 +48,8 @@ pipeline {
         stage('Backend Checks') {
             steps {
                 dir('backend\\django_backend') {
-                    bat 'python3 --version'
-                    bat 'python3 -m venv .venv'
+                    bat 'py -3.12 --version'
+                    bat 'py -3.12 -m venv .venv'
                     bat '.venv\\Scripts\\python.exe -m pip install --upgrade pip'
                     bat '.venv\\Scripts\\python.exe -m pip install -r requirements.txt'
                     bat '.venv\\Scripts\\python.exe manage.py check'
