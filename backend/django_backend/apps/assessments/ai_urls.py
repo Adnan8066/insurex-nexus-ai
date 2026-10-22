@@ -2,6 +2,7 @@ from django.urls import path
 from . import ai_views, rl_views
 
 urlpatterns = [
+    path('analyze-damage/', ai_views.analyze_claim_damage, name='analyze-claim-damage'),
     path('assess-claim/', ai_views.assess_claim, name='assess-claim'),
     path('predict-repair-cost/', ai_views.predict_repair_cost, name='predict-repair-cost'),
     path('detect-fraud/', ai_views.detect_fraud, name='detect-fraud'),

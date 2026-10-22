@@ -385,12 +385,34 @@ def model_status(request):
     if not request.user.is_staff_member:
         return Response({'detail': 'Staff access is required.'}, status=status.HTTP_403_FORBIDDEN)
     from ml_service import get_model_status
+    from .damage_analysis import get_damage_model_status
     current = get_model_status()
     report = current.pop('training_report', None)
     return Response({
         'models': current,
+        'visual_damage_analysis': get_damage_model_status(),
         'trained_at': report.get('trained_at') if report else None,
         'datasets': report.get('datasets', {}) if report else {},
         'metrics': report.get('metrics', []) if report else [],
         'data_audit': report.get('data_audit', {}) if report else {},
     })
+
+
+@extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsStaffMember])
+def analyze_claim_damage(request):
+    """Run the image segmentation models on photos already attached to a claim."""
+    claim_id = request.data.get('claim_id')
+    if not claim_id:
+        return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    claim = get_object_or_404(Claim, id=claim_id)
+    from .damage_analysis import DamageAnalysisUnavailable, analyze_claim_photos
+    try:
+        analysis = analyze_claim_photos(claim)
+    except ValueError as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except DamageAnalysisUnavailable as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response(analysis)

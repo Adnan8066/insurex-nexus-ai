@@ -32,6 +32,9 @@ joblib>=1.4.0
 matplotlib>=3.8.4
 lightgbm>=4.3.0
 
+# YOLOv8 segmentation inference for claim photos (checkpoint metadata: 8.3.174)
+ultralytics==8.3.174
+
 # ML Experiment Tracking - comment out for now
 # mlflow==2.13.1
 
