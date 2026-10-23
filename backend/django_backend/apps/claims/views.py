@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+import logging
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 from django.utils import timezone
@@ -15,6 +16,8 @@ from .serializers import (
     ClaimStatusHistorySerializer, ClaimTimelineSerializer, ClaimNoteSerializer
 )
 from common.permissions import IsOwnerOrAdmin, IsEmployee, CanIssuePolicy
+
+logger = logging.getLogger(__name__)
 
 
 class ClaimViewSet(viewsets.ModelViewSet):
@@ -116,6 +119,14 @@ class ClaimViewSet(viewsets.ModelViewSet):
             f'Claim {claim.claim_number} was submitted successfully.',
             link=f'/claims/{claim.id}', related_object_type='claim', related_object_id=claim.id,
         )
+        # Auto-routing fails closed unless explicitly enabled and the PPO
+        # artifact has passed the held-out evaluation gate.
+        try:
+            from apps.assessments.rl_views import auto_assign_new_claim
+            auto_assign_new_claim(claim)
+        except Exception:
+            # A routing/model outage must never roll back a customer's claim.
+            logger.exception('Automatic routing failed for claim %s', claim.claim_number)
     
     @action(detail=True, methods=['get', 'post'], url_path='documents')
     def documents(self, request, pk=None):

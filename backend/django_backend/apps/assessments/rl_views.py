@@ -38,6 +38,82 @@ def _evaluation_gate_passed(model_path):
         return False
 
 
+def auto_assign_new_claim(claim):
+    """Assign a new claim only when routing is enabled and the PPO is qualified.
+
+    This is deliberately fail-closed: missing staff profiles, model artifacts,
+    dependencies, or a passing evaluation leave the claim unassigned.
+    """
+    if os.environ.get('CLAIM_ROUTING_AUTO_ASSIGN_ENABLED', 'false').lower() != 'true':
+        return False
+
+    model_path = _model_artifact_path()
+    if not _evaluation_gate_passed(model_path):
+        return False
+
+    from apps.accounts.models import Role
+    from apps.claims.models import Claim, ClaimTimeline
+
+    profiles = list(RoutingAgentProfile.objects.select_related('user').filter(
+        user__role=Role.EMPLOYEE,
+        user__is_active=True,
+        is_available=True,
+        is_demo=False,
+    ))
+    agent_status = [_agent_status(profile) for profile in profiles]
+    # The model accepts 3-5 candidates. Avoid inventing/fabricating roster data.
+    if not 3 <= len(agent_status) <= 5:
+        return False
+
+    values = {
+        'incident_severity': claim.incident_severity,
+        'number_of_vehicles': claim.number_of_vehicles,
+        'injuries': claim.injuries,
+        'property_damage': claim.property_damage,
+        'witnesses': claim.witnesses,
+        'police_report': claim.police_report,
+        'complexity_score': claim.complexity_score,
+    }
+    result = _load_recommendation_engine().get_routing_recommendations(
+        _claim_routing_features(values), agent_status,
+    )
+    if result.get('status') != 'recommendation_available':
+        return False
+
+    selected = next((
+        profile for profile in profiles
+        if str(profile.user_id) == str(result.get('recommended_agent_id'))
+    ), None)
+    option = next((
+        item for item in result.get('ranked_options', [])
+        if str(item.get('agent_id')) == str(result.get('recommended_agent_id'))
+    ), None)
+    if selected is None or not option or not option.get('skill_match'):
+        return False
+
+    from django.db import transaction
+    with transaction.atomic():
+        # Conditional update prevents a concurrent/manual assignment being overwritten.
+        updated = Claim.objects.filter(
+            pk=claim.pk, assigned_adjuster__isnull=True,
+            status__in=['submitted', 'under_review', 'ai_assessment'],
+        ).update(assigned_adjuster=selected.user)
+        if not updated:
+            return False
+        ClaimTimeline.objects.create(
+            claim=claim,
+            status=claim.status,
+            title='Automatically Assigned to Adjuster',
+            description=(
+                f'Claim was routed to {selected.user.get_full_name() or selected.user.email} '
+                f'by the qualified RL model ({result.get("model_version", "unknown")}).'
+            ),
+            is_system=True,
+        )
+    claim.assigned_adjuster = selected.user
+    return True
+
+
 class ActiveAgentStatusSerializer(serializers.Serializer):
     id = serializers.JSONField()
     queue_length = serializers.FloatField(min_value=0)

@@ -140,6 +140,21 @@ be exercised, and the status page still warns when the candidate is unqualified.
 The gate compares PPO with the least-workload heuristic on held-out mean reward,
 wait, imbalance, and mismatch metrics.
 
+## Automatic claim assignment
+
+New claim intake calls the routing hook after the claim is saved. Assignment is
+off by default. It proceeds only when `CLAIM_ROUTING_AUTO_ASSIGN_ENABLED=True`,
+the deployed model's adjacent `.evaluation.json` passes the evaluation gate,
+and there are 3-5 active, available, non-demo employee routing profiles. The
+selected employee must also meet the model's required skill tier. Otherwise,
+the claim remains unassigned and can be handled through the existing staff
+assignment flow. Successful assignments are recorded in the claim timeline.
+
+Before enabling this setting, retrain and evaluate with representative,
+reviewed operational data. The current evaluation is synthetic and fails the
+gate, so it cannot trigger automatic assignments. Do not enable the setting
+with that candidate.
+
 ## Checks
 
 From the `backend` directory:
@@ -150,5 +165,4 @@ python django_backend/manage.py test apps.assessments
 ```
 
 Model metrics from this synthetic environment must not be described as real
-claim outcomes or used for automatic claim approval, denial, settlement, or
-routing.
+claim outcomes or used for automatic claim approval, denial, or settlement.
