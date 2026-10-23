@@ -65,9 +65,9 @@ export function Footer() {
             <div className="rounded-3xl bg-white p-7 text-slate-950 shadow-2xl shadow-black/20 sm:max-w-sm">
               <p className="text-2xl font-extrabold leading-tight tracking-tight">Built around your claims workflow.</p>
           <p className="mt-3 text-sm leading-6 text-slate-600">Manage coverage, vehicle details, assessment, investigation, and settlement in one workspace.</p>
-              <a href="#footer-contact" className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              <Link to="/support" className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                 Contact Support <ArrowRight className="h-4 w-4" />
-              </a>
+              </Link>
             </div>
             <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm font-bold text-white" aria-label="InsureX dashboard">
               <img src="/insurex-nexus-ai-logo.jpg" alt="InsureX Nexus AI logo" className="h-8 w-8 rounded-lg object-cover" />

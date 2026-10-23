@@ -30,7 +30,8 @@ DIFFICULTY_WORKLOAD = 5.0
 class RewardWeights:
     """Reward coefficients used by the synthetic scheduling objective."""
 
-    wait: float = 1.0
+    # Keep the training objective aligned with the evaluation's wait metric.
+    wait: float = 10.0
     imbalance: float = 2.0
     skill_mismatch: float = 8.0
     assignment: float = 1.0

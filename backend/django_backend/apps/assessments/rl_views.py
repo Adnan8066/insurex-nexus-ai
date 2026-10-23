@@ -181,6 +181,13 @@ def routing_model_status(request):
     report_path = model_path.with_suffix('.evaluation.json')
     evaluation_report_present = report_path.is_file()
     evaluation_gate_passed = _evaluation_gate_passed(model_path)
+    dataset_pretraining = None
+    if evaluation_report_present:
+        try:
+            report = json.loads(report_path.read_text(encoding='utf-8'))
+            dataset_pretraining = report.get('dataset_pretraining')
+        except (OSError, json.JSONDecodeError, AttributeError):
+            dataset_pretraining = None
     return Response({
         'ready': artifact_present and all(dependencies.values()),
         'qualified_for_advisory_pilot': artifact_present and evaluation_gate_passed,
@@ -191,6 +198,7 @@ def routing_model_status(request):
         'artifact_name': model_path.name,
         'artifact_size_bytes': model_path.stat().st_size if artifact_present else None,
         'artifact_path_configured': bool(configured_path),
+        'dataset_pretraining': dataset_pretraining,
         'dependencies': dependencies,
         'advisory_only': True,
         'automated_assignment': False,

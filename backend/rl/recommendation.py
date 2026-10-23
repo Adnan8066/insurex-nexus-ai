@@ -6,6 +6,7 @@ import math
 import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+from xml.parsers.expat import model
 
 import numpy as np
 from stable_baselines3 import PPO
@@ -41,9 +42,18 @@ class ClaimRecommendationEngine:
 
     OBSERVATION_SIZE = 3 + MAX_AGENTS * 4
 
-    def __init__(self, model: Any, model_version: str = "unversioned") -> None:
+    def __init__(
+        self,
+        model: Any,
+        model_version: str = "unversioned",
+        strategy: str = "reward_aware",
+) -> None:
+        if strategy not in {"reward_aware", "ppo"}:
+            raise ValueError("strategy must be 'reward_aware' or 'ppo'.")
+
         self.model = model
         self.model_version = model_version
+        self.strategy = strategy
 
     @classmethod
     def load(cls, model_path: str | Path | None = None) -> "ClaimRecommendationEngine":

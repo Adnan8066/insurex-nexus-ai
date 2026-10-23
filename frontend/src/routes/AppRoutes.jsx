@@ -29,6 +29,7 @@ const UserManagement = lazy(() => import('../pages/admin/UserManagement').then((
 const AIDecisionCenter = lazy(() => import('../pages/decision/AIDecisionCenter').then((module) => ({ default: module.AIDecisionCenter })))
 const AIOperations = lazy(() => import('../pages/operations/AIOperations').then((module) => ({ default: module.AIOperations })))
 const Notifications = lazy(() => import('../pages/notifications/Notifications').then((module) => ({ default: module.Notifications })))
+const Support = lazy(() => import('../pages/support/Support').then((module) => ({ default: module.Support })))
 const Profile = lazy(() => import('../pages/profile/Profile').then((module) => ({ default: module.Profile })))
 const Settings = lazy(() => import('../pages/settings/Settings').then((module) => ({ default: module.Settings })))
 const LandingPage = lazy(() => import('../pages/LandingPage').then((module) => ({ default: module.LandingPage })))
@@ -90,6 +91,7 @@ export default function AppRoutes() {
         <Route path="ai-decision" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><ErrorBoundary><AIDecisionCenter /></ErrorBoundary></ProtectedRoute>} />
         <Route path="operations" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIOperations /></ProtectedRoute>} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="support" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><Support /></ProtectedRoute>} />
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
       </Route>

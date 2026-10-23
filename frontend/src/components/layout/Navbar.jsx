@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
+  ArrowLeft,
   BarChart3,
   Bell,
   Brain,
@@ -17,7 +18,6 @@ import {
   LayoutDashboard,
   LogOut,
   Moon,
-  Plus,
   Settings,
   Sun,
   User,
@@ -33,7 +33,6 @@ const moduleItems = [
   { label: 'User Management', to: '/admin/users', Icon: Users, roles: ['admin'] },
   { label: 'Vehicles', to: '/vehicles', Icon: Car, roles: ['customer', 'employee', 'admin'] },
   { label: 'Claims', to: '/claims', Icon: Briefcase, roles: ['customer', 'employee', 'investigator', 'admin'] },
-  { label: 'New Claim', to: '/claims/new', Icon: Plus, roles: ['customer', 'employee', 'admin'] },
   { label: 'AI Assessment', to: '/ai-assessment', Icon: Brain, roles: ['employee', 'investigator', 'admin'] },
   { label: 'Routing Advice', to: '/routing-advisory', Icon: GitBranch, roles: ['employee', 'investigator', 'admin'] },
   { label: 'Fraud Investigation', to: '/fraud', Icon: AlertTriangle, roles: ['employee', 'investigator', 'admin'] },
@@ -62,6 +61,7 @@ export function Navbar() {
   const userMenuRef = useRef(null)
   const notificationsRef = useRef(null)
   const visibleModules = moduleItems.filter((item) => item.roles.includes(user?.role))
+  const showModuleNavigation = user?.role !== 'customer'
   const activeModuleIndex = visibleModules.reduce((activeIndex, item, index) => {
     const matches = location.pathname === item.to
       || (item.to !== '/dashboard' && location.pathname.startsWith(`${item.to}/`))
@@ -233,6 +233,15 @@ export function Navbar() {
 
       <div className="border-t border-slate-100">
         <div className="mx-auto flex max-w-[1600px] items-center px-1 sm:px-4 lg:px-6">
+          <button
+            onClick={() => navigate(window.history.length > 1 ? -1 : '/dashboard')}
+            className="mr-1 shrink-0 rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-blue-700"
+            aria-label="Go back"
+            title="Go back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          {showModuleNavigation && <>
           <button onClick={() => scrollModules(-1)} className="shrink-0 rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700" aria-label="Scroll modules left"><ChevronLeft className="h-4 w-4" /></button>
           <nav
             ref={moduleNavRef}
@@ -256,6 +265,7 @@ export function Navbar() {
             ))}
           </nav>
           <button onClick={() => scrollModules(1)} className="shrink-0 rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700" aria-label="Scroll modules right"><ChevronRight className="h-4 w-4" /></button>
+          </>}
         </div>
       </div>
     </header>

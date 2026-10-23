@@ -34,3 +34,23 @@ The existing claims, policies, vehicles, fraud, and analytics APIs expose the im
 
 The policy creation form includes eight user-provided motor policy tier examples (`POL-PC-001`–`POL-PC-006` and `POL-TW-007`–`POL-TW-008`). Their base premiums are illustrative estimates only; they are not verified insurer quotes or offers. Selecting a tier stores its ID and coverage summary with the created policy.
 
+
+## Synthetic RL transition data
+
+`rl/data/synthetic_claim_routing_transitions.csv` contains 20,000 synthetic
+state/action/reward/next-state transitions for the claim-routing simulator. It
+uses the observation layout and reward assumptions documented in
+`rl/environment.py`; `episode_id` and `step` preserve trajectory boundaries.
+This is suitable for exercising offline-RL data pipelines and inspecting the
+simulator's behavior. It is **not real insurance or adjuster-performance data**
+and cannot establish real-world routing quality. Regenerate it with the
+`least_workload` behavior policy before the updated PPO training workflow uses
+the CSV to warm-start its actor by imitating those heuristic actions. PPO then
+continues learning by interacting with the simulator; logged rewards are not
+used in the warm start.
+
+Regenerate it from the `backend` directory with:
+
+```powershell
+python -m rl.generate_dataset --episodes 200 --steps 100 --seed 2026 --policy least_workload
+```

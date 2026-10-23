@@ -2,7 +2,7 @@ from gymnasium.utils.env_checker import check_env
 
 from rl.environment import ClaimRoutingEnv
 from rl.evaluation import evaluate_across_seeds, evaluate_baselines
-
+import numpy as np
 
 def test_environment_passes_gymnasium_checker():
     check_env(ClaimRoutingEnv(), skip_render_check=True)
@@ -32,7 +32,7 @@ def test_simulator_decays_workload_and_penalizes_skill_mismatch():
 
     assert low_skill_info["skill_mismatch"] is True
     assert high_skill_info["skill_mismatch"] is False
-    assert high_skill_reward - low_skill_reward == 8.0
+    assert np.isclose(high_skill_reward - low_skill_reward, 8.0)
     assert (low_skill_env.workloads <= before + 6.0).all()
     assert (low_skill_env.queue_lengths == [2, 1, 1, 1, 1]).all()
 

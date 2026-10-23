@@ -172,6 +172,26 @@ class AuthViewSet(viewsets.GenericViewSet):
             'success': True,
             'data': {'user': UserSerializer(user).data},
         }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='support-contacts')
+    def support_contacts(self, request):
+        contacts = User.objects.filter(
+            role__in=[Role.ADMIN, Role.EMPLOYEE],
+            is_active=True,
+        ).exclude(email='').order_by('role', 'last_name', 'first_name', 'email')
+        return Response({
+            'success': True,
+            'data': {
+                'contacts': [{
+                    'id': contact.pk,
+                    'name': contact.get_full_name().strip() or contact.email,
+                    'email': contact.email,
+                    'role': contact.role,
+                    'department': contact.department,
+                    'phone': contact.phone,
+                } for contact in contacts],
+            },
+        })
     
     @action(detail=False, methods=['patch'], permission_classes=[IsAuthenticated], url_path='update_profile')
     def update_profile(self, request):

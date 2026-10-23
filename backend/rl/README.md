@@ -22,8 +22,27 @@ only a minimal backend environment, install those two packages separately.
 Run it from the `backend` directory:
 
 ```powershell
-python -m rl.training --timesteps 50000 --evaluation-steps 100 --evaluation-seeds 10 --seed 123
+python -m rl.training --timesteps 50000 --evaluation-steps 100 --evaluation-seeds 10 --seed 123 --dataset-path rl/data/synthetic_claim_routing_transitions.csv
 ```
+
+Training first warm-starts the PPO actor by behavior-cloning the action choices
+in `synthetic_claim_routing_transitions.csv` (100 epochs by default), then
+continues PPO learning by interacting with the simulator. The CSV's logged
+rewards are not used in that warm start: PPO is an on-policy algorithm, and
+replaying an old action's reward as if it came from PPO's newly selected action
+would train against mismatched outcomes. Use `--pretrain-epochs` to change the
+warm-start duration. Regenerate the CSV before training so its actions come
+from the least-workload expert policy:
+
+```powershell
+python -m rl.generate_dataset --episodes 200 --steps 100 --seed 2026 --policy least_workload
+```
+
+This dataset is synthetic; its behavior labels encode a heuristic, not human
+or adjuster decisions. The simulator's wait reward weight is 10 to better
+align the training objective with the wait-time evaluation metric. These are
+experimental tuning choices; a passing synthetic gate still does not establish
+real-world routing quality.
 
 The command evaluates a random policy and a least-estimated-workload heuristic
 for 100 simulated arrivals, trains PPO, and evaluates all three on ten held-out

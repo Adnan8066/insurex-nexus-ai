@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
   FileText,
   Briefcase,
@@ -10,9 +10,9 @@ import {
   ArrowRight,
   RefreshCw,
   Download,
-  Calendar,
   WifiOff,
   FilePlus2,
+  Car,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
@@ -21,44 +21,89 @@ import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { ChartCard, AreaChart, DoughnutChart } from '../../components/charts/ChartComponents'
 import { EmptyState } from '../../components/ui/EmptyState'
 
 import ErrorBoundary, {
-  ChartErrorFallback,
   DataTableErrorFallback,
 } from '../../components/ui/ErrorBoundary'
 
 import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/toastHooks'
 
-const claimStatusConfig = {
-  submitted: { label: 'Submitted', color: 'info' },
-  under_review: { label: 'Under Review', color: 'warning' },
-  investigation: { label: 'Investigation', color: 'warning' },
-  approved: { label: 'Approved', color: 'success' },
-  rejected: { label: 'Rejected', color: 'danger' },
-  repair_settlement: { label: 'Repair/Settlement', color: 'primary' },
-  closed: { label: 'Closed', color: 'neutral' },
-}
+const createPdfBlob = (reportLines) => {
+  const pages = [[]]
+  let y = 750
+  reportLines.forEach(({ text, style = 'body' }) => {
+    const normalized = String(text ?? '—')
+      .replace(/₹/g, 'INR ')
+      .normalize('NFKD')
+      .replace(/[^\x20-\x7E]/g, '')
+    const maxLength = style === 'title' ? 58 : 92
+    const words = normalized.split(/\s+/)
+    const wrapped = []
+    let line = ''
+    words.forEach((word) => {
+      if (line && `${line} ${word}`.length > maxLength) {
+        wrapped.push(line)
+        line = word
+      } else {
+        line = line ? `${line} ${word}` : word
+      }
+    })
+    if (line) wrapped.push(line)
 
-const TIMEFRAME_OPTIONS = [
-  { value: 'week', label: 'Last 7 Days', days: 7 },
-  { value: 'month', label: 'Last 30 Days', days: 30 },
-  { value: 'quarter', label: 'Current Quarter', days: 90 },
-  { value: 'ytd', label: 'Year to Date', days: 365 },
-  { value: 'year', label: 'Last Year', days: 365 },
-]
+    wrapped.forEach((wrappedLine) => {
+      if (y < 48) {
+        pages.push([])
+        y = 750
+      }
+      pages[pages.length - 1].push({ text: wrappedLine, style, y })
+      y -= style === 'title' ? 30 : style === 'section' ? 23 : 17
+    })
+    if (style === 'section') y -= 4
+  })
+
+  const escapePdfText = (text) => text.replace(/([\\()])/g, '\\$1')
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${pages.map((_, index) => `${5 + index * 2} 0 R`).join(' ')}] /Count ${pages.length} >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+  ]
+
+  pages.forEach((page, index) => {
+    const pageObjectId = 5 + index * 2
+    const contentObjectId = pageObjectId + 1
+    const commands = page.map(({ text, style, y: lineY }) => {
+      const bold = style === 'title' || style === 'section'
+      const font = bold ? 'F2' : 'F1'
+      const size = style === 'title' ? 18 : style === 'section' ? 13 : 10
+      return `BT /${font} ${size} Tf 50 ${lineY} Td (${escapePdfText(text)}) Tj ET`
+    }).join('\n')
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjectId} 0 R >>`)
+    objects.push(`<< /Length ${commands.length} >>\nstream\n${commands}\nendstream`)
+  })
+
+  let pdf = '%PDF-1.4\n'
+  const offsets = [0]
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length)
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`
+  })
+  const xrefOffset = pdf.length
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n` })
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`
+  return new Blob([pdf], { type: 'application/pdf' })
+}
 
 export function CustomerDashboard() {
   const { user } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
   const toast = useToast()
 
   const [loading, setLoading] = useState(true)
   const [policies, setPolicies] = useState([])
   const [claims, setClaims] = useState([])
-  const [timeframe, setTimeframe] = useState(searchParams.get('timeframe') || 'quarter')
   const [refreshing, setRefreshing] = useState(false)
   const [connectionError, setConnectionError] = useState(null)
 
@@ -138,130 +183,41 @@ export function CustomerDashboard() {
     fetchData()
   }, [fetchData])
 
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams)
-    if (timeframe !== 'quarter') {
-      params.set('timeframe', timeframe)
-    } else {
-      params.delete('timeframe')
-    }
-    setSearchParams(params, { replace: true })
-  }, [timeframe, searchParams, setSearchParams])
-
   const activePolicies = policies.filter((p) => p.status === 'active')
   const pendingClaims = claims.filter((c) => ['submitted', 'under_review', 'ai_assessment', 'investigation'].includes(c.status))
   const approvedClaims = claims.filter((c) => c.status === 'approved')
   const recentClaims = [...claims].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 5)
 
-  const claimStatusData = useMemo(() => {
-    const claimsByStatus = claims.reduce((acc, claim) => {
-      acc[claim.status] = (acc[claim.status] || 0) + 1
-      return acc
-    }, {})
-
-    return {
-      labels: Object.keys(claimStatusConfig).map((k) => claimStatusConfig[k].label),
-      datasets: [
-        {
-          data: Object.keys(claimStatusConfig).map((k) => claimsByStatus[k] || 0),
-          backgroundColor: [
-            '#3b82f6',
-            '#f59e0b',
-            '#1e3a5f',
-            '#f59e0b',
-            '#10b981',
-            '#ef4444',
-            '#1e3a5f',
-            '#94a3b8',
-          ],
-          borderWidth: 0,
-        },
-      ],
-    }
-  }, [claims])
-
-  const monthlyClaimsData = useMemo(() => {
-    const today = new Date()
-    const option = TIMEFRAME_OPTIONS.find((item) => item.value === timeframe) || TIMEFRAME_OPTIONS[2]
-    const start = new Date(today)
-    const periodEnd = new Date(today)
-    if (timeframe === 'ytd') start.setMonth(0, 1)
-    else if (timeframe === 'year') {
-      start.setFullYear(today.getFullYear() - 1, 0, 1)
-      periodEnd.setFullYear(today.getFullYear() - 1, 11, 31)
-      periodEnd.setHours(23, 59, 59, 999)
-    } else if (timeframe === 'quarter') {
-      start.setMonth(Math.floor(today.getMonth() / 3) * 3, 1)
-    } else start.setDate(today.getDate() - option.days + 1)
-    start.setHours(0, 0, 0, 0)
-    const daily = timeframe === 'week' || timeframe === 'month'
-    const labels = []
-    const counts = []
-    const bucketDates = []
-    const cursor = new Date(start)
-    while (cursor <= periodEnd) {
-      const bucketDate = new Date(cursor)
-      if (!daily) bucketDate.setDate(1)
-      const key = daily
-        ? `${bucketDate.getFullYear()}-${bucketDate.getMonth()}-${bucketDate.getDate()}`
-        : `${bucketDate.getFullYear()}-${bucketDate.getMonth()}`
-      if (!bucketDates.includes(key)) {
-        bucketDates.push(key)
-        labels.push(daily
-          ? bucketDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-          : bucketDate.toLocaleDateString(undefined, { month: 'short' }))
-        counts.push(0)
-      }
-      cursor.setDate(cursor.getDate() + 1)
-    }
-    claims.forEach((claim) => {
-      if (!claim.submittedAt) return
-      const submittedAt = new Date(claim.submittedAt)
-      if (Number.isNaN(submittedAt.getTime()) || submittedAt < start || submittedAt > periodEnd) return
-      const key = daily
-        ? `${submittedAt.getFullYear()}-${submittedAt.getMonth()}-${submittedAt.getDate()}`
-        : `${submittedAt.getFullYear()}-${submittedAt.getMonth()}`
-      const index = bucketDates.indexOf(key)
-      if (index >= 0) counts[index] += 1
-    })
-    return {
-      labels,
-      datasets: [
-        {
-          label: 'Claims Submitted',
-          data: counts,
-          borderColor: '#1e3a5f',
-          backgroundColor: 'rgba(30, 58, 95, 0.1)',
-          fill: true,
-          tension: 0.4,
-        },
-      ],
-    }
-  }, [claims, timeframe])
-
-  const handleTimeframeChange = (newTimeframe) => {
-    setTimeframe(newTimeframe)
-  }
-
-  const handleExport = async () => {
+  const handleExport = () => {
     try {
-      const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
-      const rows = [
-        ['Record Type', 'Reference', 'Status', 'Date', 'Details', 'Amount'],
-        ...policies.map((policy) => ['Policy', policy.policyNumber, policy.status, policy.startDate, policy.type, policy.premium]),
-        ...claims.map((claim) => ['Claim', claim.claimNumber, claim.status, claim.submittedAt, claim.incidentType, claim.claimAmount]),
+      const customerName = user?.name || user?.first_name || user?.email || 'Customer'
+      const reportLines = [
+        { text: 'InsureX Customer Report', style: 'title' },
+        { text: `Customer: ${customerName}` },
+        { text: `Generated: ${new Date().toLocaleString()}` },
+        { text: 'Account Summary', style: 'section' },
+        { text: `Active policies: ${activePolicies.length}    Total claims: ${claims.length}    Being reviewed: ${pendingClaims.length}    Approved: ${approvedClaims.length}` },
+        { text: 'Policies', style: 'section' },
+        ...(policies.length ? policies.flatMap((policy) => [
+          { text: `${policy.policyNumber || 'Policy'} — ${policy.type || 'Insurance policy'}`, style: 'body' },
+          { text: `Status: ${policy.status || 'Unknown'} | Coverage: ${formatDate(policy.startDate)} to ${formatDate(policy.endDate)} | Premium: ${formatCurrency(policy.premium)} | Deductible: ${formatCurrency(policy.deductible)}` },
+        ]) : [{ text: 'No policies found.' }]),
+        { text: 'Claims', style: 'section' },
+        ...(claims.length ? claims.flatMap((claim) => [
+          { text: `${claim.claimNumber || 'Claim'} — ${claim.status || 'Unknown status'}`, style: 'body' },
+          { text: `Policy: ${claim.policyNumber || '—'} | Incident: ${(claim.incidentType || '—').replace(/_/g, ' ')} | Date: ${formatDate(claim.incidentDate)} | Amount: ${formatCurrency(claim.claimAmount)}` },
+        ]) : [{ text: 'No claims found.' }]),
       ]
-      const report = rows.map((row) => row.map(escapeCsv).join(',')).join('\r\n')
-      const blob = new Blob([report], { type: 'text/csv;charset=utf-8' })
+      const blob = createPdfBlob(reportLines)
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `customer-report-${new Date().toISOString().split('T')[0]}.csv`
+      link.download = `customer-report-${new Date().toISOString().split('T')[0]}.pdf`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      toast.showSuccess('Report exported successfully')
+      toast.showSuccess('PDF report downloaded successfully')
     } catch (err) {
       toast.showError('Failed to export report')
     }
@@ -305,7 +261,7 @@ export function CustomerDashboard() {
   const quickActions = [
     { label: 'File a Claim', href: '/claims/new', icon: FilePlus2, color: 'bg-blue-50 text-blue-700 hover:bg-blue-100', description: 'Start a new claim' },
     { label: 'View Payments', href: '/settlements', icon: DollarSign, color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', description: 'Review your claim payment and settlement records' },
-    { label: 'Get Support', href: '/notifications', icon: Headphones, color: 'bg-violet-50 text-violet-700 hover:bg-violet-100', description: 'View updates about your account' },
+    { label: 'Get Support', href: '/support', icon: Headphones, color: 'bg-violet-50 text-violet-700 hover:bg-violet-100', description: 'Email or call our support team' },
   ]
 
   const firstName = user?.first_name || user?.firstName || user?.name?.trim().split(/\s+/)[0] || user?.get_full_name?.call(user)?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there'
@@ -316,7 +272,7 @@ export function CustomerDashboard() {
 
   return (
     <div className="page">
-      <div className="page-header">
+      <div className="page-header flex-col items-stretch">
         <div>
           <h1 className="page-title">Dashboard</h1>
           <p className="page-subtitle">Welcome back, {firstName}! Here&apos;s an overview of your insurance portfolio.</p>
@@ -327,33 +283,40 @@ export function CustomerDashboard() {
             </div>
           )}
         </div>
+        <nav className="mx-auto grid w-full grid-cols-1 gap-3 sm:w-auto sm:grid-cols-3" aria-label="Your insurance">
+          {[
+            { label: 'Policies', description: 'View your coverage and policy details.', href: '/policies', icon: FileText, visual: 'from-blue-700 via-blue-500 to-cyan-400' },
+            { label: 'Claims', description: 'Follow your claims and see the latest updates.', href: '/claims', icon: Briefcase, visual: 'from-violet-700 via-violet-500 to-fuchsia-400' },
+            { label: 'Vehicles', description: 'View the vehicles protected by your policies.', href: '/vehicles', icon: Car, visual: 'from-emerald-700 via-emerald-500 to-teal-300' },
+          ].map((item) => (
+            <Link key={item.label} to={item.href} className="card group w-full overflow-hidden transition hover:-translate-y-1 hover:shadow-lg sm:w-[172px]">
+              <span className={clsx('relative flex h-20 items-center justify-center overflow-hidden bg-gradient-to-br', item.visual)}>
+                <span className="absolute -right-3 -top-8 h-24 w-24 rounded-full border border-white/20" aria-hidden="true" />
+                <span className="absolute -bottom-12 -left-5 h-24 w-24 rounded-full border border-white/20" aria-hidden="true" />
+                <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 text-white shadow-lg backdrop-blur-sm">
+                  <item.icon className="h-6 w-6" aria-hidden="true" />
+                </span>
+              </span>
+              <span className="block p-3">
+                <span className="block font-semibold text-gray-900 group-hover:text-blue-700">{item.label}</span>
+                <span className="mt-1 block min-h-9 text-xs leading-4 text-gray-500">{item.description}</span>
+                <span className="mt-2 block text-xs font-semibold text-blue-700">Explore <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition-transform group-hover:translate-x-1" aria-hidden="true" /></span>
+              </span>
+            </Link>
+          ))}
+        </nav>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm mb-6">
         <p className="text-sm text-slate-500">Your coverage and claims, at a glance</p>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-slate-500" />
-            <select
-              value={timeframe}
-              onChange={(e) => handleTimeframeChange(e.target.value)}
-              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary"
-            >
-              {TIMEFRAME_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <Button variant="ghost" size="sm" className="relative" onClick={() => fetchData()} loading={refreshing} aria-label="Refresh dashboard" title="Refresh dashboard">
             <RefreshCw className="w-4 h-4" />
           </Button>
 
           <Button variant="primary" size="sm" onClick={handleExport} loading={refreshing}>
             <Download className="w-4 h-4 mr-2" />
-            Export Report
+            Export PDF
           </Button>
         </div>
       </div>
@@ -415,26 +378,36 @@ export function CustomerDashboard() {
           </div>
         </section>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2">
-            <ErrorBoundary fallback={({ resetError, retryCount }) => (
-              <ChartErrorFallback title="Claims Overview" resetError={resetError} retryCount={retryCount} />
-            )}>
-              <ChartCard title="Claims Overview" subtitle={`Claims submitted (${TIMEFRAME_OPTIONS.find((t) => t.value === timeframe)?.label})`}>
-                <AreaChart data={monthlyClaimsData} height={300} options={{ scales: { y: { min: 0, beginAtZero: true } } }} />
-              </ChartCard>
-            </ErrorBoundary>
-          </div>
-          <div>
-            <ErrorBoundary fallback={({ resetError, retryCount }) => (
-              <ChartErrorFallback title="Claim Status Distribution" resetError={resetError} retryCount={retryCount} />
-            )}>
-              <ChartCard title="Claim Status Distribution" subtitle="Current status of your claims">
-                <DoughnutChart data={claimStatusData} height={300} />
-              </ChartCard>
-            </ErrorBoundary>
-          </div>
-        </div>
+        <Card className="mb-8">
+          <CardHeader
+            title="Your claims at a glance"
+            subtitle="A simple summary of where things stand"
+            action={(
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/claims">Track your claims <ArrowRight className="ml-1 h-4 w-4" /></Link>
+              </Button>
+            )}
+          />
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-xl bg-amber-50 p-4">
+                <p className="text-sm font-medium text-amber-800">Being reviewed</p>
+                <p className="mt-1 text-2xl font-semibold text-amber-950 dark:text-slate-100">{pendingClaims.length}</p>
+                <p className="mt-1 text-sm text-amber-800">We&apos;ll share updates as soon as they&apos;re available.</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 p-4">
+                <p className="text-sm font-medium text-emerald-800">Approved</p>
+                <p className="mt-1 text-2xl font-semibold text-emerald-950 dark:text-slate-100">{approvedClaims.length}</p>
+                <p className="mt-1 text-sm text-emerald-800">See your claim details for the next steps.</p>
+              </div>
+              <div className="rounded-xl bg-blue-50 p-4">
+                <p className="text-sm font-medium text-blue-800">Total claims</p>
+                <p className="mt-1 text-2xl font-semibold text-blue-950 dark:text-slate-100">{claims.length}</p>
+                <p className="mt-1 text-sm text-blue-800">Your latest updates are listed below.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

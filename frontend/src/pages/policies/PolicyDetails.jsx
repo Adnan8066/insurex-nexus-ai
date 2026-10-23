@@ -277,9 +277,6 @@ export function PolicyDetails() {
                 <Card>
                   <CardHeader title="Selected Policy Tier" subtitle={`${policy.policyPlan.id} · ${policy.policyPlan.category}`} />
                   <CardContent>
-                    <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                      The tier details and base premium are user-provided estimates, not a verified insurer quote or policy offer.
-                    </p>
                     <dl className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div><dt className="text-sm font-medium text-gray-500">Coverage sections</dt><dd className="mt-1 text-gray-900">{(policy.policyPlan.coverage_sections || []).join('; ') || 'None listed'}</dd></div>
                       <div><dt className="text-sm font-medium text-gray-500">Mandatory covers</dt><dd className="mt-1 text-gray-900">{(policy.policyPlan.mandatory_covers || []).join('; ') || 'None listed'}</dd></div>

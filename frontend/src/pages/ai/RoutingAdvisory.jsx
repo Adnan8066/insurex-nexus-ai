@@ -155,6 +155,9 @@ export function RoutingAdvisory() {
       {modelStatus && !modelStatus.ready && <div role="status" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
         RL model is not ready on this backend: {modelStatus.detail || 'Required inference packages are missing.'}
       </div>}
+      {modelStatus?.ready && modelStatus.dataset_pretraining && <div role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+        Routing model warm-started from {modelStatus.dataset_pretraining.transitions?.toLocaleString() || 'synthetic'} transition records using behavior cloning, then trained in the simulator. The agent values below are current advisory inputs; they are not identities or outcomes from the training dataset.
+      </div>}
       {modelStatus?.ready && !modelStatus.qualified_for_advisory_pilot && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
         This model has not passed the multi-seed comparison gate against the least-workload heuristic. Treat results as experimental advice only.
       </div>}
@@ -194,7 +197,7 @@ export function RoutingAdvisory() {
           <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <h2 className="card-title mb-1">Agent status</h2>
-              <p className="text-sm text-gray-500">{agentSource === 'live' ? 'Application roster loaded; queue counts come from active claims. Workload is an estimate.' : 'Using synthetic sample agents.'}</p>
+              <p className="text-sm text-gray-500">{agentSource === 'live' ? 'Application roster loaded; queue counts come from active claims. Workload is an estimate.' : 'Using editable sample agent inputs for this demo recommendation.'}</p>
             </div>
             {agentSource === 'live' && <button className="btn btn-secondary" type="button" onClick={useSampleRoster}>Use sample data</button>}
           </div>

@@ -56,6 +56,11 @@ export const authService = {
     return responseData(response)
   },
 
+  async getSupportContacts() {
+    const response = await api.get('/auth/support-contacts/')
+    return responseData(response).contacts || []
+  },
+
   async updateProfile(data) {
     const profileData = { ...data }
     delete profileData.email
