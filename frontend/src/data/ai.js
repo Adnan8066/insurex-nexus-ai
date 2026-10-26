@@ -148,15 +148,6 @@ export const mockDecisionFlow = {
         processingTime: 3.4,
       },
       {
-        id: 'settlement-agent',
-        name: 'Settlement Agent',
-        status: 'completed',
-        input: { approvedAmount: 8000, deductible: 500, paymentMethod: 'Transfer' },
-        output: { settlementAmount: 7500, paymentSchedule: 'Immediate', taxImplications: 'None' },
-        confidence: 93,
-        processingTime: 1.5,
-      },
-      {
         id: 'decision-agent',
         name: 'Decision Agent',
         status: 'completed',

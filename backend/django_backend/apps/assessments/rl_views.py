@@ -319,7 +319,7 @@ def _agent_status(profile):
 
     user = profile.user
     claims = Claim.objects.filter(
-        status__in=['submitted', 'under_review', 'ai_assessment', 'investigation', 'repair_settlement']
+        status__in=['submitted', 'under_review', 'ai_assessment', 'investigation']
     )
     if user.role == 'investigator':
         claims = claims.filter(assigned_investigator_id=user.id, status='investigation')

@@ -13,7 +13,6 @@ const STATUS_LABELS = {
   ai_assessment: 'AI Assessment',
   investigation: 'Investigation',
   approved: 'Approved',
-  repair_settlement: 'Repair Settlement',
   closed: 'Closed',
   rejected: 'Rejected',
 }
@@ -53,7 +52,6 @@ export function AdminDashboard() {
   const claims = summary?.claims || {}
   const policies = summary?.policies || {}
   const fraud = summary?.fraud || {}
-  const settlements = summary?.settlements || {}
 
   const byStatus = claims.by_status || {}
   const byIncidentType = claims.by_incident_type || {}
@@ -161,10 +159,6 @@ export function AdminDashboard() {
       ['Average Claim Cost', averageClaimCost],
       ['Fraud Alerts', fraud.total_alerts || 0],
       ['High Risk Alerts', fraud.high_risk || 0],
-      ['Settlements Total', settlements.total || 0],
-      ['Settlements Pending Approval', settlements.pending_approval || 0],
-      ['Settlements Pending Payment', settlements.pending_payment || 0],
-      ['Settlements Total Paid', settlements.total_paid || 0],
     ]
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })

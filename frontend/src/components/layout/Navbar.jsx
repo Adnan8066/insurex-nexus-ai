@@ -14,7 +14,6 @@ import {
   Cpu,
   FileText,
   GitBranch,
-  Gavel,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -37,7 +36,6 @@ const moduleItems = [
   { label: 'Routing Advice', to: '/routing-advisory', Icon: GitBranch, roles: ['employee', 'investigator', 'admin'] },
   { label: 'Fraud Investigation', to: '/fraud', Icon: AlertTriangle, roles: ['employee', 'investigator', 'admin'] },
   { label: 'Investigators', to: '/investigators', Icon: Users, roles: ['employee', 'admin'] },
-  { label: 'Settlements', to: '/settlements', Icon: Gavel, roles: ['employee', 'admin'] },
   { label: 'AI Decision Center', to: '/ai-decision', Icon: GitBranch, roles: ['employee', 'admin', 'investigator'] },
   { label: 'Analytics', to: '/analytics', Icon: BarChart3, roles: ['employee', 'admin', 'investigator'] },
   { label: 'AI Operations', to: '/operations', Icon: Cpu, roles: ['employee', 'admin', 'investigator'] },
@@ -61,7 +59,10 @@ export function Navbar() {
   const userMenuRef = useRef(null)
   const notificationsRef = useRef(null)
   const visibleModules = moduleItems.filter((item) => item.roles.includes(user?.role))
-  const showModuleNavigation = user?.role !== 'customer'
+  const showModuleNavigation = Boolean(user)
+  const isDashboardPage = location.pathname === '/dashboard'
+  const roleLabels = { customer: 'Customer', employee: 'Employee', investigator: 'Investigator', admin: 'Admin' }
+  const dashboardFirstName = user?.first_name || user?.firstName || user?.name?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there'
   const activeModuleIndex = visibleModules.reduce((activeIndex, item, index) => {
     const matches = location.pathname === item.to
       || (item.to !== '/dashboard' && location.pathname.startsWith(`${item.to}/`))
@@ -69,28 +70,42 @@ export function Navbar() {
     if (activeIndex === -1 || item.to.length > visibleModules[activeIndex].to.length) return index
     return activeIndex
   }, -1)
+  const currentPageTitle = isDashboardPage
+    ? `${roleLabels[user?.role] || 'User'} Dashboard`
+    : (activeModuleIndex >= 0
+      ? visibleModules[activeModuleIndex].label
+      : location.pathname.split('/').filter(Boolean).at(-1)?.replace(/[-_]/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()))
   const [activeIndicator, setActiveIndicator] = useState({ left: 0, width: 0, ready: false })
+  const [moduleNavOverflow, setModuleNavOverflow] = useState(false)
 
   useLayoutEffect(() => {
     const nav = moduleNavRef.current
     const activeLink = moduleLinkRefs.current[activeModuleIndex]
-    if (!nav || !activeLink) {
+    if (!nav) {
       setActiveIndicator((current) => ({ ...current, ready: false }))
       return undefined
     }
 
-    const updateIndicator = () => {
-      setActiveIndicator({ left: activeLink.offsetLeft, width: activeLink.offsetWidth, ready: true })
+    const updateLayout = () => {
+      if (activeLink) {
+        setActiveIndicator({ left: activeLink.offsetLeft, width: activeLink.offsetWidth, ready: true })
+      } else {
+        setActiveIndicator((current) => ({ ...current, ready: false }))
+      }
+      const controlWidth = Array.from(
+        nav.parentElement.querySelectorAll('[data-module-scroll-control]')
+      ).reduce((total, control) => total + control.getBoundingClientRect().width, 0)
+      setModuleNavOverflow(nav.scrollWidth > nav.clientWidth + controlWidth + 2)
     }
 
-    updateIndicator()
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateIndicator)
+    updateLayout()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateLayout)
     observer?.observe(nav)
     moduleLinkRefs.current.forEach((link) => link && observer?.observe(link))
-    window.addEventListener('resize', updateIndicator)
+    window.addEventListener('resize', updateLayout)
     return () => {
       observer?.disconnect()
-      window.removeEventListener('resize', updateIndicator)
+      window.removeEventListener('resize', updateLayout)
     }
   }, [activeModuleIndex, visibleModules.length])
 
@@ -178,10 +193,20 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 shadow-sm shadow-slate-900/[0.03] backdrop-blur" role="banner">
       <div className="mx-auto flex min-h-16 max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        <Link to="/dashboard" className="flex shrink-0 items-center gap-2.5" aria-label="InsureX dashboard">
-          <img src="/insurex-nexus-ai-logo.jpg" alt="InsureX Nexus AI logo" className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-sm shadow-blue-600/20" />
-          <span className="text-base font-extrabold tracking-tight text-slate-950 sm:text-lg">InsureX <span className="text-blue-600">Nexus AI</span></span>
-        </Link>
+        <div className="flex min-w-0 shrink-0 flex-col items-start">
+          <Link to="/dashboard" className="flex items-center gap-2.5" aria-label="InsureX dashboard">
+            <img src="/insurex-nexus-ai-logo.jpg" alt="InsureX Nexus AI logo" className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-sm shadow-blue-600/20" />
+            <span className="text-base font-extrabold tracking-tight text-slate-950 sm:text-lg">InsureX <span className="text-blue-600">Nexus AI</span></span>
+          </Link>
+          {user && currentPageTitle && (
+            <div className="mt-1 max-w-full pb-2">
+              <h1 className="text-lg font-bold leading-tight tracking-tight text-slate-900 sm:text-xl">{currentPageTitle}</h1>
+              {user.role === 'customer' && isDashboardPage && (
+                <p className="text-xs leading-5 text-slate-500 sm:text-sm">Welcome back, {dashboardFirstName}! Here&apos;s an overview of your insurance portfolio.</p>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <button onClick={() => setDarkMode((current) => !current)} className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
@@ -242,7 +267,7 @@ export function Navbar() {
             <ArrowLeft className="h-4 w-4" />
           </button>
           {showModuleNavigation && <>
-          <button onClick={() => scrollModules(-1)} className="shrink-0 rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700" aria-label="Scroll modules left"><ChevronLeft className="h-4 w-4" /></button>
+          {moduleNavOverflow && <button data-module-scroll-control onClick={() => scrollModules(-1)} className="shrink-0 rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700" aria-label="Scroll modules left"><ChevronLeft className="h-4 w-4" /></button>}
           <nav
             ref={moduleNavRef}
             className="module-nav-scroll module-nav-track flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain scroll-smooth px-2 py-2"
@@ -264,7 +289,7 @@ export function Navbar() {
               </NavLink>
             ))}
           </nav>
-          <button onClick={() => scrollModules(1)} className="shrink-0 rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700" aria-label="Scroll modules right"><ChevronRight className="h-4 w-4" /></button>
+          {moduleNavOverflow && <button data-module-scroll-control onClick={() => scrollModules(1)} className="shrink-0 rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700" aria-label="Scroll modules right"><ChevronRight className="h-4 w-4" /></button>}
           </>}
         </div>
       </div>

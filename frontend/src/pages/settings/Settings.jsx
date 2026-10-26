@@ -12,7 +12,7 @@ const preferenceGroups = [
       ['email_claim_updates', 'Claim updates'], ['email_policy_updates', 'Policy updates'],
       ['email_payment_updates', 'Payment updates'], ['email_document_requests', 'Document requests'],
       ['email_ai_assessments', 'AI assessments'], ['email_fraud_alerts', 'Fraud alerts'],
-      ['email_settlements', 'Settlement updates'], ['email_marketing', 'Product announcements'],
+      ['email_marketing', 'Product announcements'],
     ],
   },
   {
@@ -21,7 +21,6 @@ const preferenceGroups = [
       ['push_claim_updates', 'Claim updates'], ['push_policy_updates', 'Policy updates'],
       ['push_payment_updates', 'Payment updates'], ['push_document_requests', 'Document requests'],
       ['push_ai_assessments', 'AI assessments'], ['push_fraud_alerts', 'Fraud alerts'],
-      ['push_settlements', 'Settlement updates'],
     ],
   },
 ]

@@ -40,7 +40,6 @@ const statusOptions = [
   { value: 'investigation', label: 'Investigation' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
-  { value: 'repair_settlement', label: 'Repair/Settlement' },
   { value: 'closed', label: 'Closed' },
 ]
 

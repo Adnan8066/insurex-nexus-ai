@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   GitBranch,
-  Brain,
   CheckCircle2,
   Cpu,
   ArrowDown,
@@ -20,7 +19,7 @@ import { assessmentService, claimService } from '../../services'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { formatCurrency, formatDate } from '../../utils/helpers'
+import { formatDate } from '../../utils/helpers'
 
 const normalizeAgent = (a, idx) => ({
   id: a.id || a.agent_type || `agent-${idx}`,
@@ -44,7 +43,6 @@ const normalizeRL = (rl) => ({
 
 const normalizeDecision = (fd, flow) => ({
   status: fd.status || fd.decision || fd.outcome || 'Pending',
-  amount: Number(fd.recommended_amount || fd.amount || fd.payout_amount || fd.approved_amount || 0),
   rationale: fd.rationale || fd.reason || fd.explanation || '',
   decidedBy: fd.decided_by || fd.decidedBy || flow?.decided_by_name || 'AI Decision Engine',
   decidedAt: fd.decided_at || fd.decidedAt || flow?.decided_at || '',
@@ -56,7 +54,7 @@ export function AIDecisionCenter() {
   const [selectedClaimId, setSelectedClaimId] = useState('')
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [isSimulating, setIsSimulating] = useState(false)
-  const [simulationStep, setSimulationStep] = useState(6)
+  const [simulationStep, setSimulationStep] = useState(5)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -97,7 +95,7 @@ export function AIDecisionCenter() {
 
   const handleSelectClaim = (id) => {
     setSelectedClaimId(id)
-    setSimulationStep(6)
+    setSimulationStep(5)
   }
 
   const handleSimulateFlow = async () => {
@@ -105,7 +103,7 @@ export function AIDecisionCenter() {
     setIsSimulating(true)
     setSimulationStep(0)
     try {
-      const agentTypes = ['claim_agent', 'policy_agent', 'fraud_agent', 'damage_agent', 'settlement_agent', 'decision_agent']
+      const agentTypes = ['claim_agent', 'policy_agent', 'fraud_agent', 'damage_agent', 'decision_agent']
       for (const [index, agentType] of agentTypes.entries()) {
         await assessmentService.runAgent(agentType, { claim_id: Number(selectedClaimId) })
         setSimulationStep(index + 1)
@@ -132,8 +130,7 @@ export function AIDecisionCenter() {
     { title: '2. ML Predictions', subtitle: 'Cost, Fraud & Total Loss Regressors', icon: Cpu },
     { title: '3. AI Multi-Agents', subtitle: 'Autonomous Specialized Sub-Agents', icon: Bot },
     { title: '4. Decision Engine', subtitle: 'Policy Rules & Threshold Synthesis', icon: GitBranch },
-    { title: '5. Settlement Estimate', subtitle: 'Predicted repair cost less policy deductible', icon: Brain },
-    { title: '6. Adjuster Review', subtitle: 'Human coverage and settlement decision', icon: CheckCircle2 },
+    { title: '5. Adjuster Review', subtitle: 'Human review of coverage and claim recommendation', icon: CheckCircle2 },
   ]
 
   const selectedClaim = claims.find((c) => String(c.id) === String(selectedClaimId))
@@ -190,7 +187,7 @@ export function AIDecisionCenter() {
       {!loading && !flow && selectedClaimId && (
         <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 rounded-xl p-6 text-sm text-blue-900">
           <strong className="font-semibold block mb-1">No Decision Flow Recorded</strong>
-          Run the review workflow to save claim, policy, fraud, damage, settlement, and human-review recommendations.
+          Run the review workflow to save claim, policy, fraud, damage, and human-review recommendations.
         </div>
       )}
 
@@ -354,7 +351,7 @@ export function AIDecisionCenter() {
                     <span className="text-xs font-semibold text-white/80 uppercase">Review Recommendation</span>
                   <div className="text-3xl font-black mt-0.5">{finalDecision.status}</div>
                   <div className="text-sm font-semibold text-emerald-300 mt-1">
-                    Estimated payout: {formatCurrency(finalDecision.amount)}
+                    Human review required
                   </div>
                 </div>
 

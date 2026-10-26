@@ -5,7 +5,7 @@ import { BrandArtwork } from '../../components/auth/BrandArtwork'
 
 const capabilities = [
   { icon: FileText, title: 'Policy workspace', text: 'Keep coverage, vehicles, and policy documents together.' },
-  { icon: CarFront, title: 'Claim lifecycle', text: 'Track a claim from first notice through review and settlement.' },
+  { icon: CarFront, title: 'Claim lifecycle', text: 'Track a claim from first notice through assessment and review.' },
   { icon: BrainCircuit, title: 'AI advisory', text: 'See decision support and routing recommendations for human review.' },
 ]
 
@@ -33,7 +33,7 @@ export function LandingPage() {
         <div className="absolute right-0 top-20 h-80 w-80 rounded-full bg-indigo-100/70 blur-3xl" />
         <div className="relative z-10">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/80 px-3.5 py-2 text-xs font-bold uppercase tracking-[.12em] text-blue-700 shadow-sm"><Sparkles className="h-4 w-4"/> Insurance operations, connected</div>
-          <h1 className="max-w-2xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.8rem]">A clearer path from <span className="text-blue-600">policy to payout.</span></h1>
+          <h1 className="max-w-2xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.8rem]">A clearer path from <span className="text-blue-600">policy to claim review.</span></h1>
           <p className="mt-6 max-w-xl text-base leading-7 text-slate-600 sm:text-lg">Manage policies, submit and follow claims, and bring the right people into each review with one connected workspace.</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link to="/register" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 font-semibold text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700">Get started <ArrowRight className="h-4 w-4"/></Link>
@@ -66,13 +66,13 @@ export function LandingPage() {
 
       <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:px-12">
         <div className="flex flex-col justify-between gap-5 rounded-3xl bg-[#071b35] p-7 text-white sm:flex-row sm:items-center sm:p-10">
-          <div><div className="flex items-center gap-2 text-sm font-semibold text-sky-300"><ClipboardCheck className="h-4 w-4"/> People stay in control</div><h2 className="mt-2 text-2xl font-bold">Start with a workspace built for clarity.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">AI tools provide advisory support. Claim assignments, coverage decisions, and settlements remain subject to human review.</p></div>
+          <div><div className="flex items-center gap-2 text-sm font-semibold text-sky-300"><ClipboardCheck className="h-4 w-4"/> People stay in control</div><h2 className="mt-2 text-2xl font-bold">Start with a workspace built for clarity.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">AI tools provide advisory support. Claim assignments and coverage decisions remain subject to human review.</p></div>
           <Link to="/register" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-[#071b35] transition hover:bg-sky-50">Create your account <ArrowRight className="h-4 w-4"/></Link>
         </div>
       </section>
 
       <footer className="mx-auto flex max-w-7xl flex-col gap-3 border-t border-slate-200 px-5 py-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
-        <span>© 2026 InsureX Nexus AI</span><span>Policy, claims, and settlement workspace</span>
+        <span>© 2026 InsureX Nexus AI</span><span>Policy, claims, and review workspace</span>
       </footer>
     </main>
   )

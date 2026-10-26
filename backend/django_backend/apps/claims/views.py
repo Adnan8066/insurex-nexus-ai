@@ -174,47 +174,6 @@ class ClaimViewSet(viewsets.ModelViewSet):
                     is_system=False
                 )
 
-                # Approval should prepare the settlement record so staff can
-                # review it directly from the Settlements dashboard.
-                if new_status == ClaimStatus.APPROVED and old_status != ClaimStatus.APPROVED:
-                    from decimal import Decimal
-                    import uuid
-                    from apps.settlements.models import Settlement, SettlementTimeline
-
-                    assessment = claim.ai_assessment if isinstance(claim.ai_assessment, dict) else {}
-                    estimate_value = claim.estimated_repair_cost or assessment.get('predicted_repair_cost') or claim.claim_amount
-                    if isinstance(estimate_value, dict):
-                        estimate_value = estimate_value.get('cost') or claim.claim_amount
-                    estimated_amount = Decimal(str(estimate_value))
-                    deductible = claim.policy.deductible
-                    from apps.settlements.services.payout import calculate_payout_for_claim
-                    payout = calculate_payout_for_claim(claim, estimated_amount)
-                    Settlement.objects.get_or_create(
-                        claim=claim,
-                        defaults={
-                            'settlement_number': f"SET-{uuid.uuid4().hex[:8].upper()}",
-                            'customer': claim.customer,
-                            'estimated_amount': estimated_amount,
-                            'deductible': deductible,
-                            'approved_amount': payout.payout,
-                            'depreciation_amount': payout.depreciation,
-                            'asset_age_years': payout.asset_age_years,
-                            'zero_depreciation_applied': payout.zero_depreciation_applied,
-                            'payout_calculation': payout.as_dict(),
-                            'notes': 'Estimated payout prepared for staff review; verify coverage and policy terms before approval.',
-                        },
-                    )
-                    settlement = Settlement.objects.get(claim=claim)
-                    if not settlement.timeline.exists():
-                        SettlementTimeline.objects.create(
-                            settlement=settlement,
-                            status=settlement.status,
-                            title='Settlement Prepared After Claim Approval',
-                            description=f'Settlement prepared for approved claim {claim.claim_number}. Review the amount and payment status.',
-                            user=request.user,
-                            metadata={'estimated_amount': str(settlement.estimated_amount)},
-                        )
-
             if claim.customer_id != request.user.id:
                 from apps.notifications.services import create_in_app_notification
                 create_in_app_notification(
@@ -223,16 +182,6 @@ class ClaimViewSet(viewsets.ModelViewSet):
                     link=f'/claims/{claim.id}', related_object_type='claim', related_object_id=claim.id,
                 )
 
-            if new_status == ClaimStatus.APPROVED and old_status != ClaimStatus.APPROVED:
-                from apps.notifications.services import create_in_app_notification
-                settlement = getattr(claim, 'settlement', None)
-                if settlement:
-                    create_in_app_notification(
-                        claim.customer, 'settlement', 'Settlement prepared',
-                        f'Claim {claim.claim_number} was approved and its settlement is ready for staff review.',
-                        link='/settlements', related_object_type='settlement', related_object_id=settlement.id,
-                    )
-            
             serializer = self.get_serializer(claim)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

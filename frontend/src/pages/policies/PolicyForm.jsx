@@ -272,9 +272,6 @@ export function PolicyForm() {
         <section className="card">
           <div className="card-header"><h2 className="card-title">Choose a Policy Tier</h2></div>
           <div className="card-content space-y-4">
-            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              These eight motor policy tiers and base premiums are the estimates you supplied. They are not verified insurer offers or quotes; confirm the wording and final premium with an insurer before issuing coverage.
-            </p>
             <Select
               label="Policy tier"
               name="policyTierId"

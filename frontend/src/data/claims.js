@@ -340,8 +340,7 @@ export const claimStatusWorkflow = [
   { id: 'investigation', label: 'Investigation', order: 4, color: 'warning' },
   { id: 'approved', label: 'Approved', order: 5, color: 'success' },
   { id: 'rejected', label: 'Rejected', order: 5, color: 'danger' },
-  { id: 'repair-settlement', label: 'Repair/Settlement', order: 6, color: 'primary' },
-  { id: 'closed', label: 'Closed', order: 7, color: 'neutral' },
+  { id: 'closed', label: 'Closed', order: 6, color: 'neutral' },
 ]
 
 export default { mockClaims, mockClaimStats, claimStatusWorkflow }

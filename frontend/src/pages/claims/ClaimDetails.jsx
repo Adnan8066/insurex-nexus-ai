@@ -115,7 +115,6 @@ const claimStatusOptions = [
   { value: 'investigation', label: 'Investigation' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
-  { value: 'repair_settlement', label: 'Repair/Settlement' },
   { value: 'closed', label: 'Closed' },
 ]
 
@@ -822,27 +821,6 @@ export function ClaimDetails() {
             </CardContent>
           </Card>
 
-          {/* Settlement / Financial Card */}
-          <Card>
-            <CardHeader title="Settlement Status" />
-            <CardContent className="p-6 space-y-3 text-sm">
-              <div className="flex justify-between py-1 border-b border-gray-100">
-                <span className="text-gray-500">Claim Amount</span>
-                <span className="font-semibold text-gray-900">{formatCurrency(claim.claimAmount)}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-100">
-                <span className="text-gray-500">Policy Deductible</span>
-                <span className="font-medium text-gray-900">₹500</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-100">
-                <span className="text-gray-500">Estimated Payout</span>
-                <span className="font-bold text-emerald-600">{formatCurrency(Math.max(0, claim.claimAmount - 500))}</span>
-              </div>
-              <div className="pt-2">
-                <Button asChild variant="secondary" className="w-full text-xs"><Link to="/settlements">Open Settlement Dashboard</Link></Button>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
 

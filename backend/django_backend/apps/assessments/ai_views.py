@@ -153,9 +153,9 @@ def claim_model_input(claim):
 
 def generate_recommendation(assessment):
     if assessment.fraud_risk_score and assessment.fraud_risk_score > 70:
-        return "High fraud risk detected. Recommend SIU investigation before settlement."
+        return "High fraud risk detected. Recommend SIU investigation before claim approval."
     elif assessment.total_loss_probability and assessment.total_loss_probability > 50:
-        return "High probability of total loss. Consider total loss settlement path."
+        return "High probability of total loss. Refer the claim for adjuster review."
     else:
         return "Standard processing recommended. Proceed with repair assessment."
 
@@ -221,7 +221,7 @@ def run_agent(request, agent_type):
     input_data = request.data.get('input_data', {})
     supported_agents = {
         'claim_agent', 'policy_agent', 'fraud_agent',
-        'damage_agent', 'settlement_agent', 'decision_agent',
+        'damage_agent', 'decision_agent',
     }
     
     if not claim_id:
@@ -299,26 +299,12 @@ def run_agent(request, agent_type):
             output_data = detect_fraud_internal(claim)
         elif agent_type == 'damage_agent':
             output_data = predict_repair_cost_internal(claim)
-        elif agent_type == 'settlement_agent':
-            cost = predict_repair_cost_internal(claim)
-            deductible = float(claim.policy.deductible or 0)
-            estimate = float(cost.get('cost') or claim.claim_amount or 0)
-            output_data = {
-                'estimated_repair_cost': estimate,
-                'deductible': deductible,
-                'recommended_amount': max(0, estimate - deductible),
-                'requires_adjuster_approval': True,
-            }
         elif agent_type == 'decision_agent':
             fraud = detect_fraud_internal(claim)
-            cost = predict_repair_cost_internal(claim)
-            deductible = float(claim.policy.deductible or 0)
-            estimated_cost = float(cost.get('cost') or claim.claim_amount or 0)
             output_data = {
                 'decision': 'manual_review',
-                'reason': 'AI outputs are review aids; an adjuster must make the coverage and settlement decision.',
+                'reason': 'AI outputs are review aids; an adjuster must make the coverage decision.',
                 'fraud_risk_score': fraud.get('score'),
-                'recommended_amount': max(0, estimated_cost - deductible),
                 'automated_approval': False,
             }
         
@@ -367,7 +353,7 @@ def get_decision_flow(request, claim_id):
     decision_flow, created = DecisionFlow.objects.get_or_create(
         claim=claim,
         defaults={
-            'agents': ['claim_agent', 'policy_agent', 'fraud_agent', 'damage_agent', 'settlement_agent'],
+            'agents': ['claim_agent', 'policy_agent', 'fraud_agent', 'damage_agent'],
             'rl_recommendation': {},
             'final_decision': {}
         }

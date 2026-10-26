@@ -53,19 +53,14 @@ const workflowStages = [
   {
     id: 'approved',
     name: '5. Decision (Approved/Rejected)',
-    desc: 'Final adjudication of claim liability and payout authorization.',
+    desc: 'Final review of claim eligibility and supporting information.',
     role: 'Claims Authority',
   },
   {
-    id: 'repair-settlement',
-    name: '6. Repair & Settlement',
-    desc: 'Claim repair cost review and settlement processing.',
-    role: 'Claims & Finance',
-  },
   {
     id: 'closed',
-    name: '7. Claim Closed',
-    desc: 'Vehicle delivered, settlement disbursed, case archived.',
+    name: '6. Claim Closed',
+    desc: 'Claim review is complete and the case is archived.',
     role: 'System Complete',
   },
 ]
@@ -307,7 +302,7 @@ export function ClaimTracking() {
                         {stage.id === 'ai-assessment' && (canViewAI ? 'AI results are available for staff review.' : 'Your claim is being reviewed by our claims team.')}
                         {stage.id === 'under-review' && 'Adjuster Sarah Mitchell reviewing submitted documentation.'}
                         {stage.id === 'investigation' && 'Investigator assigned to review conflicting timeline notes.'}
-                        {stage.id === 'approved' && 'Finance team preparing digital settlement agreement.'}
+                        {stage.id === 'approved' && 'The claim has been approved following review.'}
                         {stage.id === 'submitted' && 'Intake queue validating initial police report and photos.'}
                         {stage.id === 'closed' && 'Claim archive completed.'}
                       </span>

@@ -20,7 +20,6 @@ class CoreAPITests(TestCase):
             '/api/v1/claims/',
             '/api/v1/assessments/assessments/',
             '/api/v1/investigations/',
-            '/api/v1/settlements/',
             '/api/v1/notifications/',
             '/api/v1/analytics/metrics/',
         ]

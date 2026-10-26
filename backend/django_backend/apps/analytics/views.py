@@ -18,7 +18,6 @@ from .serializers import (
 from common.permissions import IsStaffMember
 from apps.claims.models import Claim
 from apps.policies.models import Policy
-from apps.settlements.models import Settlement
 from apps.investigations.models import FraudAlert
 
 
@@ -132,7 +131,6 @@ class ReportExecutionViewSet(viewsets.ReadOnlyModelViewSet):
 def dashboard_summary(request):
     from apps.claims.models import Claim
     from apps.policies.models import Policy, PolicyStatus
-    from apps.settlements.models import Settlement, SettlementStatus, PaymentStatus
     from apps.investigations.models import FraudAlert
     from apps.customers.models import Customer
     from apps.vehicles.models import Vehicle, VehicleStatus
@@ -161,12 +159,6 @@ def dashboard_summary(request):
                 end_date__lte=now.date() + timedelta(days=30),
                 end_date__gte=now.date()
             ).count(),
-        },
-        'settlements': {
-            'total': Settlement.objects.count(),
-            'pending_approval': Settlement.objects.filter(status=SettlementStatus.UNDER_REVIEW).count(),
-            'pending_payment': Settlement.objects.filter(payment_status=PaymentStatus.PROCESSING).count(),
-            'total_paid': Settlement.objects.filter(payment_status=PaymentStatus.COMPLETED).aggregate(Sum('approved_amount'))['approved_amount__sum'] or 0,
         },
         'fraud': {
             'total_alerts': FraudAlert.objects.count(),
@@ -275,15 +267,12 @@ def generate_claims_summary(parameters):
 
 
 def generate_financial_summary(parameters):
-    from apps.settlements.models import Settlement
     from apps.claims.models import Claim
     from apps.policies.models import Policy, PremiumHistory
     from django.db.models import Sum
     
     return {
         'total_claims_amount': Claim.objects.aggregate(Sum('claim_amount'))['claim_amount__sum'] or 0,
-        'total_paid': Settlement.objects.filter(payment_status='completed').aggregate(Sum('approved_amount'))['approved_amount__sum'] or 0,
-        'pending_payments': Settlement.objects.filter(payment_status__in=['pending', 'processing']).aggregate(Sum('approved_amount'))['approved_amount__sum'] or 0,
         'premium_collected': PremiumHistory.objects.filter(status='paid').aggregate(Sum('amount'))['amount__sum'] or 0,
     }
 
@@ -308,7 +297,6 @@ def generate_fraud_analysis(parameters):
 def generate_performance_report(parameters):
     from apps.claims.models import Claim
     from apps.investigations.models import Investigation
-    from apps.settlements.models import Settlement
     from django.db.models import Count, Avg
     from django.utils import timezone
     from datetime import timedelta
@@ -323,7 +311,4 @@ def generate_performance_report(parameters):
         'investigation_completion_rate': Investigation.objects.filter(
             opened_at__gte=thirty_days_ago
         ).filter(status='completed').count() / max(Investigation.objects.filter(opened_at__gte=thirty_days_ago).count(), 1) * 100,
-        'settlement_approval_rate': Settlement.objects.filter(
-            created_at__gte=thirty_days_ago
-        ).filter(status='approved').count() / max(Settlement.objects.filter(created_at__gte=thirty_days_ago).count(), 1) * 100,
     }

@@ -32,16 +32,10 @@ before using the platform for real insurance business.
   reviewer identity are retained. Premium adjustments create a pending billing
   history entry.
 
-## FNOL, payout, and routing advice
+## FNOL and routing advice
 
 - FNOL accepts `estimated_repair_cost`; the claim's complexity score is derived
-  from incident metadata and stored for routing. When staff approves a claim,
-  the system prepares a settlement estimate with deductible and depreciation
-  details. The payout service uses vehicle age and the policy's zero-depreciation
-  add-on, if present. Its default assumptions are controlled by
-  `CLAIM_ANNUAL_DEPRECIATION_RATE` and `CLAIM_MAX_DEPRECIATION_RATE`.
-- Settlement approval still requires staff review. Payment records track
-  initiation/completion; they do not connect to a bank or payment processor.
+  from incident metadata and stored for routing.
 - RL routing is advisory only. Recommendation/review endpoints do not assign a
   claim. Production recommendations remain disabled until a PPO artifact and
   its evaluation report pass the configured gate. See `rl/README.md` for the
@@ -58,5 +52,4 @@ python backend/django_backend/manage.py migrate
 Set rating and depreciation settings through environment variables in each
 deployment. The current default factors are demonstration values. A live pilot
 also requires approved product-specific rules, real staff routing profiles,
-qualified model weights and evaluation report, and a configured external
-payment provider if electronic payout is required.
+qualified model weights and evaluation report.

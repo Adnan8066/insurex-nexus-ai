@@ -12,14 +12,14 @@ import { Button } from '../../components/ui/Button'
 const filters = [
   ['all', 'All'], ['unread', 'Unread'], ['claim', 'Claims'],
   ['ai_assessment', 'AI'], ['fraud_alert', 'Fraud'], ['payment', 'Payments'],
-  ['policy', 'Policies'], ['settlement', 'Settlements'],
+  ['policy', 'Policies'],
 ]
 
 const iconFor = (type) => {
   if (type === 'claim') return <Briefcase className="w-5 h-5 text-blue-600" />
   if (type === 'ai_assessment') return <Brain className="w-5 h-5 text-purple-600" />
   if (type === 'fraud_alert') return <AlertTriangle className="w-5 h-5 text-red-600" />
-  if (type === 'payment' || type === 'settlement') return <DollarSign className="w-5 h-5 text-emerald-600" />
+  if (type === 'payment') return <DollarSign className="w-5 h-5 text-emerald-600" />
   return <FileText className="w-5 h-5 text-gray-600" />
 }
 
@@ -90,7 +90,7 @@ export function Notifications() {
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="page-title">Notification Center</h1>
-          <p className="page-subtitle">In-app updates for claims, policies, assessments, and settlements</p>
+          <p className="page-subtitle">In-app updates for claims, policies, and assessments</p>
         </div>
         <Button variant="secondary" onClick={markAllRead} disabled={savingId === 'all' || !notifications.some((item) => !item.is_read)}>
           <CheckCircle2 className="w-4 h-4 mr-2" />

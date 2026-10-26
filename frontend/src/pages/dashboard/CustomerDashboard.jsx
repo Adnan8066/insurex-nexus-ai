@@ -6,13 +6,11 @@ import {
   Clock,
   CheckCircle,
   Headphones,
-  DollarSign,
   ArrowRight,
   RefreshCw,
   Download,
   WifiOff,
   FilePlus2,
-  Car,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
@@ -260,11 +258,8 @@ export function CustomerDashboard() {
 
   const quickActions = [
     { label: 'File a Claim', href: '/claims/new', icon: FilePlus2, color: 'bg-blue-50 text-blue-700 hover:bg-blue-100', description: 'Start a new claim' },
-    { label: 'View Payments', href: '/settlements', icon: DollarSign, color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', description: 'Review your claim payment and settlement records' },
     { label: 'Get Support', href: '/support', icon: Headphones, color: 'bg-violet-50 text-violet-700 hover:bg-violet-100', description: 'Email or call our support team' },
   ]
-
-  const firstName = user?.first_name || user?.firstName || user?.name?.trim().split(/\s+/)[0] || user?.get_full_name?.call(user)?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there'
 
   if (loading) {
     return <DashboardSkeleton />
@@ -272,40 +267,12 @@ export function CustomerDashboard() {
 
   return (
     <div className="page">
-      <div className="page-header flex-col items-stretch">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Welcome back, {firstName}! Here&apos;s an overview of your insurance portfolio.</p>
-          {connectionError && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
-              <WifiOff className="w-4 h-4" />
-              <span>Connection error: {connectionError}</span>
-            </div>
-          )}
+      {connectionError && (
+        <div className="mb-4 flex items-center gap-2 text-sm text-red-600">
+          <WifiOff className="w-4 h-4" />
+          <span>Connection error: {connectionError}</span>
         </div>
-        <nav className="mx-auto grid w-full grid-cols-1 gap-3 sm:w-auto sm:grid-cols-3" aria-label="Your insurance">
-          {[
-            { label: 'Policies', description: 'View your coverage and policy details.', href: '/policies', icon: FileText, visual: 'from-blue-700 via-blue-500 to-cyan-400' },
-            { label: 'Claims', description: 'Follow your claims and see the latest updates.', href: '/claims', icon: Briefcase, visual: 'from-violet-700 via-violet-500 to-fuchsia-400' },
-            { label: 'Vehicles', description: 'View the vehicles protected by your policies.', href: '/vehicles', icon: Car, visual: 'from-emerald-700 via-emerald-500 to-teal-300' },
-          ].map((item) => (
-            <Link key={item.label} to={item.href} className="card group w-full overflow-hidden transition hover:-translate-y-1 hover:shadow-lg sm:w-[172px]">
-              <span className={clsx('relative flex h-20 items-center justify-center overflow-hidden bg-gradient-to-br', item.visual)}>
-                <span className="absolute -right-3 -top-8 h-24 w-24 rounded-full border border-white/20" aria-hidden="true" />
-                <span className="absolute -bottom-12 -left-5 h-24 w-24 rounded-full border border-white/20" aria-hidden="true" />
-                <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 text-white shadow-lg backdrop-blur-sm">
-                  <item.icon className="h-6 w-6" aria-hidden="true" />
-                </span>
-              </span>
-              <span className="block p-3">
-                <span className="block font-semibold text-gray-900 group-hover:text-blue-700">{item.label}</span>
-                <span className="mt-1 block min-h-9 text-xs leading-4 text-gray-500">{item.description}</span>
-                <span className="mt-2 block text-xs font-semibold text-blue-700">Explore <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition-transform group-hover:translate-x-1" aria-hidden="true" /></span>
-              </span>
-            </Link>
-          ))}
-        </nav>
-      </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm mb-6">
         <p className="text-sm text-slate-500">Your coverage and claims, at a glance</p>

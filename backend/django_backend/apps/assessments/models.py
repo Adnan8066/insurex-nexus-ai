@@ -130,7 +130,6 @@ class AgentOutput(models.Model):
         ('policy_agent', _('Policy Agent')),
         ('fraud_agent', _('Fraud Agent')),
         ('damage_agent', _('Damage Agent')),
-        ('settlement_agent', _('Settlement Agent')),
         ('decision_agent', _('Decision Agent')),
     ]
     

@@ -23,7 +23,6 @@ const AIAssessment = lazy(() => import('../pages/ai/AIAssessment').then((module)
 const RoutingAdvisory = lazy(() => import('../pages/ai/RoutingAdvisory').then((module) => ({ default: module.RoutingAdvisory })))
 const FraudDashboard = lazy(() => import('../pages/fraud/FraudDashboard').then((module) => ({ default: module.FraudDashboard })))
 const InvestigatorDashboard = lazy(() => import('../pages/investigator/InvestigatorDashboard').then((module) => ({ default: module.InvestigatorDashboard })))
-const SettlementDashboard = lazy(() => import('../pages/settlement/SettlementDashboard').then((module) => ({ default: module.SettlementDashboard })))
 const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })))
 const UserManagement = lazy(() => import('../pages/admin/UserManagement').then((module) => ({ default: module.UserManagement })))
 const AIDecisionCenter = lazy(() => import('../pages/decision/AIDecisionCenter').then((module) => ({ default: module.AIDecisionCenter })))
@@ -85,7 +84,6 @@ export default function AppRoutes() {
         <Route path="routing-advisory" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><RoutingAdvisory /></ProtectedRoute>} />
         <Route path="fraud" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><FraudDashboard /></ProtectedRoute>} />
         <Route path="investigators" element={<InvestigatorDashboard />} />
-        <Route path="settlements" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><SettlementDashboard /></ProtectedRoute>} />
         <Route path="analytics" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="admin/users" element={<ProtectedRoute roles={['admin']}><UserManagement /></ProtectedRoute>} />
         <Route path="ai-decision" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><ErrorBoundary><AIDecisionCenter /></ErrorBoundary></ProtectedRoute>} />
