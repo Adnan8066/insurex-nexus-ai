@@ -58,5 +58,18 @@ pipeline {
                 }
             }
         }
+
+        stage('Train ML Models') {
+            steps {
+                dir('backend\\django_backend') {
+                    bat '.venv\\Scripts\\python.exe manage.py train_project_models'
+                }
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/training_report.json,backend/ml/models/fraud_oracle_evaluation.png', fingerprint: true
+                }
+            }
+        }
     }
 }
