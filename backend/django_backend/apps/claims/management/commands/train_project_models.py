@@ -360,8 +360,8 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         backend_dir = settings.BASE_DIR.parent
-        parser.add_argument("--insurance-file", type=Path, default=backend_dir / "insurance_claims.csv")
-        parser.add_argument("--fraud-file", type=Path, default=backend_dir / "fraud_oracle.csv")
+        parser.add_argument("--insurance-file", type=Path, default=backend_dir / "data" / "insurance_claims.csv")
+        parser.add_argument("--fraud-file", type=Path, default=backend_dir / "data" / "fraud_oracle.csv")
         parser.add_argument("--models-dir", type=Path, default=backend_dir / "ml" / "models")
 
     def handle(self, *args, **options):

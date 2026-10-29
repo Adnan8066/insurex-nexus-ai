@@ -77,6 +77,7 @@ export function Login() {
               placeholder="you@example.com"
               autoComplete="email"
               required
+              leftIcon={<Mail className="w-5 h-5 text-gray-400" />}
             />
 
             <Input
@@ -89,6 +90,7 @@ export function Login() {
               placeholder="••••••••"
               autoComplete="current-password"
               required
+              leftIcon={<Lock className="w-5 h-5 text-gray-400" />}
               rightIcon={
                 <button
                   type="button"
@@ -102,11 +104,7 @@ export function Login() {
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary focus:ring-2" />
-              <span className="text-sm text-gray-600">Remember me</span>
-            </label>
+          <div className="flex items-center justify-end">
             <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">
               Forgot password?
             </Link>

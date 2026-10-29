@@ -25,25 +25,6 @@ export function LoadingSpinner({
   )
 }
 
-export function LoadingOverlay({
-  isLoading,
-  message = 'Loading...',
-  children,
-  className = '',
-}) {
-  if (!isLoading) return children
-
-  return (
-    <div className={clsx('relative', className)}>
-      {children}
-      <div className="absolute inset-0 bg-white/80 flex items-center justify-center gap-3 z-10 rounded-lg">
-        <LoadingSpinner size="lg" />
-        <span className="text-sm font-medium text-gray-700">{message}</span>
-      </div>
-    </div>
-  )
-}
-
 export function Skeleton({
   className = '',
   variant = 'text',
@@ -75,4 +56,4 @@ export function Skeleton({
   return <>{skeletons}</>
 }
 
-export default { LoadingSpinner, LoadingOverlay, Skeleton }
+export default { LoadingSpinner, Skeleton }

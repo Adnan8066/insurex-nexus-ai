@@ -4,6 +4,7 @@ import { notificationService, assessmentService } from '../../services'
 import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
+import { API_BASE_URL, formatApiError } from '../../services/api'
 
 const preferenceGroups = [
   {
@@ -11,7 +12,7 @@ const preferenceGroups = [
     fields: [
       ['email_claim_updates', 'Claim updates'], ['email_policy_updates', 'Policy updates'],
       ['email_payment_updates', 'Payment updates'], ['email_document_requests', 'Document requests'],
-      ['email_ai_assessments', 'AI assessments'], ['email_fraud_alerts', 'Fraud alerts'],
+      ['email_ai_assessments', 'AI assessments', 'staff'], ['email_fraud_alerts', 'Fraud alerts', 'staff'],
       ['email_marketing', 'Product announcements'],
     ],
   },
@@ -20,12 +21,11 @@ const preferenceGroups = [
     fields: [
       ['push_claim_updates', 'Claim updates'], ['push_policy_updates', 'Policy updates'],
       ['push_payment_updates', 'Payment updates'], ['push_document_requests', 'Document requests'],
-      ['push_ai_assessments', 'AI assessments'], ['push_fraud_alerts', 'Fraud alerts'],
+      ['push_ai_assessments', 'AI assessments', 'staff'], ['push_fraud_alerts', 'Fraud alerts', 'staff'],
     ],
   },
 ]
 
-const apiBase = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '')
 
 export function Settings() {
   const { user } = useAuth()
@@ -49,7 +49,7 @@ export function Settings() {
       else throw preferenceResult.reason
       setModelStatus(statusResult.status === 'fulfilled' ? statusResult.value : null)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not load your settings. Check the backend connection and try again.')
+      setError(formatApiError(err, 'Could not load your settings. Check the backend connection and try again.'))
     } finally {
       setLoading(false)
     }
@@ -72,7 +72,7 @@ export function Settings() {
       setPreferences(updated)
       setSaved(true)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not save your notification preferences.')
+      setError(formatApiError(err, 'Could not save your notification preferences.'))
     } finally {
       setSaving(false)
     }
@@ -80,10 +80,10 @@ export function Settings() {
 
   return (
     <div className="page max-w-4xl mx-auto space-y-6">
-      <div className="page-header flex items-center justify-between gap-4">
+      <div className="page-header flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="page-title">Settings</h1>
-          <p className="page-subtitle">Saved notification preferences and live backend/model status</p>
+          <p className="page-subtitle">{isStaff ? 'Notification preferences and system status' : 'Choose how we keep you updated'}</p>
         </div>
         <Button variant="outline" onClick={load} disabled={loading}>Refresh</Button>
       </div>
@@ -91,18 +91,18 @@ export function Settings() {
       {error && <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm">{error}</div>}
       {saved && <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm font-medium flex items-center gap-2"><CheckCircle2 className="w-5 h-5" />Preferences saved to your account.</div>}
 
-      <Card>
+      {isStaff && <Card>
         <CardHeader title="Backend connection" subtitle="The API URL is supplied by the app environment and cannot be changed from this screen." />
         <CardContent className="p-6">
           <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-4">
             <Server className="w-5 h-5 text-primary" />
             <div className="min-w-0">
               <div className="text-xs text-gray-500">Configured API base URL</div>
-              <code className="text-sm text-gray-900 break-all">{apiBase}</code>
+              <code className="text-sm text-gray-900 break-all">{API_BASE_URL}</code>
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
       {isStaff && <Card>
         <CardHeader title="Trained model availability" subtitle="Read from the backend model files and training report." />
@@ -124,13 +124,13 @@ export function Settings() {
 
       <form onSubmit={handleSave}>
         <Card>
-          <CardHeader title="Notification preferences" subtitle="These choices are stored on your account. Email and push delivery require those channels to be configured by the service." />
+          <CardHeader title="Notification preferences" subtitle="Choose which updates you want to receive." />
           <CardContent className="p-6 space-y-6">
             {loading || !preferences ? <p className="text-sm text-gray-500">Loading preferences…</p> : <>
               {preferenceGroups.map((group) => <section key={group.title}>
                 <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Bell className="w-4 h-4 text-primary" />{group.title}</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {group.fields.map(([name, label]) => <label key={name} className="flex items-center justify-between rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+                  {group.fields.filter(([, , audience]) => isStaff || audience !== 'staff').map(([name, label]) => <label key={name} className="flex items-center justify-between rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
                     {label}<input type="checkbox" checked={Boolean(preferences[name])} onChange={(event) => updatePreference(name, event.target.checked)} className="w-4 h-4 text-primary rounded" />
                   </label>)}
                 </div>

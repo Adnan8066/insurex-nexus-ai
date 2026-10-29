@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from common.uploads import EVIDENCE_EXTENSIONS, validate_upload
 from .models import Investigation, InvestigationEvidence, InvestigationNote, FraudAlert
 
 class InvestigationEvidenceSerializer(serializers.ModelSerializer):
@@ -13,6 +14,9 @@ class InvestigationEvidenceSerializer(serializers.ModelSerializer):
             'verified', 'verified_by', 'verified_by_name', 'verified_at', 'metadata'
         ]
         read_only_fields = ['id', 'collected_at', 'collected_by', 'verified', 'verified_by', 'verified_at']
+
+    def validate_file(self, value):
+        return validate_upload(value, EVIDENCE_EXTENSIONS)
 
 class InvestigationNoteSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source='author.get_full_name', read_only=True)

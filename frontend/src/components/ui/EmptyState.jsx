@@ -41,16 +41,4 @@ export function EmptyState({
   )
 }
 
-export function EmptyStateTable({ columns = 1, ...props }) {
-  return (
-    <tbody>
-      <tr>
-        <td colSpan={columns} className="py-12 px-4">
-          <EmptyState {...props} />
-        </td>
-      </tr>
-    </tbody>
-  )
-}
-
-export default { EmptyState, EmptyStateTable }
+export default { EmptyState }

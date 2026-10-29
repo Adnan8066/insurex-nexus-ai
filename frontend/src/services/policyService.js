@@ -31,6 +31,16 @@ export const policyService = {
     return response.data
   },
 
+  async getPolicyApplications(params = {}) {
+    const response = await api.get('/policies/applications/', { params })
+    return response.data
+  },
+
+  async declinePolicyApplication(applicationId, note = '') {
+    const response = await api.post(`/policies/applications/${applicationId}/decline/`, { note })
+    return response.data
+  },
+
   async createEndorsement(policyId, data) {
     const response = await api.post(`/policies/${policyId}/endorsements/`, data)
     return response.data

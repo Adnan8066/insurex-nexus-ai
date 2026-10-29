@@ -65,8 +65,18 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             parts = name.split(None, 1)
             attrs['first_name'] = parts[0]
             attrs['last_name'] = parts[1] if len(parts) > 1 else ''
-        if not attrs.get('username'):
-            attrs['username'] = attrs['email'].split('@')[0]
+        if attrs.get('username'):
+            if User.objects.filter(username=attrs['username']).exists():
+                raise serializers.ValidationError({'username': 'This username is already taken.'})
+        else:
+            # Derive a unique username from the email local part; two addresses
+            # with the same local part (john@a.com, john@b.com) must not collide.
+            base = (slugify(attrs['email'].split('@')[0]) or 'user')[:140]
+            username, suffix = base, 1
+            while User.objects.filter(username=username).exists():
+                username = f'{base}{suffix}'
+                suffix += 1
+            attrs['username'] = username
         return attrs
     
     def create(self, validated_data):
@@ -171,7 +181,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         profile_data = validated_data.pop('profile', None)
         if profile_data:
-            profile = instance.profile
+            profile, _created = UserProfile.objects.get_or_create(user=instance)
             for attr, value in profile_data.items():
                 setattr(profile, attr, value)
             profile.save()

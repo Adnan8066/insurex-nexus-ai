@@ -16,8 +16,8 @@ from apps.vehicles.models import Vehicle
 
 
 PROJECT_BACKEND = settings.BASE_DIR.parent
-INSURANCE_CSV = PROJECT_BACKEND / "insurance_claims.csv"
-FRAUD_CSV = PROJECT_BACKEND / "fraud_oracle.csv"
+INSURANCE_CSV = PROJECT_BACKEND / "data" / "insurance_claims.csv"
+FRAUD_CSV = PROJECT_BACKEND / "data" / "fraud_oracle.csv"
 
 
 def truthy(value):

@@ -1,4 +1,5 @@
 import json
+import logging
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -21,6 +22,27 @@ from ml_service import (
     MLModelUnavailable,
 )
 from common.permissions import IsStaffMember
+from common.params import parse_int
+from common.risk import FRAUD_HIGH_THRESHOLD, fraud_risk_band
+
+logger = logging.getLogger(__name__)
+
+
+def _get_claim(request, claim_id):
+    """Look up a claim for AI endpoints: malformed IDs give 400, and investigators
+    only reach claims assigned to them (same scope as the claims API)."""
+    queryset = Claim.objects.all()
+    if getattr(request.user, 'role', None) == 'investigator':
+        queryset = queryset.filter(assigned_investigator=request.user)
+    return get_object_or_404(queryset, id=parse_int(claim_id, 'claim_id'))
+
+
+def _unexpected_error_response(context):
+    logger.exception('AI processing failed: %s', context)
+    return Response(
+        {'error': 'The AI service failed unexpectedly. The error has been logged; please try again or contact support.'},
+        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
 
 
 def json_safe(value):
@@ -36,58 +58,112 @@ def assess_claim(request):
     if not claim_id:
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
-    claim = get_object_or_404(Claim, id=claim_id)
-    
-    assessment, created = ClaimAssessment.objects.get_or_create(
+    claim = _get_claim(request, claim_id)
+
+    try:
+        assessment = run_claim_assessment(claim)
+    except MLModelUnavailable as e:
+        return Response({'error': str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except Exception:
+        return _unexpected_error_response(f'claim {claim.pk}')
+    return Response(ClaimAssessmentSerializer(assessment).data)
+
+
+def run_claim_assessment(claim):
+    """Score a claim with the trained models and copy the results onto the claim.
+
+    The claim's scores drive the dashboards, the fraud alert queue and the
+    high-risk approval guard, so they must be written here, not only on the
+    ClaimAssessment row. Raises MLModelUnavailable when a model cannot score
+    the claim; the assessment is then marked failed.
+    """
+    assessment, _created = ClaimAssessment.objects.get_or_create(
         claim=claim,
         defaults={'assessment_type': AssessmentType.COMPREHENSIVE}
     )
-    
     assessment.status = AssessmentStatus.IN_PROGRESS
     assessment.save()
-    
+
     try:
         predicted_cost = predict_repair_cost_internal(claim)
         fraud_score = detect_fraud_internal(claim)
         total_loss_prob = predict_total_loss_internal(claim)
-        
-        assessment.predicted_repair_cost = predicted_cost['cost']
-        assessment.cost_breakdown = predicted_cost['breakdown']
-        assessment.repair_time_estimate_days = predicted_cost['time_estimate']
-        assessment.comparable_claims_count = predicted_cost['comparable_count']
-        
-        assessment.fraud_risk_score = fraud_score['score']
-        assessment.risk_level = fraud_score['level']
-        assessment.risk_factors = fraud_score['factors']
-        assessment.behavioral_indicators = fraud_score['behavioral']
-        assessment.network_analysis = fraud_score['network']
-        
-        assessment.total_loss_probability = total_loss_prob['probability']
-        
-        if fraud_score['score'] > 70:
-            assessment.claim_priority = 'critical'
-        elif fraud_score['score'] > 40 or total_loss_prob['probability'] > 50:
-            assessment.claim_priority = 'high'
-        elif fraud_score['score'] > 20 or total_loss_prob['probability'] > 25:
-            assessment.claim_priority = 'medium'
-        else:
-            assessment.claim_priority = 'low'
-        
-        assessment.ai_recommendation = generate_recommendation(assessment)
-        assessment.confidence = calculate_confidence(assessment)
-        assessment.assessed_at = timezone.now()
-        assessment.status = AssessmentStatus.COMPLETED
-        assessment.save()
-        
-        serializer = ClaimAssessmentSerializer(assessment)
-        return Response(serializer.data)
-        
-    except Exception as e:
+    except Exception:
         assessment.status = AssessmentStatus.FAILED
         assessment.save()
-        if isinstance(e, MLModelUnavailable):
-            return Response({'error': str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        raise
+
+    assessment.predicted_repair_cost = predicted_cost['cost']
+    assessment.cost_breakdown = predicted_cost['breakdown']
+    assessment.repair_time_estimate_days = predicted_cost['time_estimate']
+    assessment.comparable_claims_count = predicted_cost['comparable_count']
+
+    assessment.fraud_risk_score = fraud_score['score']
+    assessment.risk_level = fraud_risk_band(fraud_score['score'])
+    assessment.risk_factors = fraud_score['factors']
+    assessment.behavioral_indicators = fraud_score['behavioral']
+    assessment.network_analysis = fraud_score['network']
+
+    assessment.total_loss_probability = total_loss_prob['probability']
+
+    if fraud_score['score'] > FRAUD_HIGH_THRESHOLD:
+        assessment.claim_priority = 'critical'
+    elif fraud_score['score'] > 40 or total_loss_prob['probability'] > 50:
+        assessment.claim_priority = 'high'
+    elif fraud_score['score'] > 20 or total_loss_prob['probability'] > 25:
+        assessment.claim_priority = 'medium'
+    else:
+        assessment.claim_priority = 'low'
+
+    from ml_service import get_model_version
+    assessment.ai_recommendation = generate_recommendation(assessment)
+    assessment.confidence = calculate_confidence(assessment)
+    assessment.model_version = get_model_version()
+    assessment.assessed_at = timezone.now()
+    assessment.status = AssessmentStatus.COMPLETED
+    assessment.save()
+
+    # Merge rather than replace: imported claims keep their source_data row in
+    # ai_assessment, which claim_model_input needs for later re-scoring.
+    stored = dict(claim.ai_assessment) if isinstance(claim.ai_assessment, dict) else {}
+    stored.update(json_safe(ClaimAssessmentSerializer(assessment).data))
+    stored['fraud_risk'] = {
+        'score': fraud_score['score'],
+        'level': assessment.risk_level,
+        'factors': fraud_score['factors'],
+    }
+    claim.ai_assessment = stored
+    claim.fraud_risk_score = fraud_score['score']
+    claim.total_loss_probability = total_loss_prob['probability']
+    claim.save(update_fields=['ai_assessment', 'fraud_risk_score', 'total_loss_probability', 'updated_at'])
+
+    _sync_fraud_alert(claim, assessment)
+    return assessment
+
+
+def _sync_fraud_alert(claim, assessment):
+    """Raise or refresh the claim's fraud alert once its score reaches the moderate band.
+
+    An existing alert keeps its workflow state (status, investigator, notes);
+    only the model fields are refreshed.
+    """
+    from apps.investigations.models import FraudAlert
+
+    model_fields = {
+        'risk_score': assessment.fraud_risk_score,
+        'risk_level': assessment.risk_level,
+        'risk_factors': assessment.risk_factors,
+        'behavioral_indicators': assessment.behavioral_indicators,
+        'network_analysis': assessment.network_analysis,
+        'ai_recommendation': assessment.ai_recommendation,
+    }
+    alert = FraudAlert.objects.filter(claim=claim).first()
+    if alert:
+        for field, value in model_fields.items():
+            setattr(alert, field, value)
+        alert.save()
+    elif assessment.risk_level != 'low':
+        FraudAlert.objects.create(claim=claim, **model_fields)
 
 
 def predict_repair_cost_internal(claim):
@@ -152,7 +228,7 @@ def claim_model_input(claim):
 
 
 def generate_recommendation(assessment):
-    if assessment.fraud_risk_score and assessment.fraud_risk_score > 70:
+    if assessment.fraud_risk_score and assessment.fraud_risk_score > FRAUD_HIGH_THRESHOLD:
         return "High fraud risk detected. Recommend SIU investigation before claim approval."
     elif assessment.total_loss_probability and assessment.total_loss_probability > 50:
         return "High probability of total loss. Refer the claim for adjuster review."
@@ -173,7 +249,7 @@ def predict_repair_cost(request):
     if not claim_id:
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
-    claim = get_object_or_404(Claim, id=claim_id)
+    claim = _get_claim(request, claim_id)
     try:
         result = predict_repair_cost_internal(claim)
     except MLModelUnavailable as exc:
@@ -189,7 +265,7 @@ def detect_fraud(request):
     if not claim_id:
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
-    claim = get_object_or_404(Claim, id=claim_id)
+    claim = _get_claim(request, claim_id)
     try:
         result = detect_fraud_internal(claim)
     except MLModelUnavailable as exc:
@@ -205,7 +281,7 @@ def predict_total_loss(request):
     if not claim_id:
         return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
-    claim = get_object_or_404(Claim, id=claim_id)
+    claim = _get_claim(request, claim_id)
     try:
         result = predict_total_loss_internal(claim)
     except MLModelUnavailable as exc:
@@ -230,7 +306,7 @@ def run_agent(request, agent_type):
     if agent_type not in supported_agents:
         return Response({'error': 'Unknown agent type'}, status=status.HTTP_404_NOT_FOUND)
     
-    claim = get_object_or_404(Claim, id=claim_id)
+    claim = _get_claim(request, claim_id)
 
     policy = claim.policy
     vehicle = claim.vehicle
@@ -337,18 +413,18 @@ def run_agent(request, agent_type):
         
     except Exception as e:
         agent_output.status = 'failed'
-        agent_output.error_message = str(e)
+        agent_output.error_message = str(e) if isinstance(e, MLModelUnavailable) else 'Unexpected error; see server log.'
         agent_output.save()
         if isinstance(e, MLModelUnavailable):
             return Response({'error': str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return _unexpected_error_response(f'claim {claim.pk}')
 
 
 @extend_schema(responses=DecisionFlowSerializer)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsStaffMember])
 def get_decision_flow(request, claim_id):
-    claim = get_object_or_404(Claim, id=claim_id)
+    claim = _get_claim(request, claim_id)
     
     decision_flow, created = DecisionFlow.objects.get_or_create(
         claim=claim,
@@ -371,34 +447,12 @@ def model_status(request):
     if not request.user.is_staff_member:
         return Response({'detail': 'Staff access is required.'}, status=status.HTTP_403_FORBIDDEN)
     from ml_service import get_model_status
-    from .damage_analysis import get_damage_model_status
     current = get_model_status()
     report = current.pop('training_report', None)
     return Response({
         'models': current,
-        'visual_damage_analysis': get_damage_model_status(),
         'trained_at': report.get('trained_at') if report else None,
         'datasets': report.get('datasets', {}) if report else {},
         'metrics': report.get('metrics', []) if report else [],
         'data_audit': report.get('data_audit', {}) if report else {},
     })
-
-
-@extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
-@api_view(['POST'])
-@permission_classes([IsAuthenticated, IsStaffMember])
-def analyze_claim_damage(request):
-    """Run the image segmentation models on photos already attached to a claim."""
-    claim_id = request.data.get('claim_id')
-    if not claim_id:
-        return Response({'error': 'claim_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-    claim = get_object_or_404(Claim, id=claim_id)
-    from .damage_analysis import DamageAnalysisUnavailable, analyze_claim_photos
-    try:
-        analysis = analyze_claim_photos(claim)
-    except ValueError as exc:
-        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    except DamageAnalysisUnavailable as exc:
-        return Response({'error': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    return Response(analysis)

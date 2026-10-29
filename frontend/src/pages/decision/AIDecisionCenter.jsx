@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { assessmentService, claimService } from '../../services'
+import { formatApiError } from '../../services/api'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -75,7 +76,7 @@ export function AIDecisionCenter() {
       }
     } catch (err) {
       console.error('Failed to load decision flows:', err)
-      setError(err.message || 'Failed to load decision flows.')
+      setError(formatApiError(err, 'Failed to load decision flows.'))
     } finally {
       setLoading(false)
     }
@@ -112,9 +113,13 @@ export function AIDecisionCenter() {
       setFlows(Array.isArray(flowsRes) ? flowsRes : flowsRes.results || [])
     } catch (err) {
       console.error('Agent run failed:', err)
-      setError(err.response?.data?.error || err.response?.data?.detail || 'Unable to run the claim review workflow.')
-      const flowsRes = await assessmentService.getDecisionFlows()
-      setFlows(Array.isArray(flowsRes) ? flowsRes : flowsRes.results || [])
+      setError(formatApiError(err, 'Unable to run the claim review workflow.'))
+      try {
+        const flowsRes = await assessmentService.getDecisionFlows()
+        setFlows(Array.isArray(flowsRes) ? flowsRes : flowsRes.results || [])
+      } catch {
+        // Keep the flows already on screen; the error above is shown to the user.
+      }
     } finally {
       setIsSimulating(false)
     }
@@ -127,7 +132,7 @@ export function AIDecisionCenter() {
 
   const flowNodes = [
     { title: '1. Claim Intake', subtitle: 'Raw Claim & Telemetry Ingestion', icon: Activity },
-    { title: '2. ML Predictions', subtitle: 'Cost, Fraud & Total Loss Regressors', icon: Cpu },
+    { title: '2. Model Estimates', subtitle: 'Repair cost, fraud risk and total-loss chance', icon: Cpu },
     { title: '3. AI Multi-Agents', subtitle: 'Autonomous Specialized Sub-Agents', icon: Bot },
     { title: '4. Decision Engine', subtitle: 'Policy Rules & Threshold Synthesis', icon: GitBranch },
     { title: '5. Adjuster Review', subtitle: 'Human review of coverage and claim recommendation', icon: CheckCircle2 },
@@ -146,7 +151,7 @@ export function AIDecisionCenter() {
               Connected Claim Review Workflow
             </span>
           </div>
-          <h1 className="page-title">AI Decision Center</h1>
+          <h1 className="page-title">Automated Review</h1>
           <p className="page-subtitle">
             Claim data, policy checks, model estimates, and an adjuster review recommendation
           </p>
@@ -169,7 +174,7 @@ export function AIDecisionCenter() {
             <Play className={clsx('w-4 h-4 mr-2', isSimulating && 'animate-spin')} />
             {isSimulating ? 'Running Review Workflow...' : 'Run Claim Review'}
           </Button>
-          <Button asChild variant="outline"><Link to="/operations">AI Operations</Link></Button>
+          <Button asChild variant="outline"><Link to="/operations">Model Health</Link></Button>
         </div>
       </div>
 

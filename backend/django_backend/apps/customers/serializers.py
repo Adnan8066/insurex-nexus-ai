@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from common.uploads import validate_upload
 from .models import CallbackRequest, Customer, CustomerDocument
 
 
@@ -25,6 +26,22 @@ class CustomerDocumentSerializer(serializers.ModelSerializer):
         fields = ['id', 'document_type', 'file', 'original_name', 'uploaded_at', 'uploaded_by']
         read_only_fields = ['id', 'uploaded_at', 'uploaded_by']
 
+    def validate_file(self, value):
+        return validate_upload(value)
+
+
+class StaffOnlyUnderwritingFieldsMixin:
+    """Customers may not set their own credit score, risk rating or staff notes."""
+    STAFF_ONLY_FIELDS = ('credit_score', 'risk_rating', 'notes')
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        if request and getattr(request.user, 'role', None) == 'customer':
+            attempted = [field for field in self.STAFF_ONLY_FIELDS if field in getattr(self, 'initial_data', {})]
+            if attempted:
+                raise serializers.ValidationError({field: 'Only staff can set this field.' for field in attempted})
+        return super().validate(attrs)
+
 class CustomerSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_full_name = serializers.CharField(source='user.get_full_name', read_only=True)
@@ -40,7 +57,7 @@ class CustomerSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'customer_number', 'created_at', 'updated_at']
 
-class CustomerCreateSerializer(serializers.ModelSerializer):
+class CustomerCreateSerializer(StaffOnlyUnderwritingFieldsMixin, serializers.ModelSerializer):
     user = serializers.HiddenField(default=serializers.CurrentUserDefault())
     
     class Meta:
@@ -50,7 +67,7 @@ class CustomerCreateSerializer(serializers.ModelSerializer):
             'license_expiry', 'credit_score', 'risk_rating', 'notes'
         ]
 
-class CustomerUpdateSerializer(serializers.ModelSerializer):
+class CustomerUpdateSerializer(StaffOnlyUnderwritingFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = [

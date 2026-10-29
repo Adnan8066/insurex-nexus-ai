@@ -9,11 +9,12 @@ import {
   Info,
   RefreshCw,
   AlertCircle,
-  Camera,
   Play,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { assessmentService, claimService } from '../../services'
+import { formatApiError } from '../../services/api'
+import { fraudRiskLevel, INCIDENT_TYPES, labelFor } from '../../constants/domain'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
@@ -45,25 +46,12 @@ const normalizeFactors = (factors) => {
   })
 }
 
-const getErrorMessage = (error, fallback) => {
-  const payload = error?.response?.data?.error
-    ?? error?.response?.data?.detail
-    ?? error?.response?.data?.message
-    ?? error?.message
+const getErrorMessage = formatApiError
 
-  if (typeof payload === 'string' && payload.trim()) return payload
-  if (payload && typeof payload === 'object') {
-    if (typeof payload.message === 'string' && payload.message.trim()) {
-      const details = typeof payload.details === 'string' ? payload.details.trim() : ''
-      return details ? `${payload.message} (${details})` : payload.message
-    }
-    try {
-      return JSON.stringify(payload)
-    } catch {
-      return fallback
-    }
-  }
-  return fallback
+const RISK_BADGE = {
+  high: { variant: 'danger', label: 'High Risk', bar: 'bg-red-500' },
+  medium: { variant: 'warning', label: 'Moderate Risk', bar: 'bg-amber-500' },
+  low: { variant: 'success', label: 'Low Risk', bar: 'bg-emerald-500' },
 }
 
 export function AIAssessment() {
@@ -78,9 +66,6 @@ export function AIAssessment() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [analyzing, setAnalyzing] = useState(false)
-  const [analyzingDamage, setAnalyzingDamage] = useState(false)
-  const [visualAnalysis, setVisualAnalysis] = useState(null)
-  const [visualError, setVisualError] = useState(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -118,8 +103,6 @@ export function AIAssessment() {
     const targetId = targetClaim ? String(targetClaim.id) : String(selectedClaimId)
     const match = assessments.find((a) => String(a.claim) === targetId) || null
     setAssessment(match)
-    setVisualAnalysis(targetClaim?.ai_assessment?.visual_damage_analysis || null)
-    setVisualError(null)
   }, [selectedClaimId, claims, assessments])
 
   const handleSelectClaim = (id) => {
@@ -142,25 +125,9 @@ export function AIAssessment() {
     }
   }
 
-  const analyzeClaimPhotos = async () => {
-    if (!selectedClaimId) return
-    setAnalyzingDamage(true)
-    setVisualError(null)
-    try {
-      const result = await assessmentService.analyzeClaimDamage({ claim_id: Number(selectedClaimId) })
-      setVisualAnalysis(result)
-      setClaims((current) => current.map((item) => String(item.id) === String(selectedClaimId)
-        ? { ...item, ai_assessment: { ...(item.ai_assessment || {}), visual_damage_analysis: result } }
-        : item))
-    } catch (err) {
-      setVisualError(err.response?.data?.error || err.response?.data?.detail || err.message || 'Failed to analyze claim photos.')
-    } finally {
-      setAnalyzingDamage(false)
-    }
-  }
-
   const predictedRepairCost = Number(assessment?.predicted_repair_cost) || 0
   const fraudRiskScore = Number(assessment?.fraud_risk_score) || 0
+  const fraudRisk = RISK_BADGE[fraudRiskLevel(fraudRiskScore)]
   const totalLossProbability = Number(assessment?.total_loss_probability) || 0
   const claimAmount = Number(claim?.claim_amount) || 0
   const costBreakdown = assessment?.cost_breakdown || {}
@@ -203,15 +170,9 @@ export function AIAssessment() {
       {/* Header */}
       <div className="page-header flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              Machine Learning Inference Engine
-            </span>
-          </div>
-          <h1 className="page-title">AI Claim Assessment Dashboard</h1>
+          <h1 className="page-title">Claim Assessment</h1>
           <p className="page-subtitle">
-            Automated deep damage analysis, cost prediction, fraud detection, and triage recommendation
+            Estimated repair cost, fraud risk and recommended next step for a claim
           </p>
         </div>
 
@@ -225,7 +186,7 @@ export function AIAssessment() {
           >
             {claims.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.claim_number} - {c.customer_name || c.customer_email} ({c.incident_type})
+                {c.claim_number} - {c.customer_name || c.customer_email} ({labelFor(INCIDENT_TYPES, c.incident_type)})
               </option>
             ))}
           </select>
@@ -233,10 +194,6 @@ export function AIAssessment() {
           <Button variant="primary" onClick={triggerReAnalysis} disabled={analyzing || !selectedClaimId}>
             <RefreshCw className={clsx('w-4 h-4 mr-2', analyzing && 'animate-spin')} />
             {analyzing ? 'Running Inference...' : 'Re-run Inference'}
-          </Button>
-          <Button variant="outline" onClick={analyzeClaimPhotos} disabled={analyzingDamage || !selectedClaimId}>
-            <Camera className={clsx('w-4 h-4 mr-2', analyzingDamage && 'animate-pulse')} />
-            {analyzingDamage ? 'Analyzing Photos...' : 'Analyze Claim Photos'}
           </Button>
         </div>
       </div>
@@ -247,59 +204,6 @@ export function AIAssessment() {
           {error}
         </div>
       )}
-
-      <Card>
-        <CardHeader
-          title="Photo Damage & Parts Analysis"
-          subtitle="YOLO segmentation results from the claim's uploaded Photos documents"
-        />
-        <CardContent className="p-6">
-          {visualError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-              {visualError}
-            </div>
-          )}
-          {!visualAnalysis ? (
-            <p className="text-sm text-gray-500">No photo analysis has been run for this claim. Upload claim photos, then select “Analyze Claim Photos”.</p>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
-                <span><strong>{visualAnalysis.images_analyzed}</strong> image(s) analyzed</span>
-                <span><strong>{visualAnalysis.detection_count}</strong> damage area(s) detected</span>
-                <span>{visualAnalysis.analyzed_at ? `Analyzed ${formatDate(visualAnalysis.analyzed_at)}` : visualAnalysis.model}</span>
-              </div>
-              {visualAnalysis.images?.map((image) => (
-                <div key={image.document_id} className="rounded-xl border border-gray-200 p-4">
-                  <h4 className="font-semibold text-gray-900">{image.name}</h4>
-                  <p className="text-xs text-gray-500 mt-1">{image.width} × {image.height}</p>
-                  {image.detections?.length ? (
-                    <div className="mt-3 overflow-x-auto">
-                      <table className="w-full text-sm text-left">
-                        <thead className="text-xs uppercase text-gray-500 border-b">
-                          <tr><th className="py-2 pr-4">Damage</th><th className="py-2 pr-4">Detected part</th><th className="py-2">Confidence</th></tr>
-                        </thead>
-                        <tbody>
-                          {image.detections.map((detection, index) => (
-                            <tr key={`${image.document_id}-${index}`} className="border-b last:border-0">
-                              <td className="py-2 pr-4 capitalize">{detection.damage.replaceAll('_', ' ')}</td>
-                              <td className="py-2 pr-4">{detection.part || 'Part not matched'}</td>
-                              <td className="py-2">{detection.confidence}%</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : <p className="mt-3 text-sm text-gray-500">No damage areas detected in this image.</p>}
-                </div>
-              ))}
-              {visualAnalysis.skipped_images?.length > 0 && (
-                <p className="text-sm text-amber-700">{visualAnalysis.skipped_images.length} unreadable image(s) were skipped.</p>
-              )}
-              <p className="text-xs text-gray-500">These visual detections identify likely damage and affected parts; they do not calculate repair costs or make claim decisions.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {loading && (
         <div className="p-8 text-center text-sm text-gray-400">Loading AI assessments...</div>
@@ -356,27 +260,15 @@ export function AIAssessment() {
                   <span className="text-3xl font-extrabold text-gray-900">
                     {Math.round(fraudRiskScore)}%
                   </span>
-                  <Badge
-                    variant={
-                      fraudRiskScore > 60
-                        ? 'danger'
-                        : fraudRiskScore > 30
-                          ? 'warning'
-                          : 'success'
-                    }
-                  >
-                    {fraudRiskScore > 60
-                      ? 'High Risk'
-                      : fraudRiskScore > 30
-                        ? 'Moderate Risk'
-                        : 'Low Risk'}
+                  <Badge variant={fraudRisk.variant}>
+                    {fraudRisk.label}
                   </Badge>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-3 overflow-hidden">
                   <div
                     className={clsx(
                       'h-2 rounded-full transition-all duration-500',
-                      fraudRiskScore > 60 ? 'bg-red-500' : fraudRiskScore > 30 ? 'bg-amber-500' : 'bg-emerald-500'
+                      fraudRisk.bar
                     )}
                     style={{ width: `${Math.min(fraudRiskScore, 100)}%` }}
                   />
@@ -452,7 +344,7 @@ export function AIAssessment() {
 
               <div className="flex items-center gap-3">
                 <Button asChild variant="outline"><Link to="/ai-decision">Inspect Decision Flow</Link></Button>
-                <Button asChild variant="secondary"><Link to="/fraud">Fraud Center</Link></Button>
+                <Button asChild variant="secondary"><Link to="/fraud">Fraud Alerts</Link></Button>
               </div>
             </div>
           </div>

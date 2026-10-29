@@ -6,7 +6,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from apps.accounts.models import Role
 
-from .models import Investigation, InvestigationEvidence, InvestigationNote, FraudAlert
+from .models import Investigation, InvestigationEvidence, InvestigationNote, FraudAlert, InvestigationStatus
 from .serializers import (
     InvestigationSerializer, InvestigationCreateSerializer, InvestigationUpdateSerializer,
     InvestigationEvidenceSerializer, InvestigationNoteSerializer,
@@ -47,42 +47,36 @@ class InvestigationViewSet(viewsets.ModelViewSet):
         case_number = f"INV-{uuid.uuid4().hex[:8].upper()}"
         serializer.save(case_number=case_number, opened_at=timezone.now())
     
-    @action(detail=True, methods=['post'], url_path='evidence')
-    def add_evidence(self, request, pk=None):
+    # GET and POST share one action per path: separate @actions with the same
+    # url_path collide in the router and GET answered 405.
+    @action(detail=True, methods=['get', 'post'], url_path='evidence')
+    def evidence(self, request, pk=None):
         investigation = self.get_object()
-        serializer = InvestigationEvidenceSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(investigation=investigation, collected_by=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='evidence')
-    def list_evidence(self, request, pk=None):
-        investigation = self.get_object()
-        evidence = investigation.evidence.all()
-        serializer = InvestigationEvidenceSerializer(evidence, many=True)
+        if request.method == 'POST':
+            serializer = InvestigationEvidenceSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(investigation=investigation, collected_by=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = InvestigationEvidenceSerializer(investigation.evidence.all(), many=True)
         return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'], url_path='notes')
-    def add_note(self, request, pk=None):
+
+    @action(detail=True, methods=['get', 'post'], url_path='notes')
+    def notes(self, request, pk=None):
         investigation = self.get_object()
-        serializer = InvestigationNoteSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(investigation=investigation, author=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='notes')
-    def list_notes(self, request, pk=None):
-        investigation = self.get_object()
-        notes = investigation.notes.all()
-        serializer = InvestigationNoteSerializer(notes, many=True)
+        if request.method == 'POST':
+            serializer = InvestigationNoteSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(investigation=investigation, author=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = InvestigationNoteSerializer(investigation.notes.all(), many=True)
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'], url_path='start')
     def start_investigation(self, request, pk=None):
         investigation = self.get_object()
-        investigation.status = Investigation.InvestigationStatus.IN_PROGRESS
+        investigation.status = InvestigationStatus.IN_PROGRESS
         investigation.started_at = timezone.now()
         investigation.save(update_fields=['status', 'started_at'])
         serializer = self.get_serializer(investigation)
@@ -91,7 +85,7 @@ class InvestigationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='complete')
     def complete_investigation(self, request, pk=None):
         investigation = self.get_object()
-        investigation.status = Investigation.InvestigationStatus.COMPLETED
+        investigation.status = InvestigationStatus.COMPLETED
         investigation.completed_at = timezone.now()
         investigation.findings = request.data.get('findings', investigation.findings)
         investigation.conclusion = request.data.get('conclusion', investigation.conclusion)

@@ -6,8 +6,9 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Sum, Avg, Q
+from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
-from datetime import timedelta
+from datetime import date, timedelta
 import json
 
 from .models import DashboardMetric, AnalyticsSnapshot, Report, ReportExecution
@@ -16,7 +17,9 @@ from .serializers import (
     ReportSerializer, ReportCreateSerializer, ReportExecutionSerializer
 )
 from common.permissions import IsStaffMember
-from apps.claims.models import Claim
+from common.params import parse_int
+from common.risk import FRAUD_HIGH_THRESHOLD, FRAUD_MODERATE_THRESHOLD, FRAUD_RISK_BANDS
+from apps.claims.models import Claim, ClaimStatus
 from apps.policies.models import Policy
 from apps.investigations.models import FraudAlert
 
@@ -125,45 +128,146 @@ class ReportExecutionViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-started_at']
 
 
+TIMEFRAME_LABELS = {
+    'week': 'Last 7 days',
+    'month': 'Last 30 days',
+    'quarter': 'Current quarter',
+    'ytd': 'Year to date',
+    'year': 'Last year',
+}
+TOTAL_LOSS_THRESHOLD = 50
+
+
+def resolve_timeframe(timeframe, today=None):
+    """Return (start_date, end_date) for a dashboard timeframe, or (None, None) for all time."""
+    today = today or timezone.localdate()
+    if timeframe == 'week':
+        return today - timedelta(days=6), today
+    if timeframe == 'month':
+        return today - timedelta(days=29), today
+    if timeframe == 'quarter':
+        return date(today.year, 3 * ((today.month - 1) // 3) + 1, 1), today
+    if timeframe == 'ytd':
+        return date(today.year, 1, 1), today
+    if timeframe == 'year':
+        return date(today.year - 1, 1, 1), date(today.year - 1, 12, 31)
+    return None, None
+
+
+def _period(request):
+    timeframe = request.query_params.get('timeframe')
+    start, end = resolve_timeframe(timeframe)
+    return {
+        'timeframe': timeframe if start else 'all',
+        'label': TIMEFRAME_LABELS.get(timeframe, 'All time'),
+        'start': start,
+        'end': end,
+    }
+
+
+def _scoped_claims(request, period):
+    user = request.user
+    claims = Claim.objects.all() if user.is_staff_member else Claim.objects.filter(customer=user)
+    if period['start']:
+        claims = claims.filter(submitted_at__date__range=(period['start'], period['end']))
+    return claims
+
+
+def _scoped_alerts(request, period):
+    user = request.user
+    alerts = FraudAlert.objects.all() if user.is_staff_member else FraudAlert.objects.filter(claim__customer=user)
+    if period['start']:
+        alerts = alerts.filter(created_at__date__range=(period['start'], period['end']))
+    return alerts
+
+
+def _fraud_band_counts(claims):
+    return claims.aggregate(
+        low=Count('id', filter=Q(fraud_risk_score__lt=FRAUD_MODERATE_THRESHOLD)),
+        medium=Count('id', filter=Q(
+            fraud_risk_score__gte=FRAUD_MODERATE_THRESHOLD,
+            fraud_risk_score__lte=FRAUD_HIGH_THRESHOLD,
+        )),
+        high=Count('id', filter=Q(fraud_risk_score__gt=FRAUD_HIGH_THRESHOLD)),
+    )
+
+
+def _period_payload(period):
+    return {
+        'timeframe': period['timeframe'],
+        'label': period['label'],
+        'start': period['start'],
+        'end': period['end'],
+    }
+
+
 @extend_schema(responses=OpenApiTypes.OBJECT)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard_summary(request):
-    from apps.claims.models import Claim
+    """Dashboard totals. Pass ?timeframe=week|month|quarter|ytd|year to limit claims to that period."""
     from apps.policies.models import Policy, PolicyStatus
-    from apps.investigations.models import FraudAlert
     from apps.customers.models import Customer
     from apps.vehicles.models import Vehicle, VehicleStatus
-    
-    now = timezone.now()
-    thirty_days_ago = now - timedelta(days=30)
+
+    period = _period(request)
+    today = timezone.localdate()
+    thirty_days_ago = timezone.now() - timedelta(days=30)
     user = request.user
-    claims_qs = Claim.objects.all() if user.is_staff_member else Claim.objects.filter(customer=user)
+    claims_qs = _scoped_claims(request, period)
+    alerts_qs = _scoped_alerts(request, period)
     policies_qs = Policy.objects.all() if user.is_staff_member else Policy.objects.filter(customer=user)
-    
+    active_policies = policies_qs.filter(status=PolicyStatus.ACTIVE)
+    if period['start']:
+        # Policies started in the period, and policies whose coverage overlapped it.
+        new_policies = policies_qs.filter(start_date__range=(period['start'], period['end']))
+        active_policies = active_policies.filter(start_date__lte=period['end'], end_date__gte=period['start'])
+    else:
+        new_policies = policies_qs
+
+    status_counts = dict(claims_qs.values('status').annotate(count=Count('id')).values_list('status', 'count'))
+    total_claims = claims_qs.count()
+    amounts = claims_qs.aggregate(total=Sum('claim_amount'), avg=Avg('claim_amount'))
+    total_loss_cases = claims_qs.filter(total_loss_probability__gte=TOTAL_LOSS_THRESHOLD).count()
+    bands = _fraud_band_counts(claims_qs)
+
     summary = {
+        'period': _period_payload(period),
         'claims': {
-            'total': claims_qs.count(),
+            'total': total_claims,
             'new_this_month': claims_qs.filter(submitted_at__gte=thirty_days_ago).count(),
-            'by_status': dict(claims_qs.values('status').annotate(count=Count('id')).values_list('status', 'count')),
+            'by_status': status_counts,
+            # Every lifecycle status in pipeline order, including statuses with no claims.
+            'status_distribution': [
+                {'status': value, 'label': str(label), 'count': status_counts.get(value, 0)}
+                for value, label in ClaimStatus.choices
+            ],
             'by_incident_type': dict(claims_qs.values('incident_type').annotate(count=Count('id')).values_list('incident_type', 'count')),
-            'total_amount': claims_qs.aggregate(Sum('claim_amount'))['claim_amount__sum'] or 0,
-            'avg_claim_amount': claims_qs.aggregate(Avg('claim_amount'))['claim_amount__avg'] or 0,
-            'total_loss_cases': claims_qs.filter(total_loss_probability__gte=50).count(),
+            'total_amount': amounts['total'] or 0,
+            'avg_claim_amount': amounts['avg'] or 0,
+            'total_loss_cases': total_loss_cases,
+            'repairable_cases': total_claims - total_loss_cases,
+            'total_loss_threshold': TOTAL_LOSS_THRESHOLD,
         },
         'policies': {
-            'total': policies_qs.count(),
-            'active': policies_qs.filter(status=PolicyStatus.ACTIVE).count(),
+            'total': new_policies.count(),
+            'active': active_policies.count(),
             'expiring_soon': policies_qs.filter(
                 status=PolicyStatus.ACTIVE,
-                end_date__lte=now.date() + timedelta(days=30),
-                end_date__gte=now.date()
+                end_date__lte=today + timedelta(days=30),
+                end_date__gte=today
             ).count(),
         },
         'fraud': {
-            'total_alerts': FraudAlert.objects.count(),
-            'high_risk': FraudAlert.objects.filter(risk_level='high').count(),
-            'under_investigation': FraudAlert.objects.filter(status='investigation').count(),
+            # Model-scored claims above the high-risk band.
+            'high_risk_claims': bands['high'],
+            'flag_rate': round(bands['high'] / total_claims * 100, 1) if total_claims else 0,
+            # Fraud alerts are opened when a claim is referred to an investigator (SIU),
+            # which can happen for any score, so they are reported separately.
+            'siu_referrals': alerts_qs.count(),
+            'total_alerts': alerts_qs.count(),
+            'high_risk': alerts_qs.filter(risk_level='high').count(),
+            'under_investigation': alerts_qs.filter(status='investigation').count(),
         },
         'customers': {
             'total': Customer.objects.count(),
@@ -174,22 +278,42 @@ def dashboard_summary(request):
             'active': Vehicle.objects.filter(status=VehicleStatus.ACTIVE).count(),
         },
     }
-    
+
+    if not user.is_staff_member:
+        # Fraud scoring/SIU referrals are investigator-only information, and
+        # portfolio-wide customer/vehicle totals are not the customer's data.
+        summary.pop('fraud')
+        summary.pop('customers')
+        own_vehicles = Vehicle.objects.filter(customer=user)
+        summary['vehicles'] = {
+            'total': own_vehicles.count(),
+            'active': own_vehicles.filter(status=VehicleStatus.ACTIVE).count(),
+        }
+        summary['claims'].pop('total_loss_cases')
+        summary['claims'].pop('repairable_cases')
+        summary['claims'].pop('total_loss_threshold')
+
     return Response(summary)
 
 
 @extend_schema(responses=OpenApiTypes.OBJECT)
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsStaffMember])
 def fraud_risk(request):
-    from apps.investigations.models import FraudAlert
-    user = request.user
-    alerts = FraudAlert.objects.all() if user.is_staff_member else FraudAlert.objects.filter(claim__customer=user)
-    by_level = dict(alerts.values('risk_level').annotate(count=Count('id')).values_list('risk_level', 'count'))
+    """Claims in the period grouped by fraud risk score band (<30, 30-65, >65)."""
+    period = _period(request)
+    claims = _scoped_claims(request, period)
+    bands = _fraud_band_counts(claims)
     return Response({
-        'total': alerts.count(),
-        'by_level': by_level,
-        'high_risk': alerts.filter(risk_level='high').count(),
+        'period': _period_payload(period),
+        'total': claims.count(),
+        'by_level': bands,
+        'bands': [
+            {'level': level, 'label': label, 'count': bands[level]}
+            for level, label in FRAUD_RISK_BANDS
+        ],
+        'high_risk': bands['high'],
+        'thresholds': {'moderate': FRAUD_MODERATE_THRESHOLD, 'high': FRAUD_HIGH_THRESHOLD},
     })
 
 
@@ -207,28 +331,56 @@ def export_report(request):
     return Response({'detail': 'Export is not configured in this environment.'}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
 
+def _month_starts(start, end):
+    current = start.replace(day=1)
+    while current <= end:
+        yield current
+        current = date(current.year + current.month // 12, current.month % 12 + 1, 1)
+
+
 @extend_schema(responses={200: ClaimTrendResponseSerializer(many=True)})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def claims_trend(request):
-    days = int(request.query_params.get('days', 30))
-    end_date = timezone.now().date()
-    start_date = end_date - timedelta(days=days)
-    
-    from apps.claims.models import Claim
-    from django.db.models.functions import TruncDate
-    
-    daily_claims = Claim.objects.filter(
-        submitted_at__date__gte=start_date,
-        submitted_at__date__lte=end_date
-    ).annotate(
-        date=TruncDate('submitted_at')
-    ).values('date').annotate(
-        count=Count('id'),
-        total_amount=Sum('claim_amount')
-    ).order_by('date')
-    
-    return Response(list(daily_claims))
+    """Claim intake and amount per bucket, with empty buckets filled with zeros.
+
+    Use ?timeframe=week|month|quarter|ytd|year, or ?days=N for the trailing N days.
+    ?granularity=day|month controls bucketing; month buckets are dated on the 1st.
+    """
+    period = _period(request)
+    if period['start']:
+        start_date, end_date = period['start'], period['end']
+    else:
+        end_date = timezone.localdate()
+        days = parse_int(request.query_params.get('days'), 'days', minimum=1, maximum=3660, default=30)
+        start_date = end_date - timedelta(days=days)
+    granularity = 'month' if request.query_params.get('granularity') == 'month' else 'day'
+
+    user = request.user
+    claims = Claim.objects.all() if user.is_staff_member else Claim.objects.filter(customer=user)
+    claims = claims.filter(submitted_at__date__range=(start_date, end_date))
+
+    if granularity == 'month':
+        rows = claims.annotate(bucket=TruncMonth('submitted_at'))
+        buckets = list(_month_starts(start_date, end_date))
+    else:
+        rows = claims.annotate(bucket=TruncDate('submitted_at'))
+        buckets = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+
+    totals = {}
+    for row in rows.values('bucket').annotate(count=Count('id'), total_amount=Sum('claim_amount')):
+        bucket = row['bucket']
+        bucket = bucket.date() if hasattr(bucket, 'date') else bucket
+        totals[bucket] = row
+
+    return Response([
+        {
+            'date': bucket,
+            'count': totals.get(bucket, {}).get('count', 0),
+            'total_amount': totals.get(bucket, {}).get('total_amount') or 0,
+        }
+        for bucket in buckets
+    ])
 
 
 def execute_report(report, parameters):

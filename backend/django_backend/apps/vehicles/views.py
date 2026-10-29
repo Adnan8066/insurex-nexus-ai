@@ -1,4 +1,4 @@
-﻿from rest_framework import viewsets, status, filters
+from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -6,12 +6,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 from apps.accounts.models import Role
 from apps.policies.models import Policy
 
-from .models import Vehicle, VehicleDocument, VehicleHistory
+from rest_framework.exceptions import PermissionDenied
+from .models import Vehicle, VehicleDocument, VehicleHistory, VehicleStatus
+from common.params import Conflict, parse_int
 from .serializers import (
     VehicleSerializer, VehicleCreateSerializer, VehicleUpdateSerializer,
     VehicleDocumentSerializer, VehicleHistorySerializer
 )
-from common.permissions import IsOwnerOrAdmin, CanIssuePolicy
+from common.permissions import CanIssuePolicy
 
 
 class VehicleViewSet(viewsets.ModelViewSet):
@@ -45,7 +47,8 @@ class VehicleViewSet(viewsets.ModelViewSet):
         if self.action in ['create']:
             return [IsAuthenticated(), CanIssuePolicy()]
         elif self.action in ['update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), IsOwnerOrAdmin()]
+            # Owner customers (scoped by get_queryset), employees and admins.
+            return [IsAuthenticated(), CanIssuePolicy()]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -60,7 +63,8 @@ class VehicleViewSet(viewsets.ModelViewSet):
     def list_claims(self, request, pk=None):
         from apps.claims.serializers import ClaimSerializer
         vehicle = self.get_object()
-        serializer = ClaimSerializer(vehicle.claims.all(), many=True)
+        # The request context is required so customer-hidden fields are stripped.
+        serializer = ClaimSerializer(vehicle.claims.all(), many=True, context={'request': request})
         return Response(serializer.data)
     
     def perform_create(self, serializer):
@@ -82,36 +86,36 @@ class VehicleViewSet(viewsets.ModelViewSet):
         if updated.policy_id:
             Policy.objects.filter(pk=updated.policy_id).update(vehicle=updated)
     
-    @action(detail=True, methods=['post'], url_path='documents')
-    def upload_document(self, request, pk=None):
+    def perform_destroy(self, instance):
+        # Claims cascade-delete with their vehicle; never destroy claim records this way.
+        if instance.claims.exists():
+            raise Conflict('This vehicle has claims on record and cannot be deleted. Mark it inactive instead.')
+        instance.delete()
+
+    # GET and POST share one action: separate @actions with the same url_path
+    # collide in the router and POST answered 405.
+    @action(detail=True, methods=['get', 'post'], url_path='documents')
+    def documents(self, request, pk=None):
         vehicle = self.get_object()
-        serializer = VehicleDocumentSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(vehicle=vehicle, uploaded_by=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='documents')
-    def list_documents(self, request, pk=None):
-        vehicle = self.get_object()
-        documents = vehicle.documents.all()
-        serializer = VehicleDocumentSerializer(documents, many=True)
+        if request.method == 'POST':
+            serializer = VehicleDocumentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(vehicle=vehicle, uploaded_by=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = VehicleDocumentSerializer(vehicle.documents.all(), many=True)
         return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'], url_path='history')
-    def add_history(self, request, pk=None):
+
+    @action(detail=True, methods=['get', 'post'], url_path='history')
+    def history(self, request, pk=None):
         vehicle = self.get_object()
-        serializer = VehicleHistorySerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(vehicle=vehicle)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='history')
-    def list_history(self, request, pk=None):
-        vehicle = self.get_object()
-        history = vehicle.history.all()
-        serializer = VehicleHistorySerializer(history, many=True)
+        if request.method == 'POST':
+            serializer = VehicleHistorySerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(vehicle=vehicle)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = VehicleHistorySerializer(vehicle.history.all(), many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'], url_path='registration-expiring')
@@ -119,7 +123,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         from datetime import timedelta
         
-        days = int(request.query_params.get('days', 30))
+        days = parse_int(request.query_params.get('days'), 'days', minimum=0, maximum=3650, default=30)
         upcoming_date = timezone.now().date() + timedelta(days=days)
         
         vehicles = self.get_queryset().filter(

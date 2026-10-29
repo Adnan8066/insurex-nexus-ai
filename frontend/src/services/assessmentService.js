@@ -56,11 +56,6 @@ export const assessmentService = {
     return response.data
   },
 
-  async analyzeClaimDamage(data) {
-    const response = await api.post('/ai/analyze-damage/', data)
-    return response.data
-  },
-
   async predictRepairCost(data) {
     const response = await api.post('/ai/predict-repair-cost/', data)
     return response.data

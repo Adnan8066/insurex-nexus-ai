@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Brain, LoaderCircle, Sparkles, Users } from 'lucide-react'
 import { assessmentService } from '../../services'
+import { formatApiError } from '../../services/api'
 
 const initialClaim = {
   complexity_score: 0.7,
@@ -50,7 +51,7 @@ export function RoutingAdvisory() {
       setModelStatus(status)
     }).catch((requestError) => {
       if (!cancelled) {
-        setError(requestError.response?.data?.detail || 'Live routing data could not be loaded. You can still try the clearly marked sample values.')
+        setError(formatApiError(requestError, 'Live routing data could not be loaded. You can still try the clearly marked sample values.'))
       }
     })
     return () => { cancelled = true }
@@ -104,8 +105,7 @@ export function RoutingAdvisory() {
       )
       setResult(advice)
     } catch (requestError) {
-      const details = requestError.response?.data?.detail || requestError.response?.data
-      setError(typeof details === 'string' ? details : 'Could not get routing advice. Check that the backend and trained model are running, then try again.')
+      setError(formatApiError(requestError, 'Could not get routing advice. Please try again in a moment.'))
     } finally {
       setLoading(false)
     }
@@ -127,7 +127,7 @@ export function RoutingAdvisory() {
       })
       setReviewSaved(true)
     } catch (requestError) {
-      setError(requestError.response?.data?.detail || 'Could not save the human review. Please try again.')
+      setError(formatApiError(requestError, 'Could not save the human review. Please try again.'))
     } finally {
       setReviewLoading(false)
     }
@@ -141,8 +141,8 @@ export function RoutingAdvisory() {
             <Brain className="h-4 w-4" /> RL routing simulator
           </span>
         </div>
-        <h1 className="page-title">Claim Routing Advice</h1>
-        <p className="page-subtitle">Compare agent options using configured staff profiles and active claim queues.</p>
+        <h1 className="page-title">Suggest Adjuster</h1>
+        <p className="page-subtitle">See which agent is best placed to handle a claim, based on skills and current workload.</p>
       </header>
 
       <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">

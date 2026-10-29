@@ -12,12 +12,22 @@ from .serializers import (
     CustomerUpdateSerializer, CustomerDocumentSerializer, CallbackRequestSerializer
 )
 from common.permissions import IsOwnerOrAdmin, IsStaffMember
+from common.params import Conflict
 
 
 class CallbackRequestViewSet(viewsets.ModelViewSet):
     queryset = CallbackRequest.objects.all()
     serializer_class = CallbackRequestSerializer
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
+
+    throttle_scope = 'public_form'
+
+    def get_throttles(self):
+        # Only the anonymous public form is rate limited.
+        if self.action == 'create':
+            from rest_framework.throttling import ScopedRateThrottle
+            return [ScopedRateThrottle()]
+        return []
 
     def get_permissions(self):
         if self.action == 'create':
@@ -64,23 +74,23 @@ class CustomerViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         import uuid
+        if Customer.objects.filter(user=self.request.user).exists():
+            raise Conflict('A customer profile already exists for this account.')
         customer_number = f"CUST-{uuid.uuid4().hex[:8].upper()}"
         serializer.save(customer_number=customer_number)
-    
-    @action(detail=True, methods=['post'], url_path='documents')
-    def upload_document(self, request, pk=None):
+
+    # GET and POST share one action; separate @actions with the same url_path
+    # collide in the router and POST answered 405.
+    @action(detail=True, methods=['get', 'post'], url_path='documents')
+    def documents(self, request, pk=None):
         customer = self.get_object()
-        serializer = CustomerDocumentSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(customer=customer, uploaded_by=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='documents')
-    def list_documents(self, request, pk=None):
-        customer = self.get_object()
-        documents = customer.documents.all()
-        serializer = CustomerDocumentSerializer(documents, many=True)
+        if request.method == 'POST':
+            serializer = CustomerDocumentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(customer=customer, uploaded_by=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = CustomerDocumentSerializer(customer.documents.all(), many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'], url_path='me')

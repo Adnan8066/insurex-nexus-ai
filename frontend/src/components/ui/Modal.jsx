@@ -18,6 +18,12 @@ export function Modal({
 }) {
   const modalRef = useRef(null)
   const previousActiveElement = useRef(null)
+  // Keep the latest onClose without re-running the open/close effect on every parent render
+  // (an inline onClose would otherwise re-focus the trigger and the modal each render).
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (isOpen) {
@@ -26,7 +32,7 @@ export function Modal({
       modalRef.current?.focus()
       const handleKeyDown = (e) => {
         if (e.key === 'Escape' && closeOnEscape) {
-          onClose()
+          onCloseRef.current?.()
         }
         if (e.key === 'Tab') {
           trapFocus(e)
@@ -39,7 +45,7 @@ export function Modal({
         previousActiveElement.current?.focus()
       }
     }
-  }, [isOpen, closeOnEscape, onClose])
+  }, [isOpen, closeOnEscape])
 
   const trapFocus = (e) => {
     const focusableElements = modalRef.current?.querySelectorAll(

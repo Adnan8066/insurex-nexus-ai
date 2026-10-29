@@ -1,4 +1,4 @@
-﻿from rest_framework import viewsets, status, filters
+from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -7,8 +7,11 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from django.db import transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
+from django.conf import settings
+from decimal import Decimal
 
 from .models import (Policy, PolicyApplication, PolicyEndorsement, PolicyCoverage,
                      PolicyDocument, PremiumHistory, PolicyStatus)
@@ -21,6 +24,8 @@ from .serializers import (
     PolicyEndorsementSerializer, PolicyEndorsementCreateSerializer,
 )
 from common.permissions import IsEmployee, IsAdmin
+from common.params import Conflict, parse_int
+from rest_framework.exceptions import PermissionDenied
 
 User = get_user_model()
 
@@ -34,6 +39,12 @@ def _json_safe(value):
     if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
     return value
+
+
+def _check_can_review(user, application):
+    """Employees act on requests assigned to them (or not yet assigned); admins may step in on any."""
+    if user.role == Role.EMPLOYEE and application.assigned_to_id not in (None, user.id):
+        raise PermissionDenied('This request is assigned to another employee.')
 
 
 class PolicyViewSet(viewsets.ModelViewSet):
@@ -79,13 +90,15 @@ class PolicyViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         if self.action in ['bind_quote', 'approve_endorsement', 'reject_endorsement']:
             return [IsAuthenticated(), IsEmployee()]
-        if self.action in ['create_endorsement', 'list_endorsements']:
+        if self.action == 'endorsements':
             return [IsAuthenticated(), IsEmployee()]
         if self.action == 'create':
             return [IsAuthenticated(), IsEmployee()]
         if self.action == 'form_options':
             return [IsAuthenticated(), IsEmployee()]
-        if self.action in ['update', 'partial_update', 'destroy', 'upload_document', 'update_coverage', 'add_premium_payment']:
+        if self.action in ['update', 'partial_update', 'destroy', 'update_coverage', 'add_premium_payment']:
+            return [IsAuthenticated(), IsAdmin()]
+        if self.action == 'documents' and self.request.method == 'POST':
             return [IsAuthenticated(), IsAdmin()]
         return [IsAuthenticated()]
 
@@ -94,32 +107,50 @@ class PolicyViewSet(viewsets.ModelViewSet):
         """Collect underwriting details and persist an estimate-only quote."""
         serializer = PolicyQuoteSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        is_customer_request = request.user.role == Role.CUSTOMER
+        if is_customer_request:
+            # Underwriting inputs are not self-declared: apply the default score and
+            # leave agent assignment to the staff member who reviews the request.
+            data['risk_score'] = Decimal(str(settings.POLICY_DEFAULT_RISK_SCORE))
+            data['risk_factors'] = {'source': 'customer request; default risk score pending staff review'}
+            data['policy_terms'].pop('agent', None)
+            vehicle_id = data['policy_terms'].get('vehicle')
+            if vehicle_id and PolicyApplication.objects.filter(
+                customer=request.user, status=PolicyApplication.Status.QUOTED, policy_terms__vehicle=vehicle_id,
+            ).exists():
+                raise Conflict('A policy request for this vehicle is already waiting for review.')
         from .services.rating import calculate_premium
         try:
             quote = calculate_premium(
-                coverage_limit=serializer.validated_data['coverage_limit'],
-                deductible=serializer.validated_data['deductible'],
-                risk_score=serializer.validated_data['risk_score'],
+                coverage_limit=data['coverage_limit'],
+                deductible=data['deductible'],
+                risk_score=data['risk_score'],
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         application = PolicyApplication.objects.create(
-            **serializer.validated_data,
+            **data,
             created_by=request.user,
             quoted_premium=quote.premium,
             rating_breakdown=quote.as_dict(),
         )
+        if is_customer_request:
+            from apps.assessments.assignment import assign_policy_request
+            assign_policy_request(application)
         return Response(PolicyApplicationSerializer(application).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='bind-quote')
     def bind_quote(self, request):
         """Explicit staff approval binds a quoted application into an active policy."""
-        application_id = request.data.get('application_id')
-        application = get_object_or_404(PolicyApplication, pk=application_id)
-        if application.status != PolicyApplication.Status.QUOTED:
-            return Response({'detail': 'Only an unbound quote can be issued.'}, status=status.HTTP_409_CONFLICT)
-        terms = application.policy_terms
+        application_id = parse_int(request.data.get('application_id'), 'application_id')
         with transaction.atomic():
+            # Lock the quote so two reviewers cannot issue it twice.
+            application = get_object_or_404(PolicyApplication.objects.select_for_update(), pk=application_id)
+            if application.status != PolicyApplication.Status.QUOTED:
+                return Response({'detail': 'Only an unbound quote can be issued.'}, status=status.HTTP_409_CONFLICT)
+            _check_can_review(request.user, application)
+            terms = application.policy_terms
             if terms.get('vehicle'):
                 vehicle = get_object_or_404(Vehicle.objects.select_for_update(), pk=terms['vehicle'])
                 if vehicle.customer_id != application.customer_id or vehicle.policy_id:
@@ -130,8 +161,10 @@ class PolicyViewSet(viewsets.ModelViewSet):
                 agent_id=terms.get('agent'),
                 type=application.policy_type,
                 status=PolicyStatus.ACTIVE,
-                start_date=terms['start_date'],
-                end_date=terms['end_date'],
+                # policy_terms stores ISO strings; convert so the returned policy
+                # (is_active, days_remaining) compares real dates.
+                start_date=parse_date(terms['start_date']),
+                end_date=parse_date(terms['end_date']),
                 premium=application.quoted_premium,
                 deductible=application.deductible,
                 payment_frequency=terms.get('payment_frequency', 'annual'),
@@ -153,7 +186,9 @@ class PolicyViewSet(viewsets.ModelViewSet):
             )
             application.status = PolicyApplication.Status.BOUND
             application.bound_policy = policy
-            application.save(update_fields=['status', 'bound_policy', 'updated_at'])
+            application.reviewed_by = request.user
+            application.reviewed_at = timezone.now()
+            application.save(update_fields=['status', 'bound_policy', 'reviewed_by', 'reviewed_at', 'updated_at'])
         from apps.notifications.services import create_in_app_notification
         create_in_app_notification(
             policy.customer,
@@ -166,9 +201,13 @@ class PolicyViewSet(viewsets.ModelViewSet):
         )
         return Response(PolicySerializer(policy, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['post'], url_path='endorsements')
-    def create_endorsement(self, request, pk=None):
+    # GET and POST share one action: two @actions with the same url_path collide
+    # in the router and GET answered 405.
+    @action(detail=True, methods=['get', 'post'], url_path='endorsements')
+    def endorsements(self, request, pk=None):
         policy = self.get_object()
+        if request.method == 'GET':
+            return Response(PolicyEndorsementSerializer(policy.endorsements.all(), many=True).data)
         serializer = PolicyEndorsementCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         changes = dict(serializer.validated_data)
@@ -189,17 +228,12 @@ class PolicyViewSet(viewsets.ModelViewSet):
         )
         return Response(PolicyEndorsementSerializer(endorsement).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['get'], url_path='endorsements')
-    def list_endorsements(self, request, pk=None):
-        policy = self.get_object()
-        return Response(PolicyEndorsementSerializer(policy.endorsements.all(), many=True).data)
-
     @action(detail=True, methods=['post'], url_path='endorsements/(?P<endorsement_id>[^/.]+)/approve')
     def approve_endorsement(self, request, pk=None, endorsement_id=None):
         policy = self.get_object()
         with transaction.atomic():
             policy = Policy.objects.select_for_update().get(pk=policy.pk)
-            endorsement = get_object_or_404(policy.endorsements.select_for_update(), pk=endorsement_id)
+            endorsement = get_object_or_404(policy.endorsements.select_for_update(), pk=parse_int(endorsement_id, 'endorsement_id'))
             if endorsement.status != PolicyEndorsement.Status.PENDING:
                 return Response({'detail': 'This endorsement is no longer pending.'}, status=status.HTTP_409_CONFLICT)
             changes = endorsement.proposed_changes
@@ -227,7 +261,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='endorsements/(?P<endorsement_id>[^/.]+)/reject')
     def reject_endorsement(self, request, pk=None, endorsement_id=None):
-        endorsement = get_object_or_404(self.get_object().endorsements.all(), pk=endorsement_id)
+        endorsement = get_object_or_404(self.get_object().endorsements.all(), pk=parse_int(endorsement_id, 'endorsement_id'))
         if endorsement.status != PolicyEndorsement.Status.PENDING:
             return Response({'detail': 'This endorsement is no longer pending.'}, status=status.HTTP_409_CONFLICT)
         endorsement.status = PolicyEndorsement.Status.REJECTED
@@ -291,6 +325,8 @@ class PolicyViewSet(viewsets.ModelViewSet):
     def form_options(self, request):
         customer_id = request.query_params.get('customer')
         policy_id = request.query_params.get('policy')
+        customer_id = parse_int(customer_id, 'customer') if customer_id else None
+        policy_id = parse_int(policy_id, 'policy') if policy_id else None
         customers = User.objects.filter(role=Role.CUSTOMER, is_active=True).order_by('last_name', 'first_name', 'email')
         agents = User.objects.filter(role__in=[Role.EMPLOYEE, Role.ADMIN], is_active=True).order_by('last_name', 'first_name', 'email')
         investigators = User.objects.filter(role=Role.INVESTIGATOR, is_active=True).order_by('last_name', 'first_name', 'email')
@@ -340,20 +376,19 @@ class PolicyViewSet(viewsets.ModelViewSet):
             } for policy in policies],
         })
     
-    @action(detail=True, methods=['post'], url_path='documents')
-    def upload_document(self, request, pk=None):
+    # GET (any user who can see the policy) and POST (admin only, see
+    # get_permissions) share one action; two @actions with the same url_path
+    # collide in the router and POST answered 405.
+    @action(detail=True, methods=['get', 'post'], url_path='documents')
+    def documents(self, request, pk=None):
         policy = self.get_object()
-        serializer = PolicyDocumentSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(policy=policy, uploaded_by=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='documents')
-    def list_documents(self, request, pk=None):
-        policy = self.get_object()
-        documents = policy.documents.all()
-        serializer = PolicyDocumentSerializer(documents, many=True)
+        if request.method == 'POST':
+            serializer = PolicyDocumentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(policy=policy, uploaded_by=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = PolicyDocumentSerializer(policy.documents.all(), many=True)
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'], url_path='premium-history')
@@ -397,7 +432,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         from datetime import timedelta
         
-        days = int(request.query_params.get('days', 30))
+        days = parse_int(request.query_params.get('days'), 'days', minimum=0, maximum=3650, default=30)
         upcoming_date = timezone.now().date() + timedelta(days=days)
         
         policies = self.get_queryset().filter(
@@ -407,3 +442,44 @@ class PolicyViewSet(viewsets.ModelViewSet):
         )
         serializer = self.get_serializer(policies, many=True)
         return Response(serializer.data)
+
+
+class PolicyApplicationViewSet(viewsets.ReadOnlyModelViewSet):
+    """Quotes waiting for a decision. Customers see their own requests; staff see all."""
+    serializer_class = PolicyApplicationSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['status']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        queryset = PolicyApplication.objects.select_related('customer', 'assigned_to', 'reviewed_by', 'bound_policy')
+        user = self.request.user
+        if user.role == Role.ADMIN:
+            return queryset
+        if user.role == Role.EMPLOYEE:
+            return queryset.filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
+        if user.role == Role.CUSTOMER:
+            return queryset.filter(customer=user)
+        return queryset.none()
+
+    @action(detail=True, methods=['post'], url_path='decline', permission_classes=[IsAuthenticated, IsEmployee])
+    def decline(self, request, pk=None):
+        with transaction.atomic():
+            application = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=pk)
+            if application.status != PolicyApplication.Status.QUOTED:
+                raise Conflict('Only a quote waiting for review can be declined.')
+            _check_can_review(request.user, application)
+            application.status = PolicyApplication.Status.DECLINED
+            application.reviewed_by = request.user
+            application.reviewed_at = timezone.now()
+            application.review_note = str(request.data.get('note', '')).strip()[:2000]
+            application.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_note', 'updated_at'])
+        from apps.notifications.services import create_in_app_notification
+        reason = f' Reason: {application.review_note}' if application.review_note else ''
+        create_in_app_notification(
+            application.customer, 'policy', 'Policy request declined',
+            f'Your policy request could not be approved.{reason}',
+            link='/vehicles', related_object_type='policy_application', related_object_id=application.pk,
+        )
+        return Response(self.get_serializer(application).data)

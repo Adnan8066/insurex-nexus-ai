@@ -117,6 +117,10 @@ class PolicyApplication(models.Model):
     policy_terms = models.JSONField(_('requested policy terms'), default=dict)
     status = models.CharField(_('status'), max_length=12, choices=Status.choices, default=Status.QUOTED)
     bound_policy = models.OneToOneField(Policy, on_delete=models.SET_NULL, null=True, blank=True, related_name='source_application')
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_policy_applications')
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_policy_applications')
+    reviewed_at = models.DateTimeField(_('reviewed at'), null=True, blank=True)
+    review_note = models.TextField(_('review note'), blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -10,9 +10,10 @@ const moduleGroups = [
     title: 'Insurance & Claims',
     badge: 'CUSTOMER WORKFLOWS',
     links: [
-      { label: 'Claims workspace', to: '/claims', roles: allRoles },
+      { label: 'Claims', to: '/claims', roles: allRoles },
       { label: 'Policies', to: '/policies', roles: ['customer', 'employee', 'admin'] },
       { label: 'Vehicles', to: '/vehicles', roles: ['customer', 'employee', 'admin'] },
+      { label: 'Help & Support', to: '/support', roles: ['customer', 'employee', 'admin'] },
     ],
     secondBadge: '',
     secondLinks: [],
@@ -21,14 +22,14 @@ const moduleGroups = [
     title: 'Review & Investigation',
     badge: 'AI & RISK REVIEW',
     links: [
-      { label: 'AI Assessment', to: '/ai-assessment', roles: reviewRoles },
-      { label: 'Fraud Investigation', to: '/fraud', roles: reviewRoles },
-      { label: 'AI Decision Center', to: '/ai-decision', roles: reviewRoles },
+      { label: 'Claim Assessment', to: '/ai-assessment', roles: reviewRoles },
+      { label: 'Fraud Alerts', to: '/fraud', roles: reviewRoles },
+      { label: 'Automated Review', to: '/ai-decision', roles: reviewRoles },
       { label: 'Analytics', to: '/analytics', roles: reviewRoles },
     ],
     secondBadge: 'CLAIM SUPPORT',
     secondLinks: [
-      { label: 'Investigator Workspace', to: '/investigators', roles: ['employee', 'investigator', 'admin'] },
+      { label: 'Investigation Cases', to: '/investigators', roles: ['employee', 'investigator', 'admin'] },
     ],
   },
   {
@@ -36,7 +37,7 @@ const moduleGroups = [
     badge: 'CLAIM OPERATIONS',
     links: [
       { label: 'User Management', to: '/admin/users', roles: ['admin'] },
-      { label: 'AI Operations', to: '/operations', roles: reviewRoles },
+      { label: 'Model Health', to: '/operations', roles: reviewRoles },
     ],
     secondBadge: '',
     secondLinks: [],
@@ -55,14 +56,15 @@ export function Footer() {
     links: group.links.filter((link) => link.roles.includes(user?.role)),
     secondLinks: group.secondLinks.filter((link) => link.roles.includes(user?.role)),
   })).filter((group) => group.links.length > 0 || group.secondLinks.length > 0)
+  const isCustomer = user?.role === 'customer'
   return (
     <footer className="bg-[#06172e] text-slate-200" role="contentinfo">
       <div className="mx-auto max-w-[1600px] px-4 pb-8 pt-12 sm:px-6 lg:px-8 lg:pt-16">
         <div className="footer-module-grid gap-10 lg:gap-12" style={{ '--footer-group-count': columns.length }}>
           <section className="flex flex-col items-start gap-6">
             <div className="rounded-3xl bg-white p-7 text-slate-950 shadow-2xl shadow-black/20 sm:max-w-sm">
-              <p className="text-2xl font-extrabold leading-tight tracking-tight">Built around your claims workflow.</p>
-              <p className="mt-3 text-sm leading-6 text-slate-600">Manage coverage, vehicle details, assessment, and investigation in one workspace.</p>
+              <p className="text-2xl font-extrabold leading-tight tracking-tight">{isCustomer ? 'Questions about a claim?' : 'Built around your claims workflow.'}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{isCustomer ? 'Our support team can help with policies, claims and documents.' : 'Manage coverage, vehicle details, assessment, and investigation in one workspace.'}</p>
               <Link to="/support" className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                 Contact Support <ArrowRight className="h-4 w-4" />
               </Link>
@@ -91,10 +93,10 @@ export function Footer() {
         <div className="mt-12 grid gap-6 border-t border-white/10 pt-7 md:grid-cols-[1fr_auto] md:items-end">
           <div className="max-w-2xl space-y-3">
             <div id="footer-contact" className="scroll-mt-24">
-              <h2 className="text-sm font-bold text-white">Workspace support</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-400">For help with account access or a claim, contact your InsureX administrator or claims team.</p>
+              <h2 className="text-sm font-bold text-white">{isCustomer ? 'Need help?' : 'Workspace support'}</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-400">{isCustomer ? 'Contact our support team for help with your account, policies or claims.' : 'For help with account access or a claim, contact your InsureX administrator or claims team.'}</p>
             </div>
-            <p className="text-xs leading-5 text-slate-500">InsureX Nexus AI connects the policy, vehicle, claim, AI review, and investigation workflows.</p>
+            {!isCustomer && <p className="text-xs leading-5 text-slate-500">InsureX Nexus AI connects the policy, vehicle, claim, AI review, and investigation workflows.</p>}
             <p className="text-xs text-slate-500">© {new Date().getFullYear()} InsureX Nexus AI</p>
           </div>
         </div>

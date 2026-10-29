@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Save } from 'lucide-react'
+import { addYears, format } from 'date-fns'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { policyService, vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
 import { policyTiers } from '../../data/policyTiers'
 import { formatCurrency } from '../../utils/helpers'
+import { formatApiError } from '../../services/api'
+import { POLICY_STATUSES, POLICY_TYPES } from '../../constants/domain'
 
-const today = () => new Date().toISOString().slice(0, 10)
-const nextYear = () => new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10)
+// Local calendar dates (toISOString() would give the UTC date, which is off by a day near midnight).
+const today = () => format(new Date(), 'yyyy-MM-dd')
+const nextYear = () => format(addYears(new Date(), 1), 'yyyy-MM-dd')
 
 export function PolicyForm() {
   const navigate = useNavigate()
@@ -102,7 +106,7 @@ export function PolicyForm() {
           }
         }
       } catch (err) {
-        if (active) setError(err.response?.data?.detail || 'Unable to load the policy form data.')
+        if (active) setError(formatApiError(err, 'Unable to load the policy form data.'))
       }
     }
     loadForm()
@@ -128,7 +132,7 @@ export function PolicyForm() {
         }
         if (active) setVehicles(rows)
       } catch (err) {
-        if (active) setError(err.response?.data?.detail || 'Unable to load vehicles for this customer.')
+        if (active) setError(formatApiError(err, 'Unable to load vehicles for this customer.'))
       }
     }
     loadVehicles()
@@ -245,10 +249,7 @@ export function PolicyForm() {
       else await policyService.createPolicy(payload)
       navigate('/policies')
     } catch (err) {
-      const details = err.response?.data?.error?.details || err.response?.data
-      setError(typeof details === 'object'
-        ? Object.entries(details).filter(([field]) => field !== 'detail').map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`).join('; ') || err.response?.data?.detail || 'Failed to save policy.'
-        : details?.detail || 'Failed to save policy.')
+      setError(formatApiError(err, 'Failed to save policy.'))
     } finally {
       setLoading(false)
     }
@@ -309,19 +310,13 @@ export function PolicyForm() {
               <Select label="Customer" name="customer" value={formData.customer} onChange={handleChange} options={customerOptions} placeholder="Select customer" required />
             )}
             {canAssignCustomer && (
-              <Select label="Assigned Agent" name="agent" value={formData.agent} onChange={handleChange} options={agentOptions} placeholder="Select agent (optional)" />
+              <Select label="Assigned Agent (optional)" name="agent" value={formData.agent} onChange={handleChange} options={agentOptions} placeholder="No agent" allowEmpty />
             )}
             {isCustomPolicy && <Select label="Policy Type" name="type" value={formData.type} onChange={handleChange} options={[
-              { value: 'auto_comprehensive', label: 'Comprehensive Auto' },
-              { value: 'auto_collision', label: 'Collision Auto' },
-              { value: 'auto_liability', label: 'Liability Auto' },
-              { value: 'homeowners', label: 'Homeowners' },
-              { value: 'renters', label: 'Renters' },
-              { value: 'umbrella', label: 'Umbrella' },
+              ...POLICY_TYPES,
             ]} />}
             {isEdit && <Select label="Status" name="status" value={formData.status} onChange={handleChange} options={[
-              { value: 'pending', label: 'Pending' }, { value: 'active', label: 'Active' },
-              { value: 'suspended', label: 'Suspended' }, { value: 'expired', label: 'Expired' }, { value: 'cancelled', label: 'Cancelled' },
+              ...POLICY_STATUSES,
             ]} />}
             <Input label="Start Date" name="startDate" type="date" value={formData.startDate} onChange={handleChange} required />
             <Input label="End Date" name="endDate" type="date" value={formData.endDate} onChange={handleChange} required />

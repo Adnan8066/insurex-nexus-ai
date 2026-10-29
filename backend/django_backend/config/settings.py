@@ -66,6 +66,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'common.middleware.RequestIDMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -76,7 +77,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 if not DEBUG:
-    MIDDLEWARE.insert(2, 'whitenoise.middleware.WhiteNoiseMiddleware')
+    MIDDLEWARE.insert(3, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'config.urls'
 
@@ -148,8 +149,13 @@ USE_TZ = True
 POLICY_BASE_ANNUAL_RATE = os.environ.get('POLICY_BASE_ANNUAL_RATE', '0.025')
 POLICY_DEDUCTIBLE_CREDIT_RATE = os.environ.get('POLICY_DEDUCTIBLE_CREDIT_RATE', '0.20')
 POLICY_RATING_VERSION = os.environ.get('POLICY_RATING_VERSION', 'demo-v1')
+# Risk score used for quotes a customer requests themselves; staff review it
+# before the quote is issued as a policy.
+POLICY_DEFAULT_RISK_SCORE = os.environ.get('POLICY_DEFAULT_RISK_SCORE', '25')
 CLAIM_ANNUAL_DEPRECIATION_RATE = os.environ.get('CLAIM_ANNUAL_DEPRECIATION_RATE', '0.05')
 CLAIM_MAX_DEPRECIATION_RATE = os.environ.get('CLAIM_MAX_DEPRECIATION_RATE', '0.80')
+# New claims go to the least-busy employee whenever the RL router does not assign them.
+CLAIM_AUTO_ASSIGN_LEAST_BUSY = os.environ.get('CLAIM_AUTO_ASSIGN_LEAST_BUSY', 'True').lower() == 'true'
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.environ.get('STATIC_ROOT', BASE_DIR / 'staticfiles')
@@ -187,7 +193,18 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'common.exceptions.custom_exception_handler',
+    # Only views that opt in with a throttle_scope are throttled (login, password
+    # reset, registration, public callback form).
+    'DEFAULT_THROTTLE_RATES': {
+        'login': os.environ.get('THROTTLE_LOGIN_RATE', '10/min'),
+        'password_reset': os.environ.get('THROTTLE_PASSWORD_RESET_RATE', '5/hour'),
+        'register': os.environ.get('THROTTLE_REGISTER_RATE', '20/hour'),
+        'public_form': os.environ.get('THROTTLE_PUBLIC_FORM_RATE', '20/hour'),
+    },
 }
+
+# Maximum size of a single uploaded document/photo (see common/uploads.py).
+MAX_UPLOAD_BYTES = int(os.environ.get('MAX_UPLOAD_BYTES', 25 * 1024 * 1024))
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.environ.get('JWT_ACCESS_TOKEN_LIFETIME_MINUTES', 60))),
@@ -285,7 +302,7 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'format': '{levelname} {asctime} [{request_id}] {module} {process:d} {thread:d} {message}',
             'style': '{',
         },
         'simple': {
@@ -293,10 +310,14 @@ LOGGING = {
             'style': '{',
         },
     },
+    'filters': {
+        'request_id': {'()': 'common.middleware.RequestIDLogFilter'},
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
+            'filters': ['request_id'],
         },
     },
     'root': {

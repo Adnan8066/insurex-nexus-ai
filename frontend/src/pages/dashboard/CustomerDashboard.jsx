@@ -27,6 +27,10 @@ import ErrorBoundary, {
 
 import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/toastHooks'
+import { PENDING_CLAIM_STATUSES, POLICY_TYPES, labelFor } from '../../constants/domain'
+
+// Customers see internal review stages as "Under review".
+const CUSTOMER_STATUS = { ai_assessment: 'under_review', investigation: 'under_review' }
 
 const createPdfBlob = (reportLines) => {
   const pages = [[]]
@@ -122,7 +126,7 @@ export function CustomerDashboard() {
     incidentSeverity: c.incident_severity,
     location: c.location,
     claimAmount: c.claim_amount,
-    status: c.status === 'ai_assessment' ? 'under_review' : c.status,
+    status: CUSTOMER_STATUS[c.status] || c.status,
     priority: c.priority,
     submittedAt: c.submitted_at,
     aiAssessment: c.ai_assessment ? {
@@ -170,7 +174,10 @@ export function CustomerDashboard() {
       setConnectionError(null)
     } catch (err) {
       setConnectionError(err.response?.data?.detail || err.message || 'Backend unreachable')
-      toast.showRetryToast('Connection error. Unable to load dashboard data.', () => fetchData())
+      toast.error('We could not load your dashboard.', {
+        persistent: true,
+        action: { label: 'Retry', onClick: () => fetchData() },
+      })
     } finally {
       setRefreshing(false)
       setLoading(false)
@@ -182,8 +189,8 @@ export function CustomerDashboard() {
   }, [fetchData])
 
   const activePolicies = policies.filter((p) => p.status === 'active')
-  const pendingClaims = claims.filter((c) => ['submitted', 'under_review', 'ai_assessment', 'investigation'].includes(c.status))
-  const approvedClaims = claims.filter((c) => c.status === 'approved')
+  const pendingClaims = claims.filter((c) => PENDING_CLAIM_STATUSES.includes(c.status))
+  const approvedClaims = claims.filter((c) => ['approved', 'repair_settlement'].includes(c.status))
   const recentClaims = [...claims].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 5)
 
   const handleExport = () => {
@@ -215,50 +222,17 @@ export function CustomerDashboard() {
       link.click()
       document.body.removeChild(link)
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      toast.showSuccess('PDF report downloaded successfully')
-    } catch (err) {
-      toast.showError('Failed to export report')
+      toast.success('Your summary PDF has been downloaded.')
+    } catch {
+      toast.error('We could not create the PDF. Please try again.')
     }
   }
 
   const metricCards = [
-    {
-      title: 'Active Policies',
-      value: activePolicies.length,
-      icon: FileText,
-      iconColor: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      link: '/policies',
-    },
-    {
-      title: 'Total Claims',
-      value: claims.length,
-      icon: Briefcase,
-      iconColor: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      link: '/claims',
-    },
-    {
-      title: 'Pending Claims',
-      value: pendingClaims.length,
-      icon: Clock,
-      iconColor: 'text-yellow-600',
-      bgColor: 'bg-yellow-50',
-      link: '/claims?status=pending',
-    },
-    {
-      title: 'Approved Claims',
-      value: approvedClaims.length,
-      icon: CheckCircle,
-      iconColor: 'text-green-600',
-      bgColor: 'bg-green-50',
-      link: '/claims?status=approved',
-    },
-  ]
-
-  const quickActions = [
-    { label: 'File a Claim', href: '/claims/new', icon: FilePlus2, color: 'bg-blue-50 text-blue-700 hover:bg-blue-100', description: 'Start a new claim' },
-    { label: 'Get Support', href: '/support', icon: Headphones, color: 'bg-violet-50 text-violet-700 hover:bg-violet-100', description: 'Email or call our support team' },
+    { title: 'Active policies', value: activePolicies.length, icon: FileText, iconColor: 'text-blue-600', bgColor: 'bg-blue-50', link: '/policies', hint: 'View your cover' },
+    { title: 'Being reviewed', value: pendingClaims.length, icon: Clock, iconColor: 'text-amber-600', bgColor: 'bg-amber-50', link: '/claims?status=pending', hint: 'Claims waiting for a decision' },
+    { title: 'Approved', value: approvedClaims.length, icon: CheckCircle, iconColor: 'text-green-600', bgColor: 'bg-green-50', link: '/claims?status=approved', hint: 'Approved or being paid' },
+    { title: 'All claims', value: claims.length, icon: Briefcase, iconColor: 'text-purple-600', bgColor: 'bg-purple-50', link: '/claims', hint: 'Your full claim history' },
   ]
 
   if (loading) {
@@ -266,159 +240,107 @@ export function CustomerDashboard() {
   }
 
   return (
-    <div className="page">
+    <div className="page space-y-6">
       {connectionError && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-red-600">
-          <WifiOff className="w-4 h-4" />
-          <span>Connection error: {connectionError}</span>
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+          <WifiOff className="w-4 h-4 shrink-0" />
+          <span>We couldn&apos;t reach our servers, so this information may be out of date.</span>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => fetchData()}>Try again</Button>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm mb-6">
-        <p className="text-sm text-slate-500">Your coverage and claims, at a glance</p>
+      {/* Main actions first: filing a claim is the most common task. */}
+      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Need to make a claim?</h2>
+          <p className="text-sm text-slate-500">It takes about 5 minutes. You can add photos now or later.</p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="ghost" size="sm" className="relative" onClick={() => fetchData()} loading={refreshing} aria-label="Refresh dashboard" title="Refresh dashboard">
-            <RefreshCw className="w-4 h-4" />
+          <Button asChild variant="primary">
+            <Link to="/claims/new"><FilePlus2 className="mr-2 h-4 w-4" />File a claim</Link>
           </Button>
-
-          <Button variant="primary" size="sm" onClick={handleExport} loading={refreshing}>
-            <Download className="w-4 h-4 mr-2" />
-            Export PDF
+          <Button asChild variant="secondary">
+            <Link to="/support"><Headphones className="mr-2 h-4 w-4" />Get help</Link>
+          </Button>
+          <Button variant="ghost" size="sm" className="whitespace-nowrap" onClick={handleExport} disabled={refreshing} title="Download a PDF summary of your policies and claims">
+            <Download className="mr-2 h-4 w-4" />
+            Download summary
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => fetchData()} loading={refreshing} aria-label="Refresh" title="Refresh">
+            <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {metricCards.map((metric) => (
-          <ErrorBoundary
-            key={metric.title}
-            fallback={({ resetError }) => (
-              <div className="card p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">{metric.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">-</p>
-                  </div>
-                  <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
-                    <metric.icon className="w-6 h-6" />
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" onClick={resetError} className="mt-4">
-                  Retry
-                </Button>
+          <Link key={metric.title} to={metric.link} className="card group p-4 transition-shadow hover:shadow-lg sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-500">{metric.title}</p>
+                <p className="mt-1 text-3xl font-bold text-gray-900">{metric.value}</p>
               </div>
-            )}
-          >
-            <Link key={metric.title} to={metric.link} className="card hover:shadow-lg transition-shadow group">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">{metric.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
-                  </div>
-                  <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
-                    <metric.icon className="w-6 h-6" />
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center text-sm text-gray-500 group-hover:text-primary transition-colors">
-                  <span>View details</span>
-                  <ArrowRight className="w-4 h-4 ml-1" />
-                </div>
-              </CardContent>
-            </Link>
-          </ErrorBoundary>
+              <div className={clsx('hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:flex', metric.bgColor, metric.iconColor)}>
+                <metric.icon className="h-5 w-5" aria-hidden="true" />
+              </div>
+            </div>
+            <p className="mt-2 flex items-center text-xs text-gray-500 group-hover:text-primary">
+              {metric.hint}
+              <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
+            </p>
+          </Link>
         ))}
       </div>
 
-      {claims.length === 0 ? (
-        <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-8 shadow-sm sm:p-10">
-          <div className="mx-auto max-w-xl text-center">
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-              <FilePlus2 className="h-7 w-7" aria-hidden="true" />
-            </div>
-            <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-blue-700">Your dashboard is ready</p>
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Your claims activity will appear here</h2>
-            <p className="mt-2 text-slate-600">When you file a claim, you can follow its progress and see updates in this space.</p>
-            <Button asChild variant="primary" className="mt-6">
-              <Link to="/claims/new">File a Claim <ArrowRight className="ml-2 h-4 w-4" /></Link>
-            </Button>
-          </div>
-        </section>
-      ) : (
-        <Card className="mb-8">
-          <CardHeader
-            title="Your claims at a glance"
-            subtitle="A simple summary of where things stand"
-            action={(
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/claims">Track your claims <ArrowRight className="ml-1 h-4 w-4" /></Link>
-              </Button>
-            )}
-          />
-          <CardContent>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="rounded-xl bg-amber-50 p-4">
-                <p className="text-sm font-medium text-amber-800">Being reviewed</p>
-                <p className="mt-1 text-2xl font-semibold text-amber-950 dark:text-slate-100">{pendingClaims.length}</p>
-                <p className="mt-1 text-sm text-amber-800">We&apos;ll share updates as soon as they&apos;re available.</p>
-              </div>
-              <div className="rounded-xl bg-emerald-50 p-4">
-                <p className="text-sm font-medium text-emerald-800">Approved</p>
-                <p className="mt-1 text-2xl font-semibold text-emerald-950 dark:text-slate-100">{approvedClaims.length}</p>
-                <p className="mt-1 text-sm text-emerald-800">See your claim details for the next steps.</p>
-              </div>
-              <div className="rounded-xl bg-blue-50 p-4">
-                <p className="text-sm font-medium text-blue-800">Total claims</p>
-                <p className="mt-1 text-2xl font-semibold text-blue-950 dark:text-slate-100">{claims.length}</p>
-                <p className="mt-1 text-sm text-blue-800">Your latest updates are listed below.</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <ErrorBoundary fallback={({ resetError, retryCount }) => (
-            <DataTableErrorFallback title="Recent Claims" resetError={resetError} retryCount={retryCount} />
+            <DataTableErrorFallback title="Your claims" resetError={resetError} retryCount={retryCount} />
           )}>
             <Card>
               <CardHeader
-                title="Recent Claims"
-                subtitle="Your 5 most recent claims"
-                action={
+                title="Your recent claims"
+                subtitle="Select a claim to see its progress"
+                action={claims.length > 0 && (
                   <Button variant="ghost" size="sm" asChild>
-                    <Link to="/claims">View All <ArrowRight className="w-4 h-4 ml-1" /></Link>
+                    <Link to="/claims">View all <ArrowRight className="w-4 h-4 ml-1" /></Link>
                   </Button>
-                }
+                )}
               />
               <CardContent className="p-0">
                 {recentClaims.length > 0 ? (
-                  <div className="divide-y divide-gray-200">
+                  <ul className="divide-y divide-gray-200">
                     {recentClaims.map((claim) => (
-                      <Link key={claim.id} to={`/claims/${claim.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <span className="font-semibold text-gray-900">{claim.claimNumber}</span>
-                              <StatusBadge status={claim.status} />
-                              <span className="text-sm text-gray-500">{formatDate(claim.incidentDate)}</span>
+                      <li key={claim.id}>
+                        <Link to={`/claims/${claim.id}/tracking`} className="block p-4 transition-colors hover:bg-gray-50">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold text-gray-900">{claim.claimNumber}</span>
+                                <StatusBadge status={claim.status} />
+                              </div>
+                              <p className="mt-1 truncate text-sm text-gray-600">
+                                {(claim.incidentType || 'Incident').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())}
+                                {claim.vehicle ? ` · ${claim.vehicle.make} ${claim.vehicle.model}` : ''}
+                                {' · '}{formatDate(claim.incidentDate)}
+                              </p>
+                              <p className="mt-1 text-xs font-medium text-primary">Track progress →</p>
                             </div>
-                            <p className="text-sm text-gray-600 mt-1 truncate">{claim.incidentType?.replace(/_/g, ' ')} • {claim.vehicle ? `${claim.vehicle.make} ${claim.vehicle.model}` : 'N/A'}</p>
-                            <p className="text-sm text-gray-500 mt-0.5">{claim.location}</p>
+                            <div className="shrink-0 text-right">
+                              <p className="font-semibold text-gray-900">{formatCurrency(claim.claimAmount)}</p>
+                              <p className="text-xs text-gray-500">{formatRelativeTime(claim.submittedAt)}</p>
+                            </div>
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="font-semibold text-gray-900">{formatCurrency(claim.claimAmount)}</p>
-                            <p className="text-xs text-gray-500">{formatRelativeTime(claim.submittedAt)}</p>
-                          </div>
-                        </div>
-                      </Link>
+                        </Link>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 ) : (
                   <EmptyState
+                    icon={<FilePlus2 className="w-12 h-12" />}
                     title="No claims yet"
-                    description="Your recent claim activity will appear here."
+                    description="When you file a claim, you can follow every step of it here."
+                    action={<Button asChild variant="primary"><Link to="/claims/new">File a claim</Link></Button>}
                   />
                 )}
               </CardContent>
@@ -427,67 +349,49 @@ export function CustomerDashboard() {
         </div>
         <div>
           <ErrorBoundary fallback={({ resetError, retryCount }) => (
-            <DataTableErrorFallback title="Active Policies" resetError={resetError} retryCount={retryCount} />
+            <DataTableErrorFallback title="Your policies" resetError={resetError} retryCount={retryCount} />
           )}>
             <Card>
               <CardHeader
-                title="Active Policies"
-                subtitle="Your current coverage"
-                action={
+                title="Your cover"
+                subtitle="Active policies"
+                action={policies.length > 0 && (
                   <Button variant="ghost" size="sm" asChild>
-                    <Link to="/policies">View All</Link>
+                    <Link to="/policies">View all</Link>
                   </Button>
-                }
+                )}
               />
               <CardContent className="p-0">
                 {activePolicies.length > 0 ? (
-                  <div className="divide-y divide-gray-200">
+                  <ul className="divide-y divide-gray-200">
                     {activePolicies.map((policy) => (
-                      <Link key={policy.id} to={`/policies/${policy.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-gray-900">{policy.type}</span>
-                              <StatusBadge status={policy.status} />
-                            </div>
-                            <p className="text-sm text-gray-500 mt-1 truncate">
-                              {policy.vehicle ? `${policy.vehicle.make} ${policy.vehicle.model} (${policy.vehicle.year})` : policy.property?.address}
-                            </p>
-                            <p className="text-sm text-gray-500">Expires {formatDate(policy.endDate)}</p>
+                      <li key={policy.id}>
+                        <Link to={`/policies/${policy.id}`} className="block p-4 transition-colors hover:bg-gray-50">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">{labelFor(POLICY_TYPES, policy.type)}</span>
+                            <StatusBadge status={policy.status} />
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="font-semibold text-gray-900">{formatCurrency(policy.premium)}/yr</p>
-                            <p className="text-xs text-gray-500">Deductible: {formatCurrency(policy.deductible)}</p>
-                          </div>
-                        </div>
-                      </Link>
+                          <p className="mt-1 truncate text-sm text-gray-500">
+                            {policy.vehicle ? `${policy.vehicle.make} ${policy.vehicle.model} (${policy.vehicle.year})` : (policy.property?.address || policy.policyNumber)}
+                          </p>
+                          <p className="text-sm text-gray-500">Renews or ends {formatDate(policy.endDate)}</p>
+                          <p className="mt-1 text-xs text-gray-500">{formatCurrency(policy.premium)} a year · Deductible {formatCurrency(policy.deductible)}</p>
+                        </Link>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 ) : (
                   <EmptyState
                     icon={<FileText className="w-12 h-12" />}
                     title="No active policies"
-                    description="You don't have any active policies at the moment."
+                    description="You need an active policy to file a claim. Contact us to set one up."
+                    action={<Button asChild variant="secondary"><Link to="/support">Contact us</Link></Button>}
                   />
                 )}
               </CardContent>
             </Card>
           </ErrorBoundary>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {quickActions.filter((action) => claims.length > 0 || action.label !== 'File a Claim').map((action) => (
-          <Link key={action.label} to={action.href} className="card group">
-            <CardContent className="p-6 flex flex-col items-center text-center">
-              <div className={clsx('w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-colors', action.color)}>
-                <action.icon className="w-7 h-7" />
-              </div>
-              <h3 className="font-semibold text-gray-900 group-hover:text-primary transition-colors">{action.label}</h3>
-              <p className="text-sm text-gray-500 mt-1">{action.description}</p>
-            </CardContent>
-          </Link>
-        ))}
       </div>
     </div>
   )

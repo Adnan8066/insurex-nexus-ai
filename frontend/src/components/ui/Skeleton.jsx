@@ -16,16 +16,6 @@ export function Skeleton({ className = '', variant = 'text', width, height, ...p
   )
 }
 
-export function SkeletonText({ lines = 3, className = '', ...props }) {
-  return (
-    <div className={clsx('space-y-2', className)} {...props}>
-      {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton key={i} variant="text" width={{ 0: '100%', 1: '80%', 2: '60%' }[i] || '100%' } height="1rem" />
-      ))}
-    </div>
-  )
-}
-
 export function SkeletonCard({ className = '', variant = 'default', ...props }) {
   const variants = {
     default: (
@@ -140,56 +130,6 @@ export function DashboardSkeleton({ metricCount = 4, chartCount = 3, tableRows =
             <Skeleton variant="text" width="1/2" height="1rem" className="mx-auto" />
           </div>
         ))}
-      </div>
-    </div>
-  )
-}
-
-export function ChartSkeleton({ height = 300, className = '' }) {
-  return (
-    <div className={clsx('card', className)}>
-      <div className="card-header p-4">
-        <Skeleton variant="text" width="1/3" height="1rem" className="mb-1" />
-        <Skeleton variant="text" width="1/2" height="0.875rem" />
-      </div>
-      <div className="card-content p-4">
-        <Skeleton variant="rectangular" width="full" height={height} />
-      </div>
-    </div>
-  )
-}
-
-export function TableSkeleton({ columns = 6, rows = 5, className = '' }) {
-  return (
-    <div className={clsx('card', className)}>
-      <div className="card-header p-4">
-        <Skeleton variant="text" width="1/3" height="1rem" />
-      </div>
-      <div className="card-content p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr>
-                {Array.from({ length: columns }).map((_, i) => (
-                  <th key={i} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <Skeleton variant="text" width="80%" height="0.75rem" />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {Array.from({ length: rows }).map((_, i) => (
-                <tr key={i}>
-                  {Array.from({ length: columns }).map((_, j) => (
-                    <td key={j} className="px-4 py-3">
-                      <Skeleton variant="text" width="80%" height="1rem" />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   )

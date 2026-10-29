@@ -4,6 +4,8 @@ import joblib
 import pandas as pd
 from django.conf import settings
 
+from common.risk import FRAUD_HIGH_THRESHOLD
+
 
 ML_DIR = os.path.join(settings.BASE_DIR.parent, "ml")
 MODELS_DIR = os.path.join(ML_DIR, "models")
@@ -95,7 +97,7 @@ def _fraud_probability(model, frame):
     return float(probabilities[positive_index])
 
 
-def _fraud_result(score, decision_threshold=70):
+def _fraud_result(score, decision_threshold=FRAUD_HIGH_THRESHOLD):
     score = round(score, 2)
     medium_threshold = min(40.0, decision_threshold * 0.5)
     if score >= decision_threshold:
@@ -143,7 +145,7 @@ def detect_fraud_ml(claim_data):
     features = _ORACLE_FEATURES if oracle else _INSURANCE_FEATURES
     try:
         score = _fraud_probability(model, _input_frame(claim_data, features)) * 100
-        threshold = 70
+        threshold = FRAUD_HIGH_THRESHOLD
         if oracle:
             report_path = os.path.join(MODELS_DIR, "training_report.json")
             try:
@@ -169,6 +171,25 @@ def predict_total_loss_ml(claim_data):
         return {"probability": round(min(max(probability, 0), 100), 2)}
     except (ValueError, TypeError, KeyError) as exc:
         raise MLModelUnavailable(f"The total-loss model could not score this claim: {exc}") from exc
+
+
+def get_model_version():
+    """Identify the trained artifact set used for a prediction (stored with results).
+
+    The training pipeline does not emit a semantic version, so the training run
+    timestamp from training_report.json is used ("trained-<ISO timestamp>").
+    """
+    report_path = os.path.join(MODELS_DIR, "training_report.json")
+    try:
+        import json
+        with open(report_path, encoding="utf-8") as report_file:
+            report = json.load(report_file)
+        version = report.get("version") or report.get("trained_at")
+        if version:
+            return f"trained-{version}"[:50]
+    except (OSError, ValueError, AttributeError):
+        pass
+    return "unknown"
 
 
 def get_model_status():

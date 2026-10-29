@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { format } from 'date-fns'
 import {
   Car,
   Search,
@@ -23,17 +24,15 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePag
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { formatApiError } from '../../services/api'
+import { VEHICLE_STATUSES } from '../../constants/domain'
 
-const vehicleStatuses = [
-  { value: '', label: 'All Statuses' },
-  { value: 'active', label: 'Active' },
-  { value: 'sold', label: 'Sold' },
-  { value: 'totaled', label: 'Totaled' },
-  { value: 'inactive', label: 'Inactive' },
-]
+const vehicleStatuses = [{ value: '', label: 'All Statuses' }, ...VEHICLE_STATUSES]
 
 export function VehicleList() {
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const today = format(new Date(), 'yyyy-MM-dd')
   const canManageVehicles = ['admin', 'employee', 'customer'].includes(user?.role)
   const [loading, setLoading] = useState(true)
   const [vehicles, setVehicles] = useState([])
@@ -71,6 +70,7 @@ export function VehicleList() {
           transmission: v.transmission,
           status: v.status,
           policyId: v.policy,
+          policyNumber: v.policy_number,
           claims: v.claims || [],
           customer: v.customer,
           customerName: v.customer_name,
@@ -83,7 +83,7 @@ export function VehicleList() {
         if (!cancelled) {
           setVehicles([])
           setFilteredVehicles([])
-          setError(err.response?.data?.detail || 'Could not load vehicles. Check your connection and try again.')
+          setError(formatApiError(err, 'Could not load vehicles. Check your connection and try again.'))
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -134,7 +134,7 @@ export function VehicleList() {
       setDeleteTarget(null)
       setDeleteError('')
     } catch (err) {
-      setDeleteError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to delete vehicle')
+      setDeleteError(formatApiError(err, 'Failed to delete vehicle'))
     } finally {
       setDeleting(false)
     }
@@ -190,21 +190,21 @@ export function VehicleList() {
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div className="flex-1">
               <Input
                 placeholder="Search vehicles..."
+                aria-label="Search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
+                leftIcon={<Search className="w-4 h-4 text-gray-400" />}
               />
             </div>
             <Select
               options={vehicleStatuses}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              placeholder="Filter by status"
-              className="w-48"
+              aria-label="Filter by status"
+              className="sm:w-48"
             />
           </div>
 
@@ -242,7 +242,7 @@ export function VehicleList() {
                         clickable
                         onClick={(event) => {
                           if (event.target.closest('button, a')) return
-                          window.location.href = `/vehicles/${vehicle.id}`
+                          navigate(`/vehicles/${vehicle.id}`)
                         }}
                       >
                         <TableCell>
@@ -261,12 +261,15 @@ export function VehicleList() {
                         <TableCell className="font-mono text-sm">{vehicle.vin}</TableCell>
                         <TableCell><StatusBadge status={vehicle.status} /></TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1 text-sm">
-                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <div className="flex flex-wrap items-center gap-1 text-sm">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
                             {formatDate(vehicle.registrationExpiry)}
+                            {vehicle.registrationExpiry && vehicle.registrationExpiry < today && (
+                              <Badge variant="danger" size="sm">Expired</Badge>
+                            )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm text-gray-600">{vehicle.policyId}</TableCell>
+                        <TableCell className="text-sm text-gray-600">{vehicle.policyNumber || (vehicle.policyId ? `#${vehicle.policyId}` : 'No policy')}</TableCell>
                         <TableCell>
                           <Badge variant="neutral" size="sm">{vehicle.claims.length} claim(s)</Badge>
                         </TableCell>
@@ -281,8 +284,9 @@ export function VehicleList() {
                               }}
                               className="text-red-600 hover:text-red-700 p-1"
                               title="Delete vehicle"
+                              aria-label={`Delete ${vehicle.year} ${vehicle.make} ${vehicle.model}`}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
                             </button>}
                           </div>
                         </TableCell>

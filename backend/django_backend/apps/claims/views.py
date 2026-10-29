@@ -5,7 +5,10 @@ from rest_framework.response import Response
 import logging
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
+from django.db.models import Q
+from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
+from django.conf import settings
 from apps.accounts.models import Role
 
 from django.shortcuts import get_object_or_404
@@ -15,7 +18,9 @@ from .serializers import (
     ClaimStatusUpdateSerializer, ClaimDocumentSerializer,
     ClaimStatusHistorySerializer, ClaimTimelineSerializer, ClaimNoteSerializer
 )
-from common.permissions import IsOwnerOrAdmin, IsEmployee, CanIssuePolicy
+from common.permissions import IsEmployee, CanIssuePolicy, IsStaffMember
+from common.params import parse_int
+from .workflow import TransitionError, check_transition
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +68,28 @@ class ClaimViewSet(viewsets.ModelViewSet):
         if self.action in ['create']:
             return [IsAuthenticated(), CanIssuePolicy()]
         elif self.action in ['update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), IsOwnerOrAdmin()]
+            # Customers (own claims, enforced by get_queryset), employees and admins.
+            # Investigators work claims through the investigations API.
+            return [IsAuthenticated(), CanIssuePolicy()]
         elif self.action in ['update_status', 'assign_adjuster', 'assign_investigator']:
             return [IsAuthenticated(), IsEmployee()]
+        elif self.action == 'submit_assessment':
+            return [IsAuthenticated(), IsStaffMember()]
         return [IsAuthenticated()]
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        if user.role == Role.CUSTOMER and serializer.instance.status != ClaimStatus.SUBMITTED:
+            raise PermissionDenied('Claims can only be edited by the customer while they are still submitted.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if user.role != Role.ADMIN and instance.status != ClaimStatus.SUBMITTED:
+            raise PermissionDenied(
+                'Only submitted claims can be deleted. Claims that are under review or decided are kept for the audit trail.'
+            )
+        instance.delete()
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -119,11 +142,20 @@ class ClaimViewSet(viewsets.ModelViewSet):
             f'Claim {claim.claim_number} was submitted successfully.',
             link=f'/claims/{claim.id}', related_object_type='claim', related_object_id=claim.id,
         )
-        # Auto-routing fails closed unless explicitly enabled and the PPO
-        # artifact has passed the held-out evaluation gate.
+        # Score every new claim so staff see fraud and total-loss risk without
+        # running the assessment by hand. A model outage must not block FNOL.
+        try:
+            from apps.assessments.ai_views import run_claim_assessment
+            run_claim_assessment(claim)
+        except Exception:
+            logger.exception('Automatic AI assessment failed for claim %s', claim.claim_number)
+        # The RL router assigns only when enabled and its evaluation gate has
+        # passed; otherwise the least-busy employee takes the claim.
         try:
             from apps.assessments.rl_views import auto_assign_new_claim
-            auto_assign_new_claim(claim)
+            from apps.assessments.assignment import assign_claim_to_least_busy
+            if not auto_assign_new_claim(claim) and settings.CLAIM_AUTO_ASSIGN_LEAST_BUSY:
+                assign_claim_to_least_busy(claim)
         except Exception:
             # A routing/model outage must never roll back a customer's claim.
             logger.exception('Automatic routing failed for claim %s', claim.claim_number)
@@ -133,10 +165,10 @@ class ClaimViewSet(viewsets.ModelViewSet):
         claim = self.get_object()
         if request.method == 'POST':
             serializer = ClaimDocumentSerializer(data=request.data, context={'request': request})
-            if serializer.is_valid():
-                serializer.save(claim=claim, uploaded_by=request.user)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # raise_exception gives the standard error envelope the upload UI reads.
+            serializer.is_valid(raise_exception=True)
+            serializer.save(claim=claim, uploaded_by=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         documents = claim.documents.all()
         serializer = ClaimDocumentSerializer(documents, many=True, context={'request': request})
@@ -150,6 +182,10 @@ class ClaimViewSet(viewsets.ModelViewSet):
             old_status = claim.status
             new_status = serializer.validated_data['status']
             reason = serializer.validated_data.get('reason', '')
+            try:
+                check_transition(claim, new_status, request.user)
+            except TransitionError as exc:
+                return Response({'detail': exc.message}, status=exc.status_code)
             
             with transaction.atomic():
                 claim.status = new_status
@@ -192,6 +228,7 @@ class ClaimViewSet(viewsets.ModelViewSet):
         adjuster_id = request.data.get('adjuster_id')
         if not adjuster_id:
             return Response({'error': 'adjuster_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        adjuster_id = parse_int(adjuster_id, 'adjuster_id')
         
         from django.contrib.auth import get_user_model
         User = get_user_model()
@@ -220,6 +257,7 @@ class ClaimViewSet(viewsets.ModelViewSet):
         investigator_id = request.data.get('investigator_id')
         if not investigator_id:
             return Response({'error': 'investigator_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        investigator_id = parse_int(investigator_id, 'investigator_id')
         
         from django.contrib.auth import get_user_model
         User = get_user_model()
@@ -237,10 +275,11 @@ class ClaimViewSet(viewsets.ModelViewSet):
         claim.save(update_fields=fields_to_update)
 
         from apps.investigations.models import FraudAlert, Investigation
+        from common.risk import fraud_risk_band
         import uuid
 
         score = claim.fraud_risk_score or 0
-        risk_level = 'high' if score >= 70 else 'medium' if score >= 35 else 'low'
+        risk_level = fraud_risk_band(score)
         assessment = claim.ai_assessment if isinstance(claim.ai_assessment, dict) else {}
         fraud_risk = assessment.get('fraud_risk') if isinstance(assessment.get('fraud_risk'), dict) else {}
         alert, _ = FraudAlert.objects.update_or_create(
@@ -287,25 +326,32 @@ class ClaimViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(claim)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'], url_path='notes')
-    def add_note(self, request, pk=None):
+    # GET and POST share one action: two @actions with the same url_path collide
+    # in the router and one of the methods answered 405.
+    @action(detail=True, methods=['get', 'post'], url_path='notes')
+    def notes(self, request, pk=None):
         claim = self.get_object()
-        serializer = ClaimNoteSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(claim=claim, author=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='notes')
-    def list_notes(self, request, pk=None):
-        claim = self.get_object()
+        is_customer = request.user.role == Role.CUSTOMER
+        if request.method == 'POST':
+            serializer = ClaimNoteSerializer(data=request.data)
+            if serializer.is_valid():
+                extra = {'is_internal': False} if is_customer else {}
+                serializer.save(claim=claim, author=request.user, **extra)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         notes = claim.notes.all()
+        if is_customer:
+            notes = notes.filter(is_internal=False)
         serializer = ClaimNoteSerializer(notes, many=True)
         return Response(serializer.data)
     
     @action(detail=True, methods=['get', 'patch'], url_path='status')
     def claim_status(self, request, pk=None):
         if request.method.lower() == 'patch':
+            # Calling update_status directly skips its permission classes, so the
+            # employee/admin check must be repeated here.
+            if not IsEmployee().has_permission(request, self):
+                raise PermissionDenied('Only insurance employees or administrators can change a claim status.')
             return self.update_status(request, pk=pk)
         claim = self.get_object()
         return Response({'status': claim.status})
@@ -318,43 +364,23 @@ class ClaimViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='assessment')
     def submit_assessment(self, request, pk=None):
-        from apps.assessments.ai_views import (
-            predict_repair_cost_internal, detect_fraud_internal, predict_total_loss_internal,
-            generate_recommendation, calculate_confidence,
-        )
+        from apps.assessments.ai_views import run_claim_assessment
         from ml_service import MLModelUnavailable
-        from apps.assessments.models import ClaimAssessment, AssessmentType, AssessmentStatus
         from apps.assessments.serializers import ClaimAssessmentSerializer
 
         claim = self.get_object()
-        assessment, _created = ClaimAssessment.objects.get_or_create(
-            claim=claim,
-            defaults={'assessment_type': AssessmentType.COMPREHENSIVE},
-        )
         try:
-            predicted_cost = predict_repair_cost_internal(claim)
-            fraud_score = detect_fraud_internal(claim)
-            total_loss_prob = predict_total_loss_internal(claim)
+            assessment = run_claim_assessment(claim)
         except MLModelUnavailable as exc:
             return Response({'error': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        assessment.predicted_repair_cost = predicted_cost['cost']
-        assessment.fraud_risk_score = fraud_score['score']
-        assessment.total_loss_probability = total_loss_prob['probability']
-        assessment.ai_recommendation = generate_recommendation(assessment)
-        assessment.confidence = calculate_confidence(assessment)
-        assessment.status = AssessmentStatus.COMPLETED
-        assessment.save()
-        claim.ai_assessment = ClaimAssessmentSerializer(assessment).data
-        claim.fraud_risk_score = fraud_score['score']
-        claim.total_loss_probability = total_loss_prob['probability']
-        claim.save(update_fields=['ai_assessment', 'fraud_risk_score', 'total_loss_probability'])
         return Response(ClaimAssessmentSerializer(assessment).data)
 
     @action(detail=False, methods=['get'], url_path='my-claims')
     def my_claims(self, request):
         claims = self.get_queryset().filter(customer=request.user)
-        serializer = self.get_serializer(claims, many=True)
-        return Response(serializer.data)
+        page = self.paginate_queryset(claims)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
     
     @action(detail=False, methods=['get'], url_path='assigned-to-me')
     def assigned_to_me(self, request):
@@ -362,5 +388,6 @@ class ClaimViewSet(viewsets.ModelViewSet):
             Q(assigned_adjuster=request.user)
             | Q(assigned_investigator=request.user)
         ).distinct()
-        serializer = self.get_serializer(claims, many=True)
-        return Response(serializer.data)
+        page = self.paginate_queryset(claims)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)

@@ -7,6 +7,7 @@ import {
 import { callbackService } from '../services'
 import { policyTiers } from '../data/policyTiers'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
+import { formatApiError } from '../services/api'
 
 const benefits = [
   {
@@ -88,7 +89,7 @@ export function LandingPage() {
       setSubmitted(true)
       setForm({ name: '', phone: '', vehicle_type: '', consent: false })
     } catch (error) {
-      setSubmitError(error.response?.data?.detail || 'We could not send your request. Please try again.')
+      setSubmitError(formatApiError(error, 'We could not send your request. Please try again.'))
     } finally {
       setSubmitting(false)
     }

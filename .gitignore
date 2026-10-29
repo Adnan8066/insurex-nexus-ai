@@ -47,3 +47,18 @@ htmlcov/
 .pytest_cache/
 # Local SQLite databases
 *.sqlite3
+
+# Virtual environments
+.venv/
+venv/
+
+# Uploaded files (claim photos, documents) and local runtime data
+backend/django_backend/media/
+backend/django_backend/staticfiles/*
+!backend/django_backend/staticfiles/.gitkeep
+
+# Build tools and binaries that do not belong in the repo
+*.war
+
+# Stray folders created by tools that mis-expand Windows environment variables
+%LOCALAPPDATA%/

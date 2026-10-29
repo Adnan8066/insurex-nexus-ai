@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Input, Select } from '../../components/forms/FormFields'
+import { formatApiError } from '../../services/api'
 
 const initialForm = {
   first_name: '',
@@ -21,7 +22,6 @@ const roleLabels = {
   customer: 'Customer',
   investigator: 'Investigator',
   employee: 'Insurance Employee',
-  repair: 'Repair Shop',
 }
 
 const roleOptions = Object.entries(roleLabels).map(([value, label]) => ({ value, label }))
@@ -40,7 +40,7 @@ export function UserManagement() {
     try {
       setUsers(await adminUserService.getUsers())
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not load users. Confirm you are signed in as an administrator.')
+      setError(formatApiError(err, 'Could not load users. Confirm you are signed in as an administrator.'))
     } finally {
       setLoading(false)
     }
@@ -66,7 +66,7 @@ export function UserManagement() {
       setForm(initialForm)
       await loadUsers()
     } catch (err) {
-      setError(err.response?.data?.detail || err.response?.data?.error?.message || 'Could not create this account.')
+      setError(formatApiError(err, 'Could not create this account.'))
     } finally {
       setSaving(false)
     }
@@ -79,7 +79,7 @@ export function UserManagement() {
           <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><Users className="h-6 w-6" /></div>
           <div>
             <h1 className="page-title">User Management</h1>
-            <p className="page-subtitle">Create customer, investigator, employee, and repair shop accounts.</p>
+            <p className="page-subtitle">Create customer, investigator and employee accounts.</p>
           </div>
         </div>
       </div>
@@ -95,7 +95,6 @@ export function UserManagement() {
             <Input label="Last name" name="last_name" value={form.last_name} onChange={handleChange} />
             <Input label="Email" name="email" type="email" autoComplete="email" value={form.email} onChange={handleChange} required />
             <Select label="Role" name="role" value={form.role} onChange={handleChange} options={roleOptions} required />
-            {form.role === 'repair' && <p className="md:col-span-2 -mt-2 text-sm text-amber-800">Use the same email address registered on the repair shop record so the account can access jobs assigned to that shop.</p>}
             <Input label="Phone (optional)" name="phone" type="tel" value={form.phone} onChange={handleChange} />
             {form.role !== 'customer' && <Input label="Department (optional)" name="department" value={form.department} onChange={handleChange} />}
             <Input label="Initial password" name="password" type="password" autoComplete="new-password" value={form.password} onChange={handleChange} hint="Use a strong password that meets the account security rules." required />

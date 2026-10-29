@@ -111,6 +111,8 @@ def auto_assign_new_claim(claim):
             is_system=True,
         )
     claim.assigned_adjuster = selected.user
+    from .assignment import notify_claim_assignee
+    notify_claim_assignee(claim, selected.user)
     return True
 
 
@@ -315,9 +317,24 @@ def _claim_routing_features(claim):
 
 def _agent_status(profile):
     """Derive queue and workload estimates from active assigned claims."""
+    user = profile.user
+    queue_length, workload = open_claim_load(user)
+    return {
+        'id': user.id,
+        'name': user.get_full_name() or user.email,
+        'role': user.role,
+        'queue_length': queue_length,
+        'workload': workload,
+        'skill_tier': profile.skill_tier,
+        'available': profile.is_available,
+        'is_demo': profile.is_demo,
+    }
+
+
+def open_claim_load(user):
+    """Return (open claim count, estimated work units) for a staff member's assigned claims."""
     from apps.claims.models import Claim
 
-    user = profile.user
     claims = Claim.objects.filter(
         status__in=['submitted', 'under_review', 'ai_assessment', 'investigation']
     )
@@ -348,16 +365,7 @@ def _agent_status(profile):
             + 5 * _claim_routing_features(row)['processing_difficulty']
             for row in rows
         )
-    return {
-        'id': user.id,
-        'name': user.get_full_name() or user.email,
-        'role': user.role,
-        'queue_length': len(rows),
-        'workload': round(float(workload), 2),
-        'skill_tier': profile.skill_tier,
-        'available': profile.is_available,
-        'is_demo': profile.is_demo,
-    }
+    return len(rows), round(float(workload), 2)
 
 
 @lru_cache(maxsize=1)

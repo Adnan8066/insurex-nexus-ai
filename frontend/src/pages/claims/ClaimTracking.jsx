@@ -3,72 +3,75 @@ import { useParams, Link } from 'react-router-dom'
 import {
   Activity,
   ArrowLeft,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
   Brain,
-  Shield,
+  CheckCircle2,
+  Circle,
   FileText,
-  Car,
-  Wrench,
-  Gavel,
-  ChevronRight,
-  UserCheck,
-  Send,
+  Headphones,
+  XCircle,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { claimService } from '../../services/claimService'
 import { useAuth } from '../../context/useAuth'
-import { Card, CardHeader, CardContent } from '../../components/ui/Card'
+import { Card, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
-import { Badge, StatusBadge } from '../../components/ui/Badge'
-import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
+import { StatusBadge } from '../../components/ui/Badge'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { CLAIM_STATUSES, labelFor } from '../../constants/domain'
+import { formatCurrency, formatDate } from '../../utils/helpers'
 
-const workflowStages = [
-  {
-    id: 'submitted',
-    name: '1. Claim Submission',
-    desc: 'Customer submits incident details, documents, and vehicle photos.',
-    role: 'Customer / Intake Agent',
-  },
-  {
-    id: 'under-review',
-    name: '2. Under Review',
-    desc: 'Initial policy coverage verification and adjuster assignment.',
-    role: 'Claims Adjuster',
-  },
-  {
-    id: 'ai-assessment',
-    name: '3. AI Assessment',
-    desc: 'ML repair cost estimation, fraud risk scoring, and total loss prediction.',
-    role: 'Nexus AI Engine',
-  },
-  {
-    id: 'investigation',
-    name: '4. Investigation',
-    desc: 'Special Investigations Unit (SIU) analysis for flagged anomalies.',
-    role: 'SIU Investigator',
-  },
-  {
-    id: 'approved',
-    name: '5. Decision (Approved/Rejected)',
-    desc: 'Final review of claim eligibility and supporting information.',
-    role: 'Claims Authority',
-  },
-  {
-  {
-    id: 'closed',
-    name: '6. Claim Closed',
-    desc: 'Claim review is complete and the case is archived.',
-    role: 'System Complete',
-  },
+// Five plain-language steps; every backend status maps onto one of them.
+const STEPS = [
+  { key: 'submitted', label: 'Submitted' },
+  { key: 'review', label: 'Under review' },
+  { key: 'decision', label: 'Decision' },
+  { key: 'settlement', label: 'Repair & payment' },
+  { key: 'closed', label: 'Closed' },
 ]
+
+const STEP_FOR_STATUS = {
+  submitted: 'submitted',
+  under_review: 'review',
+  ai_assessment: 'review',
+  investigation: 'review',
+  approved: 'decision',
+  rejected: 'decision',
+  repair_settlement: 'settlement',
+  closed: 'closed',
+}
+
+// Internal review stages are shown to customers as a single "Under review" step.
+const CUSTOMER_STATUS = { ai_assessment: 'under_review', investigation: 'under_review' }
+
+const CUSTOMER_NEXT = {
+  submitted: 'We have received your claim. A claims specialist will review it shortly. Adding damage photos and a repair estimate helps us decide faster.',
+  under_review: 'We are reviewing your claim and documents. We will contact you if we need anything else.',
+  approved: 'Good news: your claim is approved. We will arrange the repair or payment and keep you updated.',
+  rejected: 'Your claim was not approved. If you have questions about this decision, please contact support.',
+  repair_settlement: 'Your repair or payment is in progress. We will let you know when it is complete.',
+  closed: 'This claim is complete. No further action is needed.',
+}
+
+const STAFF_NEXT = {
+  submitted: 'Review the claim details and assign an adjuster.',
+  under_review: 'Run the AI assessment or record a decision.',
+  ai_assessment: 'Check the AI results in Automated Review, then decide.',
+  investigation: 'Waiting for the investigator to finish their review.',
+  approved: 'Arrange the repair or settlement.',
+  rejected: 'No further action unless the customer appeals.',
+  repair_settlement: 'Complete the repair or payment, then close the claim.',
+  closed: 'No action needed.',
+}
+
+function formatDateTime(value) {
+  if (!value) return '—'
+  return new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+}
 
 export function ClaimTracking() {
   const { id } = useParams()
   const { user } = useAuth()
-  const canViewAI = ['admin', 'employee', 'investigator'].includes(user?.role)
+  const isStaff = ['admin', 'employee', 'investigator'].includes(user?.role)
   const [claim, setClaim] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -80,27 +83,10 @@ export function ClaimTracking() {
       setError('')
       try {
         const res = await claimService.getClaim(id)
-        if (!cancelled) {
-          setClaim({
-            id: res.id,
-            claimNumber: res.claim_number,
-            customerName: res.customer_name,
-            policyNumber: res.policy_number,
-            status: res.status,
-            incidentType: res.incident_type,
-            incidentSeverity: res.incident_severity,
-            claimAmount: res.claim_amount,
-            submittedAt: res.submitted_at,
-            assignedAdjuster: res.assigned_adjuster_name,
-            assignedInvestigator: res.assigned_investigator_name,
-            aiAssessment: res.ai_assessment,
-            timeline: res.timeline || [],
-            statusHistory: res.status_history || [],
-          })
-        }
+        if (!cancelled) setClaim(res)
       } catch (err) {
         if (!cancelled) {
-          setError(err.response?.data?.detail || 'Failed to load claim tracking')
+          setError(err.response?.status === 404 ? '' : 'We could not load this claim. Please try again.')
           setClaim(null)
         }
       } finally {
@@ -113,216 +99,174 @@ export function ClaimTracking() {
 
   if (loading) {
     return (
-      <div className="page animate-pulse space-y-6">
+      <div className="page max-w-4xl mx-auto animate-pulse space-y-6" role="status" aria-label="Loading claim">
         <div className="h-8 bg-gray-200 rounded w-48"></div>
-        <div className="h-96 bg-gray-200 rounded-xl"></div>
+        <div className="h-40 bg-gray-200 rounded-xl"></div>
+        <div className="h-64 bg-gray-200 rounded-xl"></div>
       </div>
     )
   }
 
   if (!claim) {
     return (
-      <div className="page">
-        <div className="page-header">
-          <Link to="/claims" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-4">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Claims
-          </Link>
-        </div>
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
-        )}
+      <div className="page max-w-4xl mx-auto">
+        {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" role="alert">{error}</div>}
         <EmptyState
           icon={<Activity className="w-12 h-12" />}
-          title="Claim Not Found"
-          description={`No claim with identifier "${id}" exists.`}
-          action={<Button asChild><Link to="/claims">Browse Claims</Link></Button>}
+          title="Claim not found"
+          description="This claim doesn't exist or you don't have access to it."
+          action={<Button asChild><Link to="/claims">Go to my claims</Link></Button>}
         />
       </div>
     )
   }
 
-  // Normalize status to kebab-case to match workflow stage ids
-  const normalizedStatus = (claim.status || '').replace(/_/g, '-')
-  const visibleWorkflowStages = canViewAI
-    ? workflowStages
-    : workflowStages.map((stage) => stage.id === 'ai-assessment'
-      ? { ...stage, name: '3. Claim Review', desc: 'A claims specialist is reviewing the claim and supporting information.', role: 'Claims Team' }
-      : stage)
-  const currentStageIndex = Math.max(0, visibleWorkflowStages.findIndex((s) => s.id === normalizedStatus))
+  const status = claim.status
+  const shownStatus = isStaff ? status : (CUSTOMER_STATUS[status] || status)
+  const isRejected = status === 'rejected'
+  const currentStep = Math.max(0, STEPS.findIndex((step) => step.key === STEP_FOR_STATUS[status]))
+  const nextText = (isStaff ? STAFF_NEXT : CUSTOMER_NEXT)[shownStatus]
+
+  // Status history, oldest first. Customers see simplified labels and no internal reasons.
+  const history = [...(claim.status_history || [])]
+    .sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at))
+    .map((entry) => ({
+      id: entry.id,
+      status: isStaff ? entry.to_status : (CUSTOMER_STATUS[entry.to_status] || entry.to_status),
+      at: entry.changed_at,
+      by: isStaff ? entry.changed_by_name : null,
+      reason: isStaff ? entry.reason : null,
+    }))
+    .filter((entry, index, list) => isStaff || index === 0 || entry.status !== list[index - 1].status)
+  if (!history.some((entry) => entry.status === 'submitted')) {
+    history.unshift({ id: 'submitted', status: 'submitted', at: claim.submitted_at })
+  }
 
   return (
-    <div className="page max-w-5xl mx-auto">
-      <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+    <div className="page max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <Link to={`/claims/${claim.id}`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-2">
             <ArrowLeft className="w-4 h-4" />
-            Back to claim {claim.claimNumber}
+            Back to claim
           </Link>
-          <div className="flex items-center gap-3">
-            <h1 className="page-title">Lifecycle & Workflow Tracker</h1>
-            <StatusBadge status={!canViewAI && claim.status === 'ai_assessment' ? 'under_review' : claim.status} />
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="page-title">Track claim <span className="font-mono">{claim.claim_number}</span></h1>
+            <StatusBadge status={shownStatus} />
           </div>
           <p className="page-subtitle">
-            Tracking Claim <span className="font-mono font-semibold text-gray-800">{claim.claimNumber}</span> • Customer: {claim.customerName}
+            Submitted {formatDate(claim.submitted_at)} · {formatCurrency(claim.claim_amount)} claimed
           </p>
         </div>
-
-        <div className="flex gap-2">
-          <Button asChild variant="secondary"><Link to={`/claims/${claim.id}`}>View Full Details</Link></Button>
-          {canViewAI && <Button asChild variant="primary"><Link to="/ai-decision"><Brain className="w-4 h-4 mr-2" />AI Decision Center</Link></Button>}
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="secondary"><Link to={`/claims/${claim.id}`}><FileText className="w-4 h-4 mr-2" />Claim details</Link></Button>
+          {isStaff && <Button asChild variant="primary"><Link to="/ai-decision"><Brain className="w-4 h-4 mr-2" />Automated Review</Link></Button>}
         </div>
       </div>
 
-      {/* Progress Bar Header */}
-      <Card className="mb-8">
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-            <div>
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Overall Workflow Progress</span>
-              <h3 className="text-lg font-bold text-gray-900 mt-0.5">
-                Stage {currentStageIndex + 1} of {visibleWorkflowStages.length}: {visibleWorkflowStages[currentStageIndex]?.name.replace(/^\d+\.\s*/, '')}
-              </h3>
-            </div>
-            <div className="text-right">
-              <span className="text-2xl font-black text-primary">
-                {Math.round(((currentStageIndex + 1) / visibleWorkflowStages.length) * 100)}%
-              </span>
-              <span className="text-xs text-gray-500 block">Workflow Completion</span>
-            </div>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-            <div
-              className="bg-primary h-3 rounded-full transition-all duration-500"
-              style={{ width: `${Math.round(((currentStageIndex + 1) / visibleWorkflowStages.length) * 100)}%` }}
-            />
-          </div>
-
-          {/* Workflow stages visual pills */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mt-6">
-            {visibleWorkflowStages.map((stage, idx) => {
-              const isPast = idx < currentStageIndex
-              const isCurrent = idx === currentStageIndex
+      {/* Progress */}
+      <Card>
+        <CardContent className="p-5 sm:p-6">
+          <ol className="grid grid-cols-1 gap-3 sm:grid-cols-5 sm:gap-2" aria-label="Claim progress">
+            {STEPS.map((step, index) => {
+              const done = index < currentStep && !(isRejected && step.key === 'settlement')
+              const current = index === currentStep
+              const skipped = isRejected && index > currentStep
+              const failed = current && isRejected
+              const label = step.key === 'decision' && current
+                ? (isRejected ? 'Not approved' : 'Approved')
+                : step.label
               return (
-                <div
-                  key={stage.id}
-                  className={clsx(
-                    'p-2.5 rounded-xl border text-center transition',
-                    isCurrent
-                      ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm ring-2 ring-primary/20'
-                      : isPast
-                      ? 'border-emerald-200 bg-emerald-50/50 text-emerald-800 font-medium'
-                      : 'border-gray-200 bg-gray-50/50 text-gray-400'
-                  )}
+                <li
+                  key={step.key}
+                  className="flex items-center gap-3 sm:flex-col sm:items-center sm:gap-2 sm:text-center"
+                  aria-current={current ? 'step' : undefined}
                 >
-                  <div className="text-[10px] uppercase font-semibold">Step {idx + 1}</div>
-                  <div className="text-xs truncate font-medium mt-0.5">
-                    {stage.name.replace(/^\d+\.\s*/, '')}
-                  </div>
-                </div>
+                  <span
+                    className={clsx(
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+                      failed ? 'bg-red-600 text-white'
+                        : current ? 'bg-primary text-white ring-4 ring-primary/20'
+                          : done ? 'bg-emerald-600 text-white'
+                            : 'bg-gray-100 text-gray-400'
+                    )}
+                  >
+                    {failed ? <XCircle className="h-5 w-5" /> : done ? <CheckCircle2 className="h-5 w-5" /> : current ? <span className="text-sm font-bold">{index + 1}</span> : <Circle className="h-4 w-4" />}
+                  </span>
+                  <span className={clsx(
+                    'text-sm',
+                    current ? 'font-bold text-gray-900' : done ? 'font-medium text-gray-700' : 'text-gray-400',
+                    skipped && 'line-through',
+                  )}
+                  >
+                    {label}
+                    {current && !isStaff && <span className="sr-only"> (current step)</span>}
+                  </span>
+                </li>
               )
             })}
-          </div>
+          </ol>
+
+          {nextText && (
+            <div className={clsx(
+              'mt-6 rounded-xl p-4 text-sm',
+              isRejected ? 'bg-red-50 text-red-800' : status === 'closed' ? 'bg-emerald-50 text-emerald-800' : 'bg-blue-50 text-blue-900'
+            )}
+            >
+              <p className="font-semibold">{isStaff ? 'Next action' : 'What happens next'}</p>
+              <p className="mt-1">{nextText}</p>
+              {isStaff && ['under_review', 'ai_assessment', 'investigation'].includes(status) && (
+                <p className="mt-1 text-xs opacity-80">Current stage: {labelFor(CLAIM_STATUSES, status)}</p>
+              )}
+              {!isStaff && status === 'submitted' && (
+                <Link to={`/claims/${claim.id}`} className="mt-2 inline-flex font-semibold text-primary hover:underline">Add photos or documents</Link>
+              )}
+              {!isStaff && isRejected && (
+                <Link to="/support" className="mt-2 inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"><Headphones className="h-4 w-4" />Contact support</Link>
+              )}
+            </div>
+          )}
+
+          <dl className="mt-5 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-gray-500">{isStaff ? 'Adjuster' : 'Your claims specialist'}</dt>
+              <dd className="font-medium text-gray-900">{claim.assigned_adjuster_name || 'Not assigned yet'}</dd>
+            </div>
+            {isStaff && (
+              <div>
+                <dt className="text-gray-500">Investigator</dt>
+                <dd className="font-medium text-gray-900">{claim.assigned_investigator_name || 'None'}</dd>
+              </div>
+            )}
+            {!isStaff && (
+              <div>
+                <dt className="text-gray-500">Policy</dt>
+                <dd className="font-medium text-gray-900">{claim.policy_number || '—'}</dd>
+              </div>
+            )}
+          </dl>
         </CardContent>
       </Card>
 
-      {/* Vertical Stages Details */}
-      <div className="space-y-4">
-        {visibleWorkflowStages.map((stage, idx) => {
-          const isPast = idx < currentStageIndex
-          const isCurrent = idx === currentStageIndex
-          const isFuture = idx > currentStageIndex
-
-          return (
-            <div
-              key={stage.id}
-              className={clsx(
-                'rounded-xl border p-5 transition bg-white',
-                isCurrent
-                  ? 'border-primary shadow-md ring-1 ring-primary/20'
-                  : isPast
-                  ? 'border-emerald-200'
-                  : 'border-gray-200 opacity-60'
-              )}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div
-                    className={clsx(
-                      'w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0 text-sm',
-                      isCurrent
-                        ? 'bg-primary text-white ring-4 ring-primary/20'
-                        : isPast
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-gray-100 text-gray-500'
-                    )}
-                  >
-                    {isPast ? <CheckCircle2 className="w-5 h-5" /> : idx + 1}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h4 className="font-bold text-gray-900 text-base">{stage.name}</h4>
-                      {isCurrent && (
-                        <span className="bg-primary text-white text-xs font-semibold px-2.5 py-0.5 rounded-full animate-pulse">
-                          In Progress
-                        </span>
-                      )}
-                      {isPast && (
-                        <span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-                          Completed
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600 mt-1">{stage.desc}</p>
-                    <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
-                      <span className="font-semibold text-gray-700">Handler:</span> {stage.role}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-right flex-shrink-0 text-xs text-gray-400">
-                  {isCurrent && (
-                    <span className="text-primary font-semibold text-xs">Estimated completion: 1-2 days</span>
-                  )}
-                  {isPast && (
-                    <span className="text-emerald-700 font-medium">Verified Stage</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Extended Details for Current Stage */}
-              {isCurrent && (
-                <div className="mt-4 pt-4 border-t border-gray-100 bg-gray-50/80 -mx-5 -mb-5 p-5 rounded-b-xl">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
-                    <div>
-                      <span className="font-bold text-gray-800 block">Current Action Required:</span>
-                      <span className="text-gray-600">
-                        {stage.id === 'ai-assessment' && (canViewAI ? 'AI results are available for staff review.' : 'Your claim is being reviewed by our claims team.')}
-                        {stage.id === 'under-review' && 'Adjuster Sarah Mitchell reviewing submitted documentation.'}
-                        {stage.id === 'investigation' && 'Investigator assigned to review conflicting timeline notes.'}
-                        {stage.id === 'approved' && 'The claim has been approved following review.'}
-                        {stage.id === 'submitted' && 'Intake queue validating initial police report and photos.'}
-                        {stage.id === 'closed' && 'Claim archive completed.'}
-                      </span>
-                    </div>
-                    {canViewAI && <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => alert(`Simulated action triggered for stage: ${stage.name}`)}
-                    >
-                      Update Stage Note
-                    </Button>}
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {/* History */}
+      <Card>
+        <CardContent className="p-5 sm:p-6">
+          <h2 className="text-base font-semibold text-gray-900">History</h2>
+          <ol className="mt-4 space-y-4 border-l-2 border-gray-100 pl-5">
+            {[...history].reverse().map((entry) => (
+              <li key={entry.id} className="relative">
+                <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white bg-primary" aria-hidden="true" />
+                <p className="text-sm font-semibold text-gray-900">{labelFor(CLAIM_STATUSES, entry.status)}</p>
+                <p className="text-xs text-gray-500">
+                  {formatDateTime(entry.at)}{entry.by ? ` · ${entry.by}` : ''}
+                </p>
+                {entry.reason && <p className="mt-1 text-sm text-gray-600">{entry.reason}</p>}
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
     </div>
   )
 }
-
-export default ClaimTracking

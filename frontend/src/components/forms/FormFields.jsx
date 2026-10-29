@@ -7,10 +7,19 @@ export const Input = forwardRef(function Input({
   error,
   className = '',
   id,
+  leftIcon,
+  rightIcon,
+  style,
   ...props
 }, ref) {
   const generatedId = useId()
   const inputId = id || `${label?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'input'}-${generatedId}`
+  // Inline padding wins over the .input-field component class without depending on CSS layer order.
+  const inputStyle = {
+    ...(leftIcon ? { paddingLeft: '2.5rem' } : {}),
+    ...(rightIcon ? { paddingRight: '2.75rem' } : {}),
+    ...style,
+  }
 
   return (
     <div className={clsx('input-group', className)}>
@@ -19,14 +28,27 @@ export const Input = forwardRef(function Input({
           {label}
         </label>
       )}
-      <input
-        ref={ref}
-        id={inputId}
-        className={clsx('input-field', error && 'input-error')}
-        aria-invalid={!!error}
-        aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
-        {...props}
-      />
+      <div className="relative">
+        {leftIcon && (
+          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center" aria-hidden="true">
+            {leftIcon}
+          </span>
+        )}
+        <input
+          ref={ref}
+          id={inputId}
+          className={clsx('input-field', error && 'input-error')}
+          style={inputStyle}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
+          {...props}
+        />
+        {rightIcon && (
+          <span className="absolute inset-y-0 right-3 flex items-center">
+            {rightIcon}
+          </span>
+        )}
+      </div>
       {error && (
         <p id={`${inputId}-error`} className="input-error-text" role="alert">
           {error}
@@ -93,6 +115,7 @@ export const Select = forwardRef(function Select({
   error,
   options = [],
   placeholder,
+  allowEmpty = false,
   className = '',
   id,
   ...props
@@ -115,9 +138,9 @@ export const Select = forwardRef(function Select({
         aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
         {...props}
       >
-        {placeholder && (
-          <option value="" disabled>
-            {placeholder}
+        {(placeholder || allowEmpty) && (
+          <option value="" disabled={!allowEmpty}>
+            {placeholder || ''}
           </option>
         )}
         {options.map((option) => (

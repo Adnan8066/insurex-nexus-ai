@@ -75,16 +75,4 @@ export function CardContent({
   )
 }
 
-export function CardFooter({
-  children,
-  className = '',
-  ...props
-}) {
-  return (
-    <div className={clsx('card-footer', className)} {...props}>
-      {children}
-    </div>
-  )
-}
-
-export default { Card, CardHeader, CardContent, CardFooter }
+export default { Card, CardHeader, CardContent }

@@ -110,7 +110,7 @@ export function Register() {
               value={formData.phone}
               onChange={handleChange}
               error={errors.phone}
-              placeholder="+1 (555) 000-0000"
+              placeholder="+91 98765 43210"
               autoComplete="tel"
               required
               leftIcon={<Phone className="w-5 h-5 text-gray-400" />}
@@ -157,10 +157,7 @@ export function Register() {
           <div className="flex items-start gap-2">
             <input type="checkbox" id="terms" required className="mt-1 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary focus:ring-2" />
             <label htmlFor="terms" className="text-sm text-gray-600">
-              I agree to the{' '}
-              <Link to="/terms" className="text-primary hover:underline">Terms of Service</Link>
-              {' '}and{' '}
-              <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
+              I agree to the Terms of Service and Privacy Policy
             </label>
           </div>
 

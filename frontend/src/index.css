@@ -114,21 +114,28 @@ html.dark .landing-hero-grid {
   background: #f1f5f9;
 }
 
+/* On desktop the module nav wraps onto a second row rather than clipping labels. */
+@media (min-width: 1024px) {
+  .module-nav-track {
+    border-radius: 1.25rem;
+  }
+}
+
 .module-nav-active-indicator {
   position: absolute;
   z-index: 0;
-  top: 5px;
-  bottom: 5px;
+  top: 0;
   left: 0;
   width: var(--module-active-width);
+  height: var(--module-active-height);
   border: 1px solid rgba(15, 23, 42, 0.22);
   border-radius: 999px;
   background: linear-gradient(105deg, #2563eb 0%, #4f46e5 55%, #7c3aed 100%);
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.62);
   opacity: 0;
   pointer-events: none;
-  transform: translateX(var(--module-active-left));
-  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), width 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 120ms ease;
+  transform: translate(var(--module-active-left), var(--module-active-top));
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), width 420ms cubic-bezier(0.22, 1, 0.36, 1), height 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 120ms ease;
 }
 
 .module-nav-active-indicator.is-ready {

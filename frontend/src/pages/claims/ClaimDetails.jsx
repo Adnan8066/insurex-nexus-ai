@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   Briefcase,
   ArrowLeft,
@@ -21,9 +21,11 @@ import {
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
 import { claimService } from '../../services'
+import { formatApiError } from '../../services/api'
+import { CLAIM_STATUSES, INCIDENT_TYPES, labelFor } from '../../constants/domain'
+import { canDeleteClaim } from '../../utils/claimPermissions'
 import { policyService } from '../../services/policyService'
 import { useAuth } from '../../context/useAuth'
-import { claimStatusWorkflow } from '../../data/claims'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -108,23 +110,34 @@ const mapClaim = (c) => ({
   notes: c.notes || [],
 })
 
-const claimStatusOptions = [
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'under_review', label: 'Under Review' },
-  { value: 'ai_assessment', label: 'AI Assessment' },
-  { value: 'investigation', label: 'Investigation' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'closed', label: 'Closed' },
-]
+const claimStatusOptions = CLAIM_STATUSES
+
+// Lifecycle steps for the sidebar; approved and rejected are alternative outcomes of the same step.
+const STEP_ORDER = {
+  submitted: 1,
+  under_review: 2,
+  ai_assessment: 3,
+  investigation: 4,
+  approved: 5,
+  rejected: 5,
+  repair_settlement: 6,
+  closed: 7,
+}
+const claimStatusWorkflow = CLAIM_STATUSES.map((status) => ({
+  id: status.value,
+  label: status.label,
+  order: STEP_ORDER[status.value],
+}))
 
 export function ClaimDetails() {
   const { id } = useParams()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const canViewAI = ['admin', 'employee', 'investigator'].includes(user?.role)
   const canManageAssignments = ['admin', 'employee'].includes(user?.role)
   const [claim, setClaim] = useState(null)
-  const lifecycleStatus = (claim?.status || '').replace(/_/g, '-')
+  // Customers see the internal AI step as part of "Under Review".
+  const lifecycleStatus = !canViewAI && claim?.status === 'ai_assessment' ? 'under_review' : (claim?.status || '')
   const [statusDraft, setStatusDraft] = useState('')
   const [savingStatus, setSavingStatus] = useState(false)
   const [documentFiles, setDocumentFiles] = useState([])
@@ -170,7 +183,7 @@ export function ClaimDetails() {
         })),
       } : current)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Unable to load claim attachments.')
+      setError(formatApiError(err, 'Unable to load claim attachments.'))
     } finally {
       setDocumentsLoading(false)
     }
@@ -199,14 +212,7 @@ export function ClaimDetails() {
         uploadedCount += 1
       } catch (error) {
         failedFiles.push(file)
-        const payload = error.response?.data
-        const details = payload?.error?.details
-        const detailText = typeof details === 'string'
-          ? details
-          : details && typeof details === 'object'
-            ? Object.entries(details).map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`).join('; ')
-            : ''
-        uploadErrors.push(`${file.name}: ${detailText || payload?.detail || payload?.error?.message || error.message || 'upload request failed'}`)
+        uploadErrors.push(`${file.name}: ${formatApiError(error, 'upload failed')}`)
       }
     }
     setDocumentFiles(failedFiles)
@@ -244,7 +250,7 @@ export function ClaimDetails() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err.response?.data?.detail || 'Failed to load claim')
+          setError(err.response?.status === 404 ? '' : formatApiError(err, 'Failed to load claim'))
           setClaim(null)
         }
       } finally {
@@ -263,7 +269,7 @@ export function ClaimDetails() {
       if (kind === 'investigator') await claimService.assignInvestigator(id, Number(assignmentForm.investigator))
       await refreshClaim()
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.detail || 'Unable to update claim assignment.')
+      setError(formatApiError(err, 'Unable to update claim assignment.'))
     } finally {
       setSavingAssignment(false)
     }
@@ -278,8 +284,7 @@ export function ClaimDetails() {
       setClaim(updated)
       setStatusDraft(updated.status)
     } catch (err) {
-      const message = err.response?.data?.detail || err.response?.data?.error?.details || err.response?.data?.error
-      setError(typeof message === 'string' ? message : 'Unable to update claim status.')
+      setError(formatApiError(err, 'Unable to update claim status.'))
     } finally {
       setSavingStatus(false)
     }
@@ -289,11 +294,11 @@ export function ClaimDetails() {
     setDeleting(true)
     try {
       await claimService.deleteClaim(claim.id)
-      window.location.href = '/claims'
+      setDeleting(false)
+      navigate('/claims', { replace: true })
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to delete claim')
+      setError(formatApiError(err, 'Failed to delete claim'))
       setDeleteOpen(false)
-    } finally {
       setDeleting(false)
     }
   }
@@ -366,12 +371,14 @@ export function ClaimDetails() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline"><Link to={`/claims/${claim.id}/tracking`}><Activity className="w-4 h-4 mr-2" />Live Workflow Tracking</Link></Button>
-          {canViewAI && <Button asChild variant="primary"><Link to={`/ai-assessment?claim=${claim.id}`}><Brain className="w-4 h-4 mr-2" />AI Assessment Center</Link></Button>}
-          <Button variant="ghost" onClick={() => setDeleteOpen(true)} className="text-red-600 hover:text-red-700">
-            <Trash2 className="w-4 h-4" />
-          </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline"><Link to={`/claims/${claim.id}/tracking`}><Activity className="w-4 h-4 mr-2" />Track Claim</Link></Button>
+          {canViewAI && <Button asChild variant="primary"><Link to={`/ai-assessment?claim=${claim.id}`}><Brain className="w-4 h-4 mr-2" />Claim Assessment</Link></Button>}
+          {canDeleteClaim(user?.role, claim.status) && (
+            <Button variant="ghost" onClick={() => setDeleteOpen(true)} className="text-red-600 hover:text-red-700" aria-label="Delete claim" title="Delete claim">
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -490,7 +497,7 @@ export function ClaimDetails() {
                       </div>
                       <div>
                         <span className="text-gray-500 block text-xs">Incident Type</span>
-                        <span className="font-medium text-gray-900 capitalize">{claim.incidentType?.replace(/_/g, ' ')}</span>
+                        <span className="font-medium text-gray-900">{labelFor(INCIDENT_TYPES, claim.incidentType)}</span>
                       </div>
                     </div>
                   </div>
@@ -689,14 +696,14 @@ export function ClaimDetails() {
                         id="claim-detail-document"
                         type="file"
                         multiple
-                        accept="image/png,image/jpeg,application/pdf"
+                        accept=".jpg,.jpeg,.png,.webp,.bmp,.pdf"
                         className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:font-medium file:text-blue-700 hover:file:bg-blue-100"
                         onChange={(event) => {
                           setDocumentFiles(Array.from(event.target.files || []))
                           setDocumentUploadError('')
                         }}
                       />
-                      <p className="mt-1 text-xs text-gray-500">PNG, JPG, or PDF up to 25 MB per file</p>
+                      <p className="mt-1 text-xs text-gray-500">JPG, PNG, WEBP, BMP or PDF, up to 25 MB per file</p>
                     </div>
                     <Button
                       variant="primary"
@@ -790,7 +797,7 @@ export function ClaimDetails() {
             <CardHeader title="Claim Lifecycle Stage" />
             <CardContent className="p-6">
               <div className="space-y-2">
-                {claimStatusWorkflow.map((step) => {
+                {claimStatusWorkflow.filter((step) => canViewAI || step.id !== 'ai_assessment').map((step) => {
                   const isCurrent = step.id === lifecycleStatus
                   return (
                     <div

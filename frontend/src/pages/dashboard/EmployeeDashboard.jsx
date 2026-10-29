@@ -4,171 +4,139 @@ import {
   FileText,
   Briefcase,
   Clock,
-  CheckCircle,
   AlertTriangle,
-  Car,
-  DollarSign,
-  TrendingUp,
   Shield,
   ArrowRight,
-  MoreVertical,
-  Users,
-  Wrench,
-  Gavel,
   Brain,
   BarChart3,
   RefreshCw,
   Download,
   Calendar,
-  Wifi,
   WifiOff,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { formatCurrency, formatCurrencyCompact, formatDate, formatRelativeTime } from '../../utils/helpers'
-import { policyService, claimService, vehicleService } from '../../services'
-import { useAuth } from '../../context/useAuth'
+import { format, parseISO } from 'date-fns'
+import { formatCurrency, formatCurrencyCompact, formatRelativeTime } from '../../utils/helpers'
+import { policyService, claimService, analyticsService } from '../../services'
+import { formatApiError } from '../../services/api'
+import {
+  CLAIM_STATUSES,
+  PENDING_CLAIM_STATUSES,
+  INCIDENT_TYPES,
+  CLAIM_PRIORITIES,
+  fraudRiskLevel,
+  labelFor,
+} from '../../constants/domain'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { ChartCard, MetricChart, AreaChart, BarChart, DoughnutChart } from '../../components/charts/ChartComponents'
+import { ChartCard, ComboChart, DoughnutChart } from '../../components/charts/ChartComponents'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
 import ErrorBoundary, { ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
-import { DashboardSkeleton, ChartSkeleton, TableSkeleton, SkeletonCard } from '../../components/ui/Skeleton'
+import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/toastHooks'
 
-
-const claimStatusConfig = {
-  submitted: { label: 'Submitted', color: 'info' },
-  under_review: { label: 'Under Review', color: 'warning' },
-  ai_assessment: { label: 'AI Assessment', color: 'primary' },
-  investigation: { label: 'Investigation', color: 'warning' },
-  approved: { label: 'Approved', color: 'success' },
-  rejected: { label: 'Rejected', color: 'danger' },
-  repair_settlement: { label: 'Repair/Settlement', color: 'primary' },
-  closed: { label: 'Closed', color: 'neutral' },
-}
-
 const TIMEFRAME_OPTIONS = [
-  { value: 'week', label: 'Last 7 Days', days: 7 },
-  { value: 'month', label: 'Last 30 Days', days: 30 },
-  { value: 'quarter', label: 'Current Quarter', days: 90 },
-  { value: 'ytd', label: 'Year to Date', days: 365 },
-  { value: 'year', label: 'Last Year', days: 365 },
+  { value: 'week', label: 'Last 7 Days' },
+  { value: 'month', label: 'Last 30 Days' },
+  { value: 'quarter', label: 'Current Quarter' },
+  { value: 'ytd', label: 'Year to Date' },
+  { value: 'year', label: 'Last Year' },
 ]
+
+// Short ranges are shown per day; longer ones per month (same as the Analytics page).
+const TREND_GRANULARITY = { week: 'day', month: 'day', quarter: 'month', ytd: 'month', year: 'month' }
+
+// Matches the backend total-loss threshold used by the dashboard summary.
+const TOTAL_LOSS_THRESHOLD = 50
+
+const STATUS_COLORS = ['#3b82f6', '#f59e0b', '#1e3a5f', '#d97706', '#10b981', '#ef4444', '#6366f1', '#94a3b8']
+const RISK_VARIANT = { high: 'danger', medium: 'warning', low: 'success' }
+const PRIORITY_VARIANT = { critical: 'danger', high: 'danger', medium: 'warning', low: 'success' }
+
+const mapClaim = (c) => ({
+  id: c.id,
+  claimNumber: c.claim_number,
+  customerName: c.customer_name,
+  incidentType: c.incident_type,
+  claimAmount: Number(c.claim_amount) || 0,
+  status: c.status,
+  priority: String(c.priority || c.ai_assessment?.claim_priority || '').toLowerCase(),
+  submittedAt: c.submitted_at,
+  assignedAdjuster: c.assigned_adjuster_name,
+  fraudRiskScore: Number(c.fraud_risk_score) || 0,
+  riskLevel: fraudRiskLevel(c.fraud_risk_score),
+  totalLossProbability: Number(c.total_loss_probability ?? c.ai_assessment?.total_loss_probability) || 0,
+})
+
+const mapPolicy = (p) => ({
+  id: p.id,
+  policyNumber: p.policy_number,
+  customerName: p.customer_name,
+  type: p.type,
+  status: p.status,
+  startDate: p.start_date,
+  endDate: p.end_date,
+  premium: p.premium,
+})
 
 export function EmployeeDashboard() {
   const navigate = useNavigate()
-  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const toast = useToast()
 
+  const initialTimeframe = searchParams.get('timeframe')
+  const [timeframe, setTimeframe] = useState(
+    TIMEFRAME_OPTIONS.some((o) => o.value === initialTimeframe) ? initialTimeframe : 'quarter'
+  )
   const [loading, setLoading] = useState(true)
   const [claims, setClaims] = useState([])
   const [policies, setPolicies] = useState([])
-  const [fraudAlerts, setFraudAlerts] = useState([])
-  const [recentActivity, setRecentActivity] = useState([])
-  const [timeframe, setTimeframe] = useState(searchParams.get('timeframe') || 'quarter')
+  const [summary, setSummary] = useState(null)
+  const [fraudBands, setFraudBands] = useState(null)
+  const [trend, setTrend] = useState([])
   const [refreshing, setRefreshing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [connectionError, setConnectionError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(new Date())
 
-  const mapClaim = (c) => ({
-    id: c.id,
-    claimNumber: c.claim_number,
-    customerName: c.customer_name,
-    customerEmail: c.customer_email,
-    policyNumber: c.policy_number,
-    vehicle: c.vehicle_info ? {
-      id: c.vehicle_info.id,
-      year: c.vehicle_info.year,
-      make: c.vehicle_info.make,
-      model: c.vehicle_info.model,
-      licensePlate: c.vehicle_info.license_plate,
-    } : null,
-    incidentDate: c.incident_date,
-    incidentType: c.incident_type,
-    incidentSeverity: c.incident_severity,
-    location: c.location,
-    claimAmount: c.claim_amount,
-    status: c.status,
-    priority: c.priority,
-    submittedAt: c.submitted_at,
-    assignedAdjuster: c.assigned_adjuster_name,
-    assignedInvestigator: c.assigned_investigator_name,
-    fraudRiskScore: c.fraud_risk_score,
-    totalLossProbability: c.total_loss_probability,
-    aiAssessment: c.ai_assessment ? {
-      ...c.ai_assessment,
-      totalLossProbability: c.ai_assessment.total_loss_probability,
-      claimPriority: c.ai_assessment.claim_priority || c.ai_assessment.priority,
-    } : null,
-  })
+  const granularity = TREND_GRANULARITY[timeframe] || 'day'
 
-  const mapPolicy = (p) => ({
-    id: p.id,
-    policyNumber: p.policy_number,
-    customerName: p.customer_name,
-    customerEmail: p.customer_email,
-    type: p.type,
-    status: p.status,
-    startDate: p.start_date,
-    endDate: p.end_date,
-    premium: p.premium,
-    deductible: p.deductible,
-    paymentFrequency: p.payment_frequency,
-    autoRenew: p.auto_renew,
-    vehicle: p.vehicle_info ? {
-      id: p.vehicle_info.id,
-      year: p.vehicle_info.year,
-      make: p.vehicle_info.make,
-      model: p.vehicle_info.model,
-      licensePlate: p.vehicle_info.license_plate,
-    } : null,
-    property: { address: p.property_address },
-    createdAt: p.created_at,
-  })
-
-  const fetchData = useCallback(async (timeframeParam = timeframe) => {
+  const fetchData = useCallback(async () => {
     setRefreshing(true)
     setConnectionError(null)
     try {
-      const [clmRes, polRes] = await Promise.all([
+      const [clmRes, polRes, summaryRes, fraudRes, trendRes] = await Promise.all([
         claimService.getClaims(),
         policyService.getPolicies(),
+        analyticsService.getDashboardSummary(timeframe),
+        analyticsService.getFraudRiskDistribution(timeframe),
+        analyticsService.getClaimsTrendForTimeframe(timeframe, granularity),
       ])
-      const clms = Array.isArray(clmRes) ? clmRes : (clmRes.results || [])
-      const pols = Array.isArray(polRes) ? polRes : (polRes.results || [])
+      const clms = Array.isArray(clmRes) ? clmRes : (clmRes?.results || [])
+      const pols = Array.isArray(polRes) ? polRes : (polRes?.results || [])
       setClaims(clms.map(mapClaim))
       setPolicies(pols.map(mapPolicy))
-      setFraudAlerts(clms.filter((c) => (c.fraud_risk_score || 0) >= 50 || (c.priority === 'high' || c.priority === 'critical')).map(mapClaim))
-      setRecentActivity(
-        clms.slice(0, 5).map((c, i) => ({
-          id: c.id || i,
-          type: 'claim',
-          title: `Claim ${c.claim_number} - ${c.status?.replace(/_/g, ' ')}`,
-          detail: `${c.customer_name || 'Customer'} � ${c.incident_type?.replace(/_/g, ' ') || 'N/A'}`,
-          time: c.submitted_at ? formatRelativeTime(c.submitted_at) : 'N/A',
-          icon: Briefcase,
-          color: 'text-blue-600 bg-blue-50',
-        }))
-      )
+      setSummary(summaryRes || null)
+      setFraudBands(fraudRes?.by_level || null)
+      setTrend(Array.isArray(trendRes) ? trendRes : [])
       setLastUpdated(new Date())
-      setConnectionError(null)
     } catch (err) {
-      setConnectionError(err.response?.data?.detail || err.message || 'Backend unreachable')
-      toast.showRetryToast('Connection error. Unable to load dashboard data.', () => fetchData(timeframeParam))
+      const message = formatApiError(err, 'Unable to load dashboard data.')
+      setConnectionError(message)
+      toast.error(message, {
+        action: { label: 'Retry', onClick: () => fetchData(), persist: false },
+      })
     } finally {
       setRefreshing(false)
       setLoading(false)
     }
-  }, [timeframe, toast])
+  }, [timeframe, granularity, toast])
 
   useEffect(() => {
-    fetchData(timeframe)
-  }, [fetchData, timeframe])
+    fetchData()
+  }, [fetchData])
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams)
@@ -177,97 +145,124 @@ export function EmployeeDashboard() {
     } else {
       params.delete('timeframe')
     }
-    setSearchParams(params, { replace: true })
+    if (params.toString() !== searchParams.toString()) {
+      setSearchParams(params, { replace: true })
+    }
   }, [timeframe, searchParams, setSearchParams])
 
-
-  const activePolicies = policies.filter((p) => p.status === 'active')
-  const activeClaims = claims.filter((c) => !['closed', 'rejected'].includes(c.status))
-  const pendingClaims = claims.filter((c) => ['submitted', 'under_review', 'ai_assessment', 'investigation'].includes(c.status))
-  const highRiskClaims = fraudAlerts.filter((f) => f.riskLevel === 'high')
-  const totalLossCases = claims.filter((c) => c.status === 'total_loss' || c.aiAssessment?.totalLossProbability > 50)
-  const totalClaimAmount = claims.reduce((sum, c) => sum + c.claimAmount, 0)
-  const avgClaimCost = claims.length > 0 ? totalClaimAmount / claims.length : 0
-
-  const claimsByStatus = claims.reduce((acc, claim) => {
-    acc[claim.status] = (acc[claim.status] || 0) + 1
-    return acc
-  }, {})
+  const timeframeLabel = TIMEFRAME_OPTIONS.find((t) => t.value === timeframe)?.label || 'Selected period'
+  const summaryClaims = summary?.claims || {}
+  const byStatus = useMemo(() => summary?.claims?.by_status || {}, [summary])
+  const periodClaimCount = summaryClaims.total || 0
+  const pendingCount = PENDING_CLAIM_STATUSES.reduce((sum, status) => sum + (byStatus[status] || 0), 0)
+  const highRiskCount = summary?.fraud?.high_risk_claims ?? fraudBands?.high ?? 0
+  const totalLossCount = summaryClaims.total_loss_cases ?? 0
+  const activePolicyCount = summary?.policies?.active ?? policies.filter((p) => p.status === 'active').length
 
   const claimStatusData = useMemo(() => ({
-    labels: Object.keys(claimStatusConfig).map((k) => claimStatusConfig[k].label),
+    labels: CLAIM_STATUSES.map((s) => s.label),
     datasets: [
       {
-        data: Object.keys(claimStatusConfig).map((k) => claimsByStatus[k] || 0),
-        backgroundColor: [
-          '#3b82f6', '#f59e0b', '#1e3a5f', '#f59e0b', '#10b981', '#ef4444', '#1e3a5f', '#94a3b8',
-        ],
+        data: CLAIM_STATUSES.map((s) => byStatus[s.value] || 0),
+        backgroundColor: STATUS_COLORS,
         borderWidth: 0,
       },
     ],
-  }), [claimsByStatus])
+  }), [byStatus])
 
   const fraudRiskData = useMemo(() => ({
     labels: ['Low', 'Medium', 'High'],
     datasets: [
       {
-        data: [
-          fraudAlerts.filter((f) => f.riskLevel === 'low').length,
-          fraudAlerts.filter((f) => f.riskLevel === 'medium').length,
-          fraudAlerts.filter((f) => f.riskLevel === 'high').length,
-        ],
+        data: [fraudBands?.low || 0, fraudBands?.medium || 0, fraudBands?.high || 0],
         backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
         borderWidth: 0,
       },
     ],
-  }), [fraudAlerts])
+  }), [fraudBands])
 
-  const monthlyData = useMemo(() => ({
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+  const hasTrendData = trend.some((d) => d.count > 0)
+  const claimsOverTimeData = {
+    labels: trend.map((d) => format(parseISO(String(d.date)), granularity === 'month' ? 'MMM yyyy' : 'd MMM')),
     datasets: [
       {
-        label: 'New Claims',
-        data: [12, 19, 15, 22, 18, 25, 20],
-        borderColor: '#1e3a5f',
-        backgroundColor: 'rgba(30, 58, 95, 0.1)',
-        fill: true,
-        tension: 0.4,
+        type: 'bar',
+        label: 'Claims submitted',
+        data: trend.map((d) => d.count),
+        backgroundColor: '#1e3a5f',
+        borderRadius: 4,
+        maxBarThickness: 36,
+        yAxisID: 'y',
+        order: 2,
       },
       {
-        label: 'Resolved Claims',
-        data: [8, 15, 12, 18, 14, 20, 16],
+        type: 'line',
+        label: 'Claim amount',
+        data: trend.map((d) => Math.round(Number(d.total_amount) || 0)),
         borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        fill: true,
-        tension: 0.4,
+        backgroundColor: '#10b981',
+        pointRadius: 3,
+        tension: 0.3,
+        yAxisID: 'y1',
+        order: 1,
       },
     ],
-  }), [])
+  }
+  const claimsOverTimeOptions = {
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Claims' }, ticks: { precision: 0 } },
+      y1: {
+        beginAtZero: true,
+        position: 'right',
+        grid: { drawOnChartArea: false },
+        title: { display: true, text: 'Amount' },
+        ticks: { callback: (value) => formatCurrencyCompact(value) },
+      },
+    },
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: (ctx) => (ctx.dataset.yAxisID === 'y1'
+            ? `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`
+            : `${ctx.dataset.label}: ${ctx.raw}`),
+        },
+      },
+    },
+  }
 
   const recentClaims = [...claims].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 5)
-
-  const handleTimeframeChange = (newTimeframe) => {
-    setTimeframe(newTimeframe)
-  }
+  const fraudAlerts = claims
+    .filter((c) => c.riskLevel !== 'low')
+    .sort((a, b) => b.fraudRiskScore - a.fraudRiskScore)
 
   const handleExport = () => {
     setExporting(true)
     try {
       const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+      const totalClaimAmount = claims.reduce((sum, c) => sum + c.claimAmount, 0)
       const rows = [
-        ['Executive Claims and Policies Report'],
-        ['Reporting period', timeframe],
-        ['Generated at', new Date().toISOString()],
-        ['Total claims', claims.length],
-        ['Active claims', activeClaims.length],
-        ['Pending claims', pendingClaims.length],
-        ['Total claim amount', totalClaimAmount],
-        ['Total policies', policies.length],
-        ['Active policies', activePolicies.length],
+        ['Claims and Policies Report'],
+        ['Reporting period', timeframeLabel],
+        ['Generated at', new Date().toLocaleString()],
+        ['Claims in period', periodClaimCount],
+        ['Pending claims in period', pendingCount],
+        ['High fraud risk claims in period', highRiskCount],
+        ['Likely total loss claims in period', totalLossCount],
+        ['Active policies', activePolicyCount],
         [],
-        ['Claims'],
-        ['Claim number', 'Customer', 'Status', 'Incident type', 'Submitted', 'Amount', 'Priority'],
-        ...claims.map((claim) => [claim.claimNumber, claim.customerName, claim.status, claim.incidentType, claim.submittedAt, claim.claimAmount, claim.priority]),
+        ['Claims (latest)'],
+        ['Claim number', 'Customer', 'Status', 'Incident type', 'Submitted', 'Amount', 'Priority', 'Fraud risk'],
+        ...claims.map((claim) => [
+          claim.claimNumber,
+          claim.customerName,
+          labelFor(CLAIM_STATUSES, claim.status),
+          labelFor(INCIDENT_TYPES, claim.incidentType),
+          claim.submittedAt,
+          claim.claimAmount,
+          labelFor(CLAIM_PRIORITIES, claim.priority),
+          claim.riskLevel,
+        ]),
+        ['Total claim amount', '', '', '', '', totalClaimAmount],
         [],
         ['Policies'],
         ['Policy number', 'Customer', 'Type', 'Status', 'Start date', 'End date', 'Premium'],
@@ -278,78 +273,71 @@ export function EmployeeDashboard() {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `executive-report-${new Date().toISOString().split('T')[0]}.csv`
+      link.download = `claims-report-${format(new Date(), 'yyyy-MM-dd')}.csv`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      toast.showSuccess('Executive report exported successfully')
-    } catch (err) {
-      toast.showError('Failed to export report')
+      toast.success('Report downloaded')
+    } catch {
+      toast.error('Failed to export report')
     } finally {
       setExporting(false)
     }
   }
+
   const metricCards = [
     {
-      title: 'Total Policies',
-      value: policies.length,
+      title: 'Active Policies',
+      value: activePolicyCount,
+      caption: 'In force during the period',
       icon: FileText,
       iconColor: 'text-blue-600',
       bgColor: 'bg-blue-50',
-      trend: 'Live count',
-      trendLabel: 'current records',
       link: '/policies',
     },
     {
-      title: 'Active Claims',
-      value: activeClaims.length,
+      title: 'Claims',
+      value: periodClaimCount,
+      caption: `Submitted · ${timeframeLabel}`,
       icon: Briefcase,
       iconColor: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      trend: 'Live count',
-      trendLabel: 'current records',
       link: '/claims',
     },
     {
       title: 'Pending Claims',
-      value: pendingClaims.length,
+      value: pendingCount,
+      caption: 'Waiting for a decision',
       icon: Clock,
       iconColor: 'text-yellow-600',
       bgColor: 'bg-yellow-50',
-      trend: 'Live count',
-      trendLabel: 'current records',
       link: '/claims?status=pending',
     },
     {
-      title: 'Fraud Alerts',
-      value: highRiskClaims.length,
+      title: 'High Fraud Risk',
+      value: highRiskCount,
+      caption: 'Claims with a high fraud score',
       icon: AlertTriangle,
       iconColor: 'text-red-600',
       bgColor: 'bg-red-50',
-      trend: 'Live count',
-      trendLabel: 'current records',
       link: '/fraud',
     },
-  ]
-
-  const totalLossCards = [
     {
-      title: 'Total Loss Cases',
-      value: totalLossCases.length,
-      icon: AlertTriangle,
+      title: 'Likely Total Loss',
+      value: totalLossCount,
+      caption: `${TOTAL_LOSS_THRESHOLD}%+ total-loss probability`,
+      icon: Shield,
       iconColor: 'text-orange-600',
       bgColor: 'bg-orange-50',
-      trend: 'Live count',
-      trendLabel: 'current records',
-      link: '/claims?status=total_loss',
+      link: '/claims',
     },
   ]
 
   const quickActions = [
     { label: 'Review Claims', href: '/claims', icon: Briefcase, color: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
-    { label: 'Fraud Investigation', href: '/fraud', icon: AlertTriangle, color: 'bg-red-50 text-red-600 hover:bg-red-100' },
-    { label: 'AI Assessment', href: '/ai-assessment', icon: Brain, color: 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' },
+    { label: 'Fraud Alerts', href: '/fraud', icon: AlertTriangle, color: 'bg-red-50 text-red-600 hover:bg-red-100' },
+    { label: 'Claim Assessment', href: '/ai-assessment', icon: Brain, color: 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' },
     { label: 'Analytics', href: '/analytics', icon: BarChart3, color: 'bg-green-50 text-green-600 hover:bg-green-100' },
   ]
 
@@ -359,23 +347,24 @@ export function EmployeeDashboard() {
 
   return (
     <div className="page">
-      <div className="page-header">
+      <div className="page-header flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="page-title">Employee Dashboard</h1>
-          <p className="page-subtitle">Insurance operations overview and key metrics</p>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle">Claims and policies at a glance</p>
           {connectionError && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
-              <WifiOff className="w-4 h-4" />
-              <span>Connection error: {connectionError}</span>
+            <div className="mt-2 flex items-center gap-2 text-sm text-red-600" role="alert">
+              <WifiOff className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              <span>{connectionError}</span>
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-500" />
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-gray-500" aria-hidden="true" />
+            <span className="sr-only">Time period</span>
             <select
               value={timeframe}
-              onChange={(e) => handleTimeframeChange(e.target.value)}
+              onChange={(e) => setTimeframe(e.target.value)}
               className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary"
             >
               {TIMEFRAME_OPTIONS.map((option) => (
@@ -384,63 +373,39 @@ export function EmployeeDashboard() {
                 </option>
               ))}
             </select>
-          </div>
+          </label>
 
-          <Button variant="ghost" size="sm" onClick={() => fetchData(timeframe)} loading={refreshing} aria-label="Refresh dashboard" title="Refresh dashboard">
+          <Button variant="ghost" size="sm" onClick={() => fetchData()} loading={refreshing} aria-label="Refresh dashboard" title="Refresh dashboard">
             <RefreshCw className="w-4 h-4" />
           </Button>
 
           <Button variant="primary" size="sm" onClick={handleExport} loading={exporting} disabled={exporting}>
             <Download className="w-4 h-4 mr-2" />
-            Export Executive Report
+            Export Report
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6 mb-8">
         {metricCards.map((metric) => (
-          <ErrorBoundary
-            key={metric.title}
-            fallback={({ resetError }) => (
-              <div className="card p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">{metric.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">-</p>
-                  </div>
-                  <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
-                    <metric.icon className="w-6 h-6" />
-                  </div>
+          <Card key={metric.title} hover className="group cursor-pointer" onClick={() => navigate(metric.link)}>
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-500">{metric.title}</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
+                  <p className="mt-2 text-xs text-gray-500">{metric.caption}</p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={resetError} className="mt-4">
-                  Retry
-                </Button>
+                <div className={clsx('w-12 h-12 flex-shrink-0 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
+                  <metric.icon className="w-6 h-6" aria-hidden="true" />
+                </div>
               </div>
-            )}
-          >
-            <Card hover className="group cursor-pointer" onClick={() => navigate(metric.link)}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">{metric.title}</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
-                    <div className="flex items-center gap-1 mt-2 text-sm font-medium text-green-600">
-                      <TrendingUp className="w-4 h-4" />
-                      <span>{metric.trend}</span>
-                      <span className="text-gray-500">{metric.trendLabel}</span>
-                    </div>
-                  </div>
-                  <div className={clsx('w-12 h-12 rounded-xl flex items-center justify-center', metric.bgColor, metric.iconColor)}>
-                    <metric.icon className="w-6 h-6" />
-                  </div>
-                </div>
-                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center text-sm text-gray-500 group-hover:text-primary transition-colors">
-                  <span>View details</span>
-                  <ArrowRight className="w-4 h-4 ml-1" />
-                </div>
-              </CardContent>
-            </Card>
-          </ErrorBoundary>
+              <div className="mt-4 pt-4 border-t border-gray-100 flex items-center text-sm text-gray-500 group-hover:text-primary transition-colors">
+                <span>View details</span>
+                <ArrowRight className="w-4 h-4 ml-1" aria-hidden="true" />
+              </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
@@ -450,31 +415,37 @@ export function EmployeeDashboard() {
         )}>
           <ChartCard
             title="Claims Over Time"
-            subtitle={`New vs resolved claims (${TIMEFRAME_OPTIONS.find((t) => t.value === timeframe)?.label})`}
+            subtitle={`${granularity === 'month' ? 'Monthly' : 'Daily'} claims and claim amount · ${timeframeLabel}`}
             action={
               <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Clock className="w-4 h-4" />
+                <Clock className="w-4 h-4" aria-hidden="true" />
                 <span>Updated {formatRelativeTime(lastUpdated)}</span>
               </div>
             }
           >
-            <AreaChart data={monthlyData} height={300} />
+            {hasTrendData ? (
+              <ComboChart data={claimsOverTimeData} options={claimsOverTimeOptions} height={300} />
+            ) : (
+              <div className="flex items-center justify-center text-center text-sm text-gray-400" style={{ height: 300 }}>
+                No claims were submitted in this period.
+              </div>
+            )}
           </ChartCard>
         </ErrorBoundary>
 
         <div className="grid grid-cols-1 gap-6">
           <ErrorBoundary fallback={({ resetError, retryCount }) => (
-            <ChartErrorFallback title="Claim Status Distribution" resetError={resetError} retryCount={retryCount} />
+            <ChartErrorFallback title="Claim Status" resetError={resetError} retryCount={retryCount} />
           )}>
-            <ChartCard title="Claim Status Distribution" subtitle="Current pipeline status">
+            <ChartCard title="Claim Status" subtitle={`Claims by stage · ${timeframeLabel}`}>
               <DoughnutChart data={claimStatusData} height={250} />
             </ChartCard>
           </ErrorBoundary>
 
           <ErrorBoundary fallback={({ resetError, retryCount }) => (
-            <ChartErrorFallback title="Fraud Risk Distribution" resetError={resetError} retryCount={retryCount} />
+            <ChartErrorFallback title="Fraud Risk" resetError={resetError} retryCount={retryCount} />
           )}>
-            <ChartCard title="Fraud Risk Distribution" subtitle="Risk levels across flagged claims">
+            <ChartCard title="Fraud Risk" subtitle={`Claims by fraud risk level · ${timeframeLabel}`}>
               <DoughnutChart data={fraudRiskData} height={250} />
             </ChartCard>
           </ErrorBoundary>
@@ -482,17 +453,17 @@ export function EmployeeDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           <ErrorBoundary fallback={({ resetError, retryCount }) => (
             <DataTableErrorFallback title="Recent Claims" resetError={resetError} retryCount={retryCount} />
           )}>
             <Card>
               <CardHeader
                 title="Recent Claims"
-                subtitle="Latest claims requiring attention"
+                subtitle="Latest claims submitted"
                 action={
                   <Button variant="ghost" size="sm" asChild>
-                    <Link to="/claims">View All <ArrowRight className="w-4 h-4 ml-1" /></Link>
+                    <Link to="/claims">View All <ArrowRight className="w-4 h-4 ml-1" aria-hidden="true" /></Link>
                   </Button>
                 }
               />
@@ -508,28 +479,24 @@ export function EmployeeDashboard() {
                         <TableHead>Status</TableHead>
                         <TableHead>Priority</TableHead>
                         <TableHead>Assigned</TableHead>
-                        <TableHead className="w-24">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {recentClaims.map((claim) => (
                         <TableRow key={claim.id} clickable onClick={() => navigate(`/claims/${claim.id}`)}>
                           <TableCell className="font-mono font-medium">{claim.claimNumber}</TableCell>
-                          <TableCell>{claim.customerName}</TableCell>
-                          <TableCell>{claim.incidentType}</TableCell>
+                          <TableCell>{claim.customerName || '—'}</TableCell>
+                          <TableCell>{labelFor(INCIDENT_TYPES, claim.incidentType)}</TableCell>
                           <TableCell className="font-medium">{formatCurrency(claim.claimAmount)}</TableCell>
                           <TableCell><StatusBadge status={claim.status} /></TableCell>
                           <TableCell>
-                            <Badge variant={claim.aiAssessment?.claimPriority === 'High' ? 'danger' : claim.aiAssessment?.claimPriority === 'Medium' ? 'warning' : 'success'}>
-                              {claim.aiAssessment?.claimPriority || 'Medium'}
-                            </Badge>
+                            {claim.priority ? (
+                              <Badge variant={PRIORITY_VARIANT[claim.priority] || 'neutral'}>
+                                {labelFor(CLAIM_PRIORITIES, claim.priority)}
+                              </Badge>
+                            ) : '—'}
                           </TableCell>
                           <TableCell className="text-sm text-gray-600">{claim.assignedAdjuster || 'Unassigned'}</TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -546,33 +513,35 @@ export function EmployeeDashboard() {
             </Card>
           </ErrorBoundary>
         </div>
-        <div>
+        <div className="min-w-0">
           <ErrorBoundary fallback={({ resetError, retryCount }) => (
-            <DataTableErrorFallback title="High-Risk Fraud Alerts" resetError={resetError} retryCount={retryCount} />
+            <DataTableErrorFallback title="Fraud Alerts" resetError={resetError} retryCount={retryCount} />
           )}>
             <Card>
               <CardHeader
-                title="High-Risk Fraud Alerts"
-                subtitle="Claims requiring investigation"
+                title="Fraud Alerts"
+                subtitle="Claims with a medium or high fraud score"
               />
               <CardContent className="p-0">
                 {fraudAlerts.length > 0 ? (
                   <div className="divide-y divide-gray-200">
                     {fraudAlerts.slice(0, 5).map((alert) => (
-                      <Link key={alert.id} to={`/fraud/${alert.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
+                      <Link key={alert.id} to={`/claims/${alert.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-semibold text-gray-900">{alert.claimNumber}</span>
-                              <Badge variant={alert.riskLevel === 'high' ? 'danger' : alert.riskLevel === 'medium' ? 'warning' : 'success'}>
+                              <Badge variant={RISK_VARIANT[alert.riskLevel]}>
                                 {alert.riskLevel} risk
                               </Badge>
                             </div>
-                            <p className="text-sm text-gray-600 mt-1">{alert.customerName}</p>
-                            <p className="text-xs text-gray-500">Score: {alert.fraudRiskScore}% • {formatRelativeTime(alert.createdAt)}</p>
+                            <p className="text-sm text-gray-600 mt-1">{alert.customerName || '—'}</p>
+                            {alert.submittedAt && (
+                              <p className="text-xs text-gray-500">Submitted {formatRelativeTime(alert.submittedAt)}</p>
+                            )}
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <span className="text-lg font-bold text-gray-900">{alert.fraudRiskScore}%</span>
+                            <span className="text-lg font-bold text-gray-900">{Math.round(alert.fraudRiskScore)}%</span>
                           </div>
                         </div>
                       </Link>
@@ -582,7 +551,7 @@ export function EmployeeDashboard() {
                   <EmptyState
                     icon={<Shield className="w-12 h-12" />}
                     title="No fraud alerts"
-                    description="No high-risk claims detected at this time."
+                    description="No risky claims detected at this time."
                   />
                 )}
               </CardContent>
@@ -591,12 +560,12 @@ export function EmployeeDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {quickActions.map((action) => (
           <Link key={action.label} to={action.href} className="card group">
             <CardContent className="p-6 flex flex-col items-center text-center">
               <div className={clsx('w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-colors', action.color)}>
-                <action.icon className="w-7 h-7" />
+                <action.icon className="w-7 h-7" aria-hidden="true" />
               </div>
               <h3 className="font-semibold text-gray-900 group-hover:text-primary transition-colors">{action.label}</h3>
             </CardContent>
@@ -607,6 +576,4 @@ export function EmployeeDashboard() {
   )
 }
 
-
 export default EmployeeDashboard
-

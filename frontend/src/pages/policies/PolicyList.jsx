@@ -24,23 +24,12 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePag
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { formatApiError } from '../../services/api'
+import { POLICY_STATUSES, POLICY_TYPES } from '../../constants/domain'
 
-const policyTypes = [
-  { value: '', label: 'All Types' },
-  { value: 'auto', label: 'Auto Insurance' },
-  { value: 'home', label: 'Homeowners' },
-  { value: 'renters', label: 'Renters' },
-  { value: 'life', label: 'Life Insurance' },
-  { value: 'commercial', label: 'Commercial' },
-]
+const policyTypes = [{ value: '', label: 'All Types' }, ...POLICY_TYPES]
 
-const policyStatuses = [
-  { value: '', label: 'All Statuses' },
-  { value: 'active', label: 'Active' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'cancelled', label: 'Cancelled' },
-]
+const policyStatuses = [{ value: '', label: 'All Statuses' }, ...POLICY_STATUSES]
 
 export function PolicyList() {
   const { user } = useAuth()
@@ -91,7 +80,7 @@ export function PolicyList() {
         if (!cancelled) {
           setPolicies([])
           setFilteredPolicies([])
-          setError(err.response?.data?.detail || 'Could not load policies. Check your connection and try again.')
+          setError(formatApiError(err, 'Could not load policies. Check your connection and try again.'))
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -119,11 +108,7 @@ export function PolicyList() {
     }
 
     if (typeFilter) {
-      result = result.filter((p) => {
-        if (typeFilter === 'auto') return p.type.toLowerCase().includes('auto')
-        if (typeFilter === 'home') return p.type.toLowerCase().includes('home')
-        return p.type.toLowerCase().includes(typeFilter)
-      })
+      result = result.filter((p) => p.type === typeFilter)
     }
 
     if (statusFilter) {
@@ -152,7 +137,7 @@ export function PolicyList() {
       setDeleteTarget(null)
       setDeleteError('')
     } catch (err) {
-      setDeleteError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to delete policy')
+      setDeleteError(formatApiError(err, 'Failed to delete policy'))
     } finally {
       setDeleting(false)
     }
@@ -215,29 +200,29 @@ export function PolicyList() {
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div className="flex-1">
               <Input
                 placeholder="Search policies..."
+                aria-label="Search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
+                leftIcon={<Search className="w-4 h-4 text-gray-400" />}
               />
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <Select
                 options={policyTypes}
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                placeholder="Filter by type"
-                className="w-48"
+                aria-label="Filter by type"
+                className="sm:w-48"
               />
               <Select
                 options={policyStatuses}
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                placeholder="Filter by status"
-                className="w-48"
+                aria-label="Filter by status"
+                className="sm:w-48"
               />
             </div>
           </div>
@@ -303,7 +288,8 @@ export function PolicyList() {
                               onClick={() => { setDeleteError(''); setDeleteTarget(policy) }}
                               className="p-1 text-red-600 hover:text-red-700"
                               title="Delete policy"
-                            ><Trash2 className="h-4 w-4" /></button>}
+                              aria-label={`Delete policy ${policy.policyNumber}`}
+                            ><Trash2 className="h-4 w-4" aria-hidden="true" /></button>}
                           </div>
                         </TableCell>
                       </TableRow>

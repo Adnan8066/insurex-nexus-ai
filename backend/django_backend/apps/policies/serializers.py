@@ -6,6 +6,7 @@ from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth import get_user_model
 from django.utils.dateparse import parse_date
 from apps.accounts.models import Role
+from common.uploads import validate_upload
 from apps.vehicles.models import Vehicle
 from .models import Policy, PolicyApplication, PolicyEndorsement, PolicyCoverage, PolicyDocument, PremiumHistory
 
@@ -27,6 +28,9 @@ class PolicyDocumentSerializer(serializers.ModelSerializer):
         model = PolicyDocument
         fields = ['id', 'document_type', 'file', 'original_name', 'uploaded_at', 'uploaded_by']
         read_only_fields = ['id', 'uploaded_at', 'uploaded_by']
+
+    def validate_file(self, value):
+        return validate_upload(value)
 
 class PremiumHistorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -73,7 +77,20 @@ class PolicySerializer(serializers.ModelSerializer):
             }
         return None
 
-class PolicyCreateSerializer(serializers.ModelSerializer):
+
+class PolicyAmountValidationMixin:
+    def validate_premium(self, value):
+        if value is not None and value <= 0:
+            raise serializers.ValidationError('Premium must be greater than zero.')
+        return value
+
+    def validate_deductible(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Deductible cannot be negative.')
+        return value
+
+
+class PolicyCreateSerializer(PolicyAmountValidationMixin, serializers.ModelSerializer):
     customer = serializers.PrimaryKeyRelatedField(
         required=False, allow_null=True,
         queryset=User.objects.filter(role=Role.CUSTOMER, is_active=True),
@@ -113,7 +130,7 @@ class PolicyCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'end_date': 'End date must be on or after the start date.'})
         return attrs
 
-class PolicyUpdateSerializer(serializers.ModelSerializer):
+class PolicyUpdateSerializer(PolicyAmountValidationMixin, serializers.ModelSerializer):
     customer = serializers.PrimaryKeyRelatedField(
         required=False,
         queryset=User.objects.filter(role=Role.CUSTOMER, is_active=True),
@@ -173,6 +190,8 @@ class PolicyQuoteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'customer': 'You can only request a quote for your own account.'})
         if attrs['asset_value'] <= 0 or attrs['coverage_limit'] <= 0:
             raise serializers.ValidationError('Asset value and coverage limit must be positive.')
+        if attrs['deductible'] < 0:
+            raise serializers.ValidationError({'deductible': 'Deductible cannot be negative.'})
         if not Decimal('0') <= attrs['risk_score'] <= Decimal('100'):
             raise serializers.ValidationError({'risk_score': 'Risk score must be between 0 and 100.'})
         if attrs['deductible'] >= attrs['coverage_limit']:
@@ -206,14 +225,52 @@ class PolicyQuoteSerializer(serializers.ModelSerializer):
 
 
 class PolicyApplicationSerializer(serializers.ModelSerializer):
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.EmailField(source='customer.email', read_only=True)
+    vehicle_label = serializers.SerializerMethodField()
+    requested_by_customer = serializers.SerializerMethodField()
+    bound_policy_number = serializers.CharField(source='bound_policy.policy_number', read_only=True, default=None)
+    reviewed_by_name = serializers.SerializerMethodField()
+    assigned_to_name = serializers.SerializerMethodField()
+
     class Meta:
         model = PolicyApplication
         fields = [
-            'id', 'customer', 'policy_type', 'applicant_details', 'asset_details', 'risk_factors',
-            'asset_value', 'coverage_limit', 'deductible', 'risk_score', 'quoted_premium',
-            'rating_breakdown', 'policy_terms', 'status', 'bound_policy', 'created_at',
+            'id', 'customer', 'customer_name', 'customer_email', 'policy_type', 'applicant_details',
+            'asset_details', 'risk_factors', 'asset_value', 'coverage_limit', 'deductible', 'risk_score',
+            'quoted_premium', 'rating_breakdown', 'policy_terms', 'vehicle_label', 'status',
+            'requested_by_customer', 'assigned_to', 'assigned_to_name', 'bound_policy', 'bound_policy_number', 'reviewed_by_name',
+            'reviewed_at', 'review_note', 'created_at',
         ]
         read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_customer_name(self, obj):
+        return obj.customer.get_full_name() or obj.customer.email
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_vehicle_label(self, obj):
+        vehicle_id = (obj.policy_terms or {}).get('vehicle')
+        vehicle = Vehicle.objects.filter(pk=vehicle_id).first() if vehicle_id else None
+        if vehicle is None:
+            return ''
+        return f'{vehicle.year} {vehicle.make} {vehicle.model} ({vehicle.license_plate})'.strip()
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_requested_by_customer(self, obj):
+        return obj.created_by_id == obj.customer_id
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_assigned_to_name(self, obj):
+        if not obj.assigned_to:
+            return ''
+        return obj.assigned_to.get_full_name() or obj.assigned_to.email
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_reviewed_by_name(self, obj):
+        if not obj.reviewed_by:
+            return ''
+        return obj.reviewed_by.get_full_name() or obj.reviewed_by.email
 
 
 class PolicyEndorsementSerializer(serializers.ModelSerializer):

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { authService } from '../services'
+import { formatApiError } from '../services/api'
 import { AuthContext } from './auth-context'
 
 export function AuthProvider({ children }) {
@@ -32,35 +33,37 @@ export function AuthProvider({ children }) {
     loadUser()
   }, [loadUser])
 
+  // login and register both answer with { access, refresh, user } (unwrapped by authService).
+  const storeSession = ({ access, refresh, user: userData }) => {
+    localStorage.setItem('access_token', access)
+    localStorage.setItem('refresh_token', refresh)
+    localStorage.setItem('user', JSON.stringify(userData))
+    setUser(userData)
+    return userData
+  }
+
   const login = async (credentials) => {
     setError(null)
     try {
-      const data = await authService.login(credentials)
-      const { access, refresh, user: userData } = data
-
-      localStorage.setItem('access_token', access)
-      localStorage.setItem('refresh_token', refresh)
-      localStorage.setItem('user', JSON.stringify(userData))
-
-      setUser(userData)
+      const userData = storeSession(await authService.login(credentials))
       return { success: true, user: userData }
     } catch (err) {
-      const message = err.response?.data?.detail
-        || err.response?.data?.error?.message
-        || err.response?.data?.non_field_errors?.[0]
-        || 'Login failed. Check the backend connection and your credentials.'
+      const message = formatApiError(err, 'Login failed. Check your email and password and try again.')
       setError(message)
       return { success: false, error: message }
     }
   }
 
-  const register = async (userData) => {
+  const register = async (registrationData) => {
     setError(null)
     try {
-      const data = await authService.register(userData)
+      const data = await authService.register(registrationData)
+      if (data?.access && data?.refresh && data?.user) {
+        storeSession(data)
+      }
       return { success: true, data }
     } catch (err) {
-      const message = err.response?.data?.detail || Object.values(err.response?.data || {}).flat().join(', ') || 'Registration failed'
+      const message = formatApiError(err, 'Registration failed. Please check your details and try again.')
       setError(message)
       return { success: false, error: message }
     }
@@ -85,7 +88,7 @@ export function AuthProvider({ children }) {
       await authService.forgotPassword(email)
       return { success: true }
     } catch (err) {
-      const message = err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to send reset email'
+      const message = formatApiError(err, 'Failed to send reset email')
       setError(message)
       return { success: false, error: message }
     }
@@ -97,7 +100,7 @@ export function AuthProvider({ children }) {
       await authService.resetPassword(token, password)
       return { success: true }
     } catch (err) {
-      const message = err.response?.data?.detail || err.response?.data?.error?.message || 'Password reset failed'
+      const message = formatApiError(err, 'Password reset failed')
       setError(message)
       return { success: false, error: message }
     }
@@ -111,7 +114,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('user', JSON.stringify(updatedUser))
       return { success: true, user: updatedUser }
     } catch (err) {
-      const message = err.response?.data?.detail || err.response?.data?.error?.message || 'Profile update failed'
+      const message = formatApiError(err, 'Profile update failed')
       setError(message)
       return { success: false, error: message }
     }
@@ -123,7 +126,7 @@ export function AuthProvider({ children }) {
       await authService.changePassword(passwordData)
       return { success: true }
     } catch (err) {
-      const message = err.response?.data?.detail || err.response?.data?.error?.message || 'Password change failed'
+      const message = formatApiError(err, 'Password change failed')
       setError(message)
       return { success: false, error: message }
     }

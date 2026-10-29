@@ -57,7 +57,7 @@ export function Button({
     >
       {loading && <span className="loading-spinner" aria-hidden="true" />}
       {!loading && leftIcon && <span aria-hidden="true">{leftIcon}</span>}
-      <span>{children}</span>
+      <span className="inline-flex items-center gap-1">{children}</span>
       {!loading && rightIcon && <span aria-hidden="true">{rightIcon}</span>}
     </button>
   )

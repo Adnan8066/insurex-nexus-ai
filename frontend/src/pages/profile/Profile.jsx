@@ -20,10 +20,10 @@ export function Profile() {
   const { user, updateProfile, changePassword } = useAuth()
 
   const [formData, setFormData] = useState({
-    name: user?.name || 'John Anderson',
-    email: user?.email || 'customer@demo.com',
-    phone: user?.phone || '+1 (555) 123-4567',
-    department: user?.department || 'Policyholder',
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    department: user?.department || '',
   })
 
   const [passwordData, setPasswordData] = useState({
@@ -110,13 +110,15 @@ export function Profile() {
         <div>
           <h2 className="text-xl font-bold text-gray-900">{user?.name || 'User'}</h2>
           <p className="text-sm text-gray-500">{user?.email}</p>
-          <div className="flex gap-2 mt-2">
+          <div className="flex flex-wrap gap-2 mt-2">
             <span className="text-xs uppercase font-bold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">
               {user?.role || 'Customer'}
             </span>
-            <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-0.5 rounded-full font-medium">
-              {user?.department || 'Policyholder'}
-            </span>
+            {(user?.department || user?.role === 'customer') && (
+              <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-0.5 rounded-full font-medium">
+                {user?.department || 'Policyholder'}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -160,12 +162,14 @@ export function Profile() {
                 onChange={handleProfileChange}
               />
 
-              <Input
-                label="Department / Unit"
-                name="department"
-                value={formData.department}
-                onChange={handleProfileChange}
-              />
+              {user?.role !== 'customer' && (
+                <Input
+                  label="Department / Unit"
+                  name="department"
+                  value={formData.department}
+                  onChange={handleProfileChange}
+                />
+              )}
 
               <Button type="submit" variant="primary" loading={savingProfile} disabled={savingProfile}>
                 <Save className="w-4 h-4 mr-2" />

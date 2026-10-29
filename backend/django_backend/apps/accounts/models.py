@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -9,7 +9,16 @@ class Role(models.TextChoices):
     INVESTIGATOR = 'investigator', _('Investigator')
     ADMIN = 'admin', _('Administrator')
 
+class UserManager(DjangoUserManager):
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        # The app authorizes by role, so a superuser must also be an app admin.
+        extra_fields.setdefault('role', Role.ADMIN)
+        return super().create_superuser(username, email, password, **extra_fields)
+
+
 class User(AbstractUser):
+    objects = UserManager()
+
     email = models.EmailField(_('email address'), unique=True)
     role = models.CharField(
         _('role'),

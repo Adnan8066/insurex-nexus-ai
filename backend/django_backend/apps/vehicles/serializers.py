@@ -1,4 +1,8 @@
+import re
+
+from django.utils import timezone
 from rest_framework import serializers
+from common.uploads import validate_upload
 from django.contrib.auth import get_user_model
 from apps.accounts.models import Role
 from .models import Vehicle, VehicleDocument, VehicleHistory
@@ -6,11 +10,37 @@ from apps.policies.models import Policy
 
 User = get_user_model()
 
+
+VIN_PATTERN = re.compile(r'^[A-HJ-NPR-Z0-9]{17}$')
+
+
+class VehicleValueValidationMixin:
+    """Range checks shared by vehicle create/update (no DB constraints needed)."""
+
+    def validate_year(self, value):
+        if value is not None and not 1900 <= value <= timezone.localdate().year + 1:
+            raise serializers.ValidationError('Enter a valid model year.')
+        return value
+
+    def validate_purchase_price(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Purchase price cannot be negative.')
+        return value
+
+    def validate_current_mileage(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Mileage cannot be negative.')
+        return value
+
+
 class VehicleDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = VehicleDocument
         fields = ['id', 'document_type', 'file', 'original_name', 'uploaded_at', 'uploaded_by']
         read_only_fields = ['id', 'uploaded_at', 'uploaded_by']
+
+    def validate_file(self, value):
+        return validate_upload(value)
 
 class VehicleHistorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -36,7 +66,7 @@ class VehicleSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
-class VehicleCreateSerializer(serializers.ModelSerializer):
+class VehicleCreateSerializer(VehicleValueValidationMixin, serializers.ModelSerializer):
     customer = serializers.PrimaryKeyRelatedField(
         required=False, allow_null=True,
         queryset=User.objects.filter(role=Role.CUSTOMER, is_active=True),
@@ -52,6 +82,12 @@ class VehicleCreateSerializer(serializers.ModelSerializer):
             'transmission', 'status', 'engine_size', 'body_style', 'features'
         ]
 
+    def validate_vin(self, value):
+        value = (value or '').strip().upper()
+        if not VIN_PATTERN.match(value):
+            raise serializers.ValidationError('VIN must be 17 characters (letters and digits, excluding I, O and Q).')
+        return value
+
     def validate(self, attrs):
         request_user = self.context['request'].user
         customer = attrs.get('customer') or request_user
@@ -66,7 +102,7 @@ class VehicleCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'policy': 'The selected policy is already linked to another vehicle.'})
         return attrs
 
-class VehicleUpdateSerializer(serializers.ModelSerializer):
+class VehicleUpdateSerializer(VehicleValueValidationMixin, serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         fields = [

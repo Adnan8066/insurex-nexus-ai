@@ -24,16 +24,15 @@ Pillow==11.0.0
 
 # Data Processing
 pandas==2.2.3
-numpy>=1.26.0
+# Pinned to the versions the shipped models were trained with; joblib
+# artifacts may not load under other scikit-learn/LightGBM/NumPy versions.
+numpy==2.5.3
 
 # Machine learning inference and dataset training
-scikit-learn>=1.5.2
+scikit-learn==1.9.1
 joblib>=1.4.0
 matplotlib>=3.8.4
-lightgbm>=4.3.0
-
-# YOLOv8 segmentation inference for claim photos (checkpoint metadata: 8.3.174)
-ultralytics==8.3.174
+lightgbm==4.7.0
 
 # ML Experiment Tracking - comment out for now
 # mlflow==2.13.1

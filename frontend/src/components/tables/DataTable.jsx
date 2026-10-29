@@ -41,11 +41,12 @@ export function TableBody({ children, className = '', ...props }) {
   )
 }
 
-export function TableRow({ children, className = '', selected = false, clickable = false, onClick, onKeyDown, ...props }) {
+export function TableRow({ children, className = '', selected = false, clickable = false, hover = false, onClick, onKeyDown, ...props }) {
   return (
     <tr
       className={clsx(
         selected && 'bg-primary/5',
+        hover && 'hover:bg-gray-50',
         clickable && 'cursor-pointer hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
         className
       )}

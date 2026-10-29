@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { investigationService } from '../../services'
+import { formatApiError } from '../../services/api'
 import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
@@ -75,7 +76,7 @@ export function InvestigatorDashboard() {
       setInvestigations(Array.isArray(data) ? data : data.results || [])
     } catch (err) {
       console.error('Failed to load investigations:', err)
-      setError(err.message || 'Failed to load investigations. Please try again.')
+      setError(formatApiError(err, 'Failed to load investigations. Please try again.'))
       setInvestigations([])
     } finally {
       setLoading(false)
@@ -108,7 +109,7 @@ export function InvestigatorDashboard() {
       setActiveInvestigation(updated)
     } catch (err) {
       console.error('Failed to add investigation note:', err)
-      setError(err.message || 'Failed to save note.')
+      setError(formatApiError(err, 'Failed to save note.'))
     } finally {
       setAddingNote(false)
     }
@@ -147,19 +148,13 @@ export function InvestigatorDashboard() {
       {/* Header */}
       <div className="page-header flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-              <Shield className="w-3.5 h-3.5 text-blue-600" />
-              SIU Investigator Console
-            </span>
-          </div>
-          <h1 className="page-title">Investigator Workspace</h1>
+          <h1 className="page-title">Investigation Cases</h1>
           <p className="page-subtitle">
-            Manage assigned special investigations, log evidentiary interview notes, and review AI fraud indicators
+            Fraud cases being investigated, case notes, and the warning signs on each claim
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <label className="text-xs font-bold text-gray-500 uppercase">Logged in as:</label>
           <span className="text-sm font-semibold text-gray-900 bg-gray-100 px-3 py-1.5 rounded-lg">
             {userName} ({userRole})
@@ -266,17 +261,17 @@ export function InvestigatorDashboard() {
       <Card>
         <CardHeader
           title="Assigned Investigation Docket"
-          subtitle="Cases assigned to your account requiring SIU action"
+          subtitle="Cases waiting for investigation"
         />
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="flex-1">
               <Input
                 placeholder="Search case #, claim #, or policyholder..."
+                aria-label="Search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                leftIcon={<Search className="w-4 h-4 text-gray-400" />}
               />
             </div>
             <Select

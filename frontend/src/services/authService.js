@@ -9,18 +9,11 @@ export const authService = {
   },
 
   async register(userData) {
-    try {
-      // Public signup is customer-only; the backend enforces this independently.
-      const registrationData = { ...userData }
-      delete registrationData.role
-      const response = await api.post('/auth/register/', registrationData)
-      return responseData(response)
-    } catch (error) {
-      const message = error.response?.data?.detail
-        || Object.values(error.response?.data || {}).flat().join(', ')
-        || 'Unable to create your account. Please check your connection and try again.'
-      throw { response: { data: { detail: message } } }
-    }
+    // Public signup is customer-only; the backend enforces this independently.
+    const registrationData = { ...userData }
+    delete registrationData.role
+    const response = await api.post('/auth/register/', registrationData)
+    return responseData(response)
   },
 
   async logout() {

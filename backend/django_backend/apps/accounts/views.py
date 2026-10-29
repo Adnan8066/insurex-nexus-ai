@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
@@ -28,6 +29,22 @@ class AuthViewSet(viewsets.GenericViewSet):
     permission_classes = [AllowAny]
     serializer_class = UserSerializer
     
+    # Brute-force protection for anonymous credential endpoints (rates in
+    # REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']; keyed by client IP).
+    THROTTLE_SCOPES = {
+        'login': 'login',
+        'forgot_password': 'password_reset',
+        'reset_password': 'password_reset',
+        'register': 'register',
+    }
+
+    def get_throttles(self):
+        scope = self.THROTTLE_SCOPES.get(self.action)
+        if not scope:
+            return []
+        self.throttle_scope = scope
+        return [ScopedRateThrottle()]
+
     def get_serializer_class(self):
         if self.action == 'register':
             return UserRegistrationSerializer
@@ -178,7 +195,10 @@ class AuthViewSet(viewsets.GenericViewSet):
         contacts = User.objects.filter(
             role__in=[Role.ADMIN, Role.EMPLOYEE],
             is_active=True,
-        ).exclude(email='').order_by('role', 'last_name', 'first_name', 'email')
+        ).exclude(email='').exclude(
+            # Seeded routing demo agents are not real support staff.
+            routing_profile__is_demo=True,
+        ).exclude(email__iendswith='.invalid').order_by('role', 'last_name', 'first_name', 'email')
         return Response({
             'success': True,
             'data': {

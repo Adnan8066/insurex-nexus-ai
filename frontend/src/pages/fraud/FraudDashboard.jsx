@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { investigationService } from '../../services'
+import { formatApiError } from '../../services/api'
+import { FRAUD_HIGH_THRESHOLD, FRAUD_MODERATE_THRESHOLD, fraudRiskLevel } from '../../constants/domain'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -63,7 +65,7 @@ export function FraudDashboard() {
       setAlerts(Array.isArray(data) ? data : data.results || [])
     } catch (err) {
       console.error('Failed to load fraud alerts:', err)
-      setError(err.message || 'Failed to load fraud alerts. Please try again.')
+      setError(formatApiError(err, 'Failed to load fraud alerts. Please try again.'))
       setAlerts([])
     } finally {
       setLoading(false)
@@ -93,7 +95,7 @@ export function FraudDashboard() {
       await loadAlerts()
     } catch (err) {
       console.error('Fraud alert action failed:', err)
-      setError(err.message || 'Action failed. Please try again.')
+      setError(formatApiError(err, 'Action failed. Please try again.'))
     } finally {
       setProcessingAction(false)
     }
@@ -122,21 +124,15 @@ export function FraudDashboard() {
     <div className="page max-w-7xl mx-auto space-y-6">
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
-              <Shield className="w-3.5 h-3.5 text-amber-600" />
-              Special Investigations Unit (SIU)
-            </span>
-          </div>
-          <h1 className="page-title">Fraud Investigation Dashboard</h1>
+          <h1 className="page-title">Fraud Alerts</h1>
           <p className="page-subtitle">
-            AI-assisted anomaly detection, risk factor scoring, and investigative workflow management
+            Claims flagged for possible fraud, why they were flagged, and what to do next
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline"><Link to="/investigators"><UserCheck className="w-4 h-4 mr-2" />View Investigations</Link></Button>
-          <Button asChild variant="primary"><Link to="/ai-decision">AI Decision Center</Link></Button>
+          <Button asChild variant="primary"><Link to="/ai-decision">Automated Review</Link></Button>
         </div>
       </div>
 
@@ -185,7 +181,7 @@ export function FraudDashboard() {
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Investigations</p>
             <p className="text-2xl font-black text-primary mt-1">{activeInvestigations}</p>
-            <span className="text-xs text-gray-400">Assigned to SIU Officers</span>
+            <span className="text-xs text-gray-400">Assigned to investigators</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
             <UserCheck className="w-6 h-6" />
@@ -206,24 +202,24 @@ export function FraudDashboard() {
 
       {/* Main Table Card */}
       <Card>
-        <CardHeader title="Fraud Alert Queue" subtitle="AI-flagged claims requiring SIU triage" />
+        <CardHeader title="Fraud Alert Queue" subtitle="Flagged claims waiting for a fraud review" />
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="flex-1">
               <Input
                 placeholder="Search claim number or policyholder..."
+                aria-label="Search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                leftIcon={<Search className="w-4 h-4 text-gray-400" />}
               />
             </div>
             <Select
               options={[
                 { value: '', label: 'All Risk Levels' },
-                { value: 'high', label: 'High Fraud Risk (>75%)' },
-                { value: 'medium', label: 'Medium Fraud Risk (50-75%)' },
-                { value: 'low', label: 'Low Fraud Risk (<50%)' },
+                { value: 'high', label: `High Fraud Risk (>${FRAUD_HIGH_THRESHOLD}%)` },
+                { value: 'medium', label: `Medium Fraud Risk (${FRAUD_MODERATE_THRESHOLD}-${FRAUD_HIGH_THRESHOLD}%)` },
+                { value: 'low', label: `Low Fraud Risk (<${FRAUD_MODERATE_THRESHOLD}%)` },
               ]}
               value={riskFilter}
               onChange={(e) => setRiskFilter(e.target.value)}
@@ -282,11 +278,7 @@ export function FraudDashboard() {
                           <span
                             className={clsx(
                               'text-lg font-black',
-                              Number(alert.risk_score) >= 75
-                                ? 'text-red-600'
-                                : Number(alert.risk_score) >= 50
-                                  ? 'text-amber-600'
-                                  : 'text-emerald-600'
+                              { high: 'text-red-600', medium: 'text-amber-600', low: 'text-emerald-600' }[fraudRiskLevel(alert.risk_score)]
                             )}
                           >
                             {Math.round(Number(alert.risk_score) || 0)}%

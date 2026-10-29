@@ -8,11 +8,14 @@ import { notificationService } from '../../services'
 import { formatRelativeTime } from '../../utils/helpers'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
+import { formatApiError } from '../../services/api'
+import { useAuth } from '../../context/useAuth'
 
-const filters = [
-  ['all', 'All'], ['unread', 'Unread'], ['claim', 'Claims'],
-  ['ai_assessment', 'AI'], ['fraud_alert', 'Fraud'], ['payment', 'Payments'],
-  ['policy', 'Policies'],
+// Type tabs (apps/notifications/models.py NotificationType); only types the user actually has are shown.
+const TYPE_FILTERS = [
+  ['claim', 'Claims'], ['policy', 'Policies'], ['payment', 'Payments'], ['document', 'Documents'],
+  ['settlement', 'Settlements'], ['reminder', 'Reminders'], ['system', 'System'],
+  ['ai_assessment', 'AI', 'staff'], ['fraud_alert', 'Fraud', 'staff'],
 ]
 
 const iconFor = (type) => {
@@ -33,6 +36,8 @@ const fallbackLink = (notification) => {
 }
 
 export function Notifications() {
+  const { user } = useAuth()
+  const isStaff = ['employee', 'admin', 'investigator'].includes(user?.role)
   const [notifications, setNotifications] = useState([])
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
@@ -47,7 +52,7 @@ export function Notifications() {
       setNotifications(Array.isArray(response) ? response : response.results || [])
     } catch (err) {
       setNotifications([])
-      setError(err.response?.data?.detail || 'Could not load notifications. Check the backend connection and try again.')
+      setError(formatApiError(err, 'Could not load notifications. Check the backend connection and try again.'))
     } finally {
       setLoading(false)
     }
@@ -62,7 +67,7 @@ export function Notifications() {
       await notificationService.markAllRead()
       setNotifications((items) => items.map((item) => ({ ...item, is_read: true })))
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not mark notifications as read.')
+      setError(formatApiError(err, 'Could not mark notifications as read.'))
     } finally {
       setSavingId(null)
     }
@@ -74,11 +79,18 @@ export function Notifications() {
       await notificationService.markRead(id)
       setNotifications((items) => items.map((item) => item.id === id ? { ...item, is_read: true } : item))
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not update this notification.')
+      setError(formatApiError(err, 'Could not update this notification.'))
     } finally {
       setSavingId(null)
     }
   }
+
+  const presentTypes = new Set(notifications.map((notification) => notification.notification_type))
+  const filters = [
+    ['all', 'All'],
+    ['unread', 'Unread'],
+    ...TYPE_FILTERS.filter(([value, , audience]) => presentTypes.has(value) && (isStaff || audience !== 'staff')),
+  ]
 
   const filtered = notifications.filter((notification) => {
     if (filter === 'unread') return !notification.is_read
@@ -89,8 +101,8 @@ export function Notifications() {
     <div className="page max-w-4xl mx-auto space-y-6">
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="page-title">Notification Center</h1>
-          <p className="page-subtitle">In-app updates for claims, policies, and assessments</p>
+          <h1 className="page-title">Notifications</h1>
+          <p className="page-subtitle">Updates about your claims, policies and payments</p>
         </div>
         <Button variant="secondary" onClick={markAllRead} disabled={savingId === 'all' || !notifications.some((item) => !item.is_read)}>
           <CheckCircle2 className="w-4 h-4 mr-2" />
@@ -104,7 +116,7 @@ export function Notifications() {
         <CardHeader
           title="Your Notifications"
           action={<div className="flex gap-1 flex-wrap text-xs">{filters.map(([value, label]) => (
-            <button key={value} type="button" onClick={() => setFilter(value)} className={clsx('px-2.5 py-1 rounded-md font-semibold transition', filter === value ? 'bg-primary text-white' : 'text-gray-500 hover:bg-gray-100')}>{label}</button>
+            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={clsx('px-2.5 py-1 rounded-md font-semibold transition', filter === value ? 'bg-primary text-white' : 'text-gray-500 hover:bg-gray-100')}>{label}</button>
           ))}</div>}
         />
         <CardContent className="p-0">
@@ -113,18 +125,18 @@ export function Notifications() {
               {filtered.map((notification) => {
                 const link = fallbackLink(notification)
                 return <div key={notification.id} className={clsx('p-4 flex items-start justify-between gap-4 transition hover:bg-gray-50/80', !notification.is_read && 'bg-blue-50/40')}>
-                  <div className="flex items-start gap-3.5">
+                  <div className="flex min-w-0 items-start gap-3.5">
                     <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 shadow-sm flex items-center justify-center flex-shrink-0">{iconFor(notification.notification_type)}</div>
                     <div>
                       <div className="flex items-center gap-2">
                         <Link to={link} onClick={() => !notification.is_read && markRead(notification.id)} className="font-semibold text-gray-900 text-sm hover:text-primary hover:underline">{notification.title}</Link>
-                        {!notification.is_read && <span className="w-2 h-2 rounded-full bg-blue-600" />}
+                        {!notification.is_read && <span className="w-2 h-2 rounded-full bg-blue-600" aria-label="Unread" />}
                       </div>
                       <p className="text-sm text-gray-600 mt-0.5">{notification.message}</p>
                       <span className="text-xs text-gray-400 mt-1 block">{formatRelativeTime(notification.sent_at)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
                     <Link to={link} onClick={() => !notification.is_read && markRead(notification.id)} className="btn btn-secondary btn-sm">View</Link>
                     {!notification.is_read && <Button variant="outline" size="sm" disabled={savingId === notification.id} onClick={() => markRead(notification.id)}>Mark read</Button>}
                   </div>

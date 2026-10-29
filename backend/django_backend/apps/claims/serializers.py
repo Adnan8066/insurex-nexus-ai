@@ -1,4 +1,6 @@
+from django.utils import timezone
 from rest_framework import serializers
+from common.uploads import validate_upload
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from .models import Claim, ClaimDocument, ClaimStatusHistory, ClaimTimeline, ClaimNote, ClaimStatus, ClaimPriority
@@ -15,6 +17,9 @@ class ClaimDocumentSerializer(serializers.ModelSerializer):
             'verified_by', 'verified_by_name', 'verified_at'
         ]
         read_only_fields = ['id', 'uploaded_at', 'uploaded_by', 'verified', 'verified_by', 'verified_at']
+
+    def validate_file(self, value):
+        return validate_upload(value)
 
 class ClaimStatusHistorySerializer(serializers.ModelSerializer):
     changed_by_name = serializers.CharField(source='changed_by.get_full_name', read_only=True)
@@ -74,10 +79,13 @@ class ClaimSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get('request')
-        if request and request.user.role == 'customer':
+        if request is None or request.user.role == 'customer':
+            # Model outputs and internal staff notes are never shown to customers
+            # (or when the caller did not supply a request context).
             data.pop('ai_assessment', None)
             data.pop('fraud_risk_score', None)
             data.pop('total_loss_probability', None)
+            data['notes'] = [note for note in data.get('notes', []) if not note.get('is_internal')]
         return data
     
     @extend_schema_field(OpenApiTypes.OBJECT)
@@ -121,8 +129,30 @@ class ClaimCreateSerializer(serializers.ModelSerializer):
 
         if policy.vehicle_id and policy.vehicle_id != vehicle.id:
             raise serializers.ValidationError('The selected vehicle does not match the vehicle linked to this policy.')
-        
+
+        incident_date = attrs.get('incident_date')
+        if incident_date and policy.start_date and policy.end_date and not (
+            policy.start_date <= incident_date <= policy.end_date
+        ):
+            raise serializers.ValidationError({
+                'incident_date': f'The incident date must fall within the policy term ({policy.start_date} to {policy.end_date}).'
+            })
         return attrs
+
+    def validate_incident_date(self, value):
+        if value > timezone.localdate():
+            raise serializers.ValidationError('The incident date cannot be in the future.')
+        return value
+
+    def validate_claim_amount(self, value):
+        if value is None or value <= 0:
+            raise serializers.ValidationError('Claim amount must be greater than zero.')
+        return value
+
+    def validate_estimated_repair_cost(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Estimated repair cost cannot be negative.')
+        return value
 
 class ClaimUpdateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -137,20 +167,44 @@ class ClaimUpdateSerializer(serializers.ModelSerializer):
             'ai_assessment', 'fraud_risk_score', 'total_loss_probability'
         ]
 
+    MODEL_OUTPUT_FIELDS = {'ai_assessment', 'fraud_risk_score', 'total_loss_probability'}
+
     def validate(self, attrs):
         request = self.context.get('request')
+        submitted = set(getattr(self, 'initial_data', {}).keys())
+        if 'status' in submitted:
+            # Status changes must go through the update-status endpoint, which
+            # enforces the workflow rules and records ClaimStatusHistory.
+            raise serializers.ValidationError({
+                'status': 'Use the update-status endpoint to change a claim status.'
+            })
         if request and request.user.role == 'customer':
             protected_fields = {
-                'status', 'priority', 'assigned_adjuster', 'assigned_investigator',
-                'ai_assessment', 'fraud_risk_score',
-                'total_loss_probability',
-            }
-            attempted = protected_fields.intersection(self.initial_data.keys())
+                'priority', 'assigned_adjuster', 'assigned_investigator',
+            } | self.MODEL_OUTPUT_FIELDS
+            attempted = protected_fields.intersection(submitted)
             if attempted:
                 raise serializers.ValidationError({
                     field: 'Only staff can update this field.' for field in sorted(attempted)
                 })
+        elif request and request.user.role != 'admin':
+            # AI outputs drive the investigation rule; only admins may override them.
+            attempted = self.MODEL_OUTPUT_FIELDS.intersection(submitted)
+            if attempted:
+                raise serializers.ValidationError({
+                    field: 'AI model outputs can only be overridden by an administrator.' for field in sorted(attempted)
+                })
         return attrs
+
+    def validate_claim_amount(self, value):
+        if value is None or value <= 0:
+            raise serializers.ValidationError('Claim amount must be greater than zero.')
+        return value
+
+    def validate_estimated_repair_cost(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Estimated repair cost cannot be negative.')
+        return value
 
 class ClaimStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=ClaimStatus.choices)

@@ -7,13 +7,10 @@ import {
   Bell,
   Brain,
   Briefcase,
-  Car,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Cpu,
   FileText,
-  GitBranch,
+  Headphones,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -26,20 +23,65 @@ import { useAuth } from '../../context/useAuth'
 import { notificationService } from '../../services'
 import { formatRelativeTime } from '../../utils/helpers'
 
-const moduleItems = [
-  { label: 'Dashboard', to: '/dashboard', Icon: LayoutDashboard, roles: ['customer', 'employee', 'investigator', 'admin'] },
-  { label: 'Policies', to: '/policies', Icon: FileText, roles: ['customer', 'employee', 'admin'] },
-  { label: 'User Management', to: '/admin/users', Icon: Users, roles: ['admin'] },
-  { label: 'Vehicles', to: '/vehicles', Icon: Car, roles: ['customer', 'employee', 'admin'] },
-  { label: 'Claims', to: '/claims', Icon: Briefcase, roles: ['customer', 'employee', 'investigator', 'admin'] },
-  { label: 'AI Assessment', to: '/ai-assessment', Icon: Brain, roles: ['employee', 'investigator', 'admin'] },
-  { label: 'Routing Advice', to: '/routing-advisory', Icon: GitBranch, roles: ['employee', 'investigator', 'admin'] },
-  { label: 'Fraud Investigation', to: '/fraud', Icon: AlertTriangle, roles: ['employee', 'investigator', 'admin'] },
-  { label: 'Investigators', to: '/investigators', Icon: Users, roles: ['employee', 'admin'] },
-  { label: 'AI Decision Center', to: '/ai-decision', Icon: GitBranch, roles: ['employee', 'admin', 'investigator'] },
-  { label: 'Analytics', to: '/analytics', Icon: BarChart3, roles: ['employee', 'admin', 'investigator'] },
-  { label: 'AI Operations', to: '/operations', Icon: Cpu, roles: ['employee', 'admin', 'investigator'] },
+const ALL_ROLES = ['customer', 'employee', 'investigator', 'admin']
+const STAFF_ROLES = ['employee', 'investigator', 'admin']
+const POLICY_ROLES = ['customer', 'employee', 'admin']
+
+// A few top-level areas, ordered by everyday workflow. Related pages share a dropdown;
+// a group with a single visible page renders as a plain link. Items that would duplicate
+// a role's own dashboard are left out (the admin dashboard is Analytics; the investigator
+// dashboard is the investigation cases page). Routing advice stays reachable by URL but
+// is not listed until its model passes the evaluation gate.
+const navItems = [
+  { label: 'Dashboard', to: '/dashboard', Icon: LayoutDashboard, roles: ALL_ROLES },
+  { label: 'Claims', to: '/claims', Icon: Briefcase, roles: ALL_ROLES },
+  {
+    label: 'Policies',
+    Icon: FileText,
+    children: [
+      { label: 'Policies', to: '/policies', hint: 'Cover, premiums and endorsements', roles: POLICY_ROLES },
+      { label: 'Vehicles', to: '/vehicles', hint: 'Insured vehicles and their documents', roles: POLICY_ROLES },
+      { label: 'Policy requests', to: '/policies/requests', hint: 'Customer requests waiting to be issued', roles: ['employee', 'admin'] },
+    ],
+  },
+  {
+    label: 'Fraud',
+    Icon: AlertTriangle,
+    children: [
+      { label: 'Fraud alerts', to: '/fraud', hint: 'Claims the fraud model flagged for review', roles: STAFF_ROLES },
+      { label: 'Investigation cases', to: '/investigators', hint: 'Cases being worked by investigators', roles: ['employee', 'admin'] },
+    ],
+  },
+  {
+    label: 'AI Tools',
+    Icon: Brain,
+    children: [
+      { label: 'Claim assessment', to: '/ai-assessment', hint: 'Repair cost, fraud and total-loss estimates', roles: STAFF_ROLES },
+      { label: 'Automated review', to: '/ai-decision', hint: 'Step-by-step checks before a human decides', roles: STAFF_ROLES },
+    ],
+  },
+  { label: 'Analytics', to: '/analytics', Icon: BarChart3, roles: ['employee', 'investigator'] },
+  { label: 'Help & Support', to: '/support', Icon: Headphones, roles: ['customer'] },
 ]
+
+// Housekeeping pages live in the user menu rather than the main navigation.
+const accountItems = [
+  { label: 'User management', to: '/admin/users', Icon: Users, roles: ['admin'] },
+  { label: 'Model health', to: '/operations', Icon: Cpu, roles: STAFF_ROLES },
+]
+
+function visibleNavItems(role) {
+  return navItems
+    .map((item) => (item.children
+      ? { ...item, children: item.children.filter((child) => child.roles.includes(role)) }
+      : item))
+    .filter((item) => (item.children ? item.children.length > 0 : item.roles.includes(role)))
+    .map((item) => (item.children?.length === 1 ? { ...item.children[0], Icon: item.Icon } : item))
+}
+
+function pathMatches(pathname, to) {
+  return pathname === to || (to !== '/dashboard' && pathname.startsWith(`${to}/`))
+}
 
 export function Navbar() {
   const { user, logout } = useAuth()
@@ -54,29 +96,36 @@ export function Navbar() {
     const savedTheme = window.localStorage.getItem('theme')
     return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
   })
+  const [openGroup, setOpenGroup] = useState(null)
   const moduleNavRef = useRef(null)
   const moduleLinkRefs = useRef([])
   const userMenuRef = useRef(null)
   const notificationsRef = useRef(null)
-  const visibleModules = moduleItems.filter((item) => item.roles.includes(user?.role))
+  const visibleModules = visibleNavItems(user?.role)
+  const visibleAccountItems = accountItems.filter((item) => item.roles.includes(user?.role))
   const showModuleNavigation = Boolean(user)
   const isDashboardPage = location.pathname === '/dashboard'
   const roleLabels = { customer: 'Customer', employee: 'Employee', investigator: 'Investigator', admin: 'Admin' }
   const dashboardFirstName = user?.first_name || user?.firstName || user?.name?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there'
-  const activeModuleIndex = visibleModules.reduce((activeIndex, item, index) => {
-    const matches = location.pathname === item.to
-      || (item.to !== '/dashboard' && location.pathname.startsWith(`${item.to}/`))
-    if (!matches) return activeIndex
-    if (activeIndex === -1 || item.to.length > visibleModules[activeIndex].to.length) return index
-    return activeIndex
-  }, -1)
+  // Every reachable page with the top-level nav item it belongs to (-1 for user-menu pages).
+  const pageLinks = [
+    ...visibleModules.flatMap((item, index) => (item.children || [item]).map((link) => ({ ...link, index }))),
+    ...visibleAccountItems.map((link) => ({ ...link, index: -1 })),
+  ]
+  const activePage = pageLinks.reduce((best, link) => (
+    pathMatches(location.pathname, link.to) && (!best || link.to.length > best.to.length) ? link : best
+  ), null)
+  const activeModuleIndex = activePage ? activePage.index : -1
   const currentPageTitle = isDashboardPage
     ? `${roleLabels[user?.role] || 'User'} Dashboard`
-    : (activeModuleIndex >= 0
-      ? visibleModules[activeModuleIndex].label
+    : (activePage
+      ? activePage.label
       : location.pathname.split('/').filter(Boolean).at(-1)?.replace(/[-_]/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()))
-  const [activeIndicator, setActiveIndicator] = useState({ left: 0, width: 0, ready: false })
-  const [moduleNavOverflow, setModuleNavOverflow] = useState(false)
+  const [activeIndicator, setActiveIndicator] = useState({ left: 0, top: 0, width: 0, height: 0, ready: false })
+
+  useEffect(() => {
+    setOpenGroup(null)
+  }, [location.pathname])
 
   useLayoutEffect(() => {
     const nav = moduleNavRef.current
@@ -88,14 +137,16 @@ export function Navbar() {
 
     const updateLayout = () => {
       if (activeLink) {
-        setActiveIndicator({ left: activeLink.offsetLeft, width: activeLink.offsetWidth, ready: true })
+        setActiveIndicator({
+          left: activeLink.offsetLeft,
+          top: activeLink.offsetTop,
+          width: activeLink.offsetWidth,
+          height: activeLink.offsetHeight,
+          ready: true,
+        })
       } else {
         setActiveIndicator((current) => ({ ...current, ready: false }))
       }
-      const controlWidth = Array.from(
-        nav.parentElement.querySelectorAll('[data-module-scroll-control]')
-      ).reduce((total, control) => total + control.getBoundingClientRect().width, 0)
-      setModuleNavOverflow(nav.scrollWidth > nav.clientWidth + controlWidth + 2)
     }
 
     updateLayout()
@@ -144,11 +195,13 @@ export function Navbar() {
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) setShowUserMenu(false)
       if (notificationsRef.current && !notificationsRef.current.contains(event.target)) setShowNotifications(false)
+      if (moduleNavRef.current && !moduleNavRef.current.contains(event.target)) setOpenGroup(null)
     }
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
         setShowUserMenu(false)
         setShowNotifications(false)
+        setOpenGroup(null)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -186,25 +239,25 @@ export function Navbar() {
     }
   }
 
-  const scrollModules = (direction) => {
-    moduleNavRef.current?.scrollBy({ left: direction * 300, behavior: 'smooth' })
-  }
-
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 shadow-sm shadow-slate-900/[0.03] backdrop-blur" role="banner">
       <div className="mx-auto flex min-h-16 max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 shrink-0 flex-col items-start">
-          <Link to="/dashboard" className="flex items-center gap-2.5" aria-label="InsureX dashboard">
+        {/* Brand and page title share one row; on phones the title drops beneath the brand. */}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 py-2">
+          <Link to="/dashboard" className="flex shrink-0 items-center gap-2.5" aria-label="InsureX dashboard">
             <img src="/insurex-nexus-ai-logo.jpg" alt="InsureX Nexus AI logo" className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-sm shadow-blue-600/20" />
             <span className="text-base font-extrabold tracking-tight text-slate-950 sm:text-lg">InsureX <span className="text-blue-600">Nexus AI</span></span>
           </Link>
           {user && currentPageTitle && (
-            <div className="mt-1 max-w-full pb-2">
-              <h1 className="text-lg font-bold leading-tight tracking-tight text-slate-900 sm:text-xl">{currentPageTitle}</h1>
-              {user.role === 'customer' && isDashboardPage && (
-                <p className="text-xs leading-5 text-slate-500 sm:text-sm">Welcome back, {dashboardFirstName}! Here&apos;s an overview of your insurance portfolio.</p>
-              )}
-            </div>
+            <>
+              <span aria-hidden="true" className="hidden h-7 w-px bg-slate-200 sm:block" />
+              <div className="min-w-0 basis-full sm:basis-auto">
+                <h1 className="text-base font-bold leading-tight tracking-tight text-slate-900 sm:text-lg">{currentPageTitle}</h1>
+                {user.role === 'customer' && isDashboardPage && (
+                  <p className="text-xs leading-5 text-slate-500 sm:text-sm">Welcome back, {dashboardFirstName}! Here&apos;s an overview of your insurance portfolio.</p>
+                )}
+              </div>
+            </>
           )}
         </div>
 
@@ -249,7 +302,13 @@ export function Navbar() {
             {showUserMenu && <div className="absolute right-0 z-50 mt-3 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10">
               <div className="border-b border-slate-100 px-3 py-2"><p className="truncate text-sm font-bold text-slate-900">{user?.name}</p><p className="text-xs capitalize text-slate-500">{user?.role}</p></div>
               <Link to="/profile" className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setShowUserMenu(false)}><User className="h-4 w-4" />Profile</Link>
-              {user?.role === 'admin' && <Link to="/settings" className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setShowUserMenu(false)}><Settings className="h-4 w-4" />Settings</Link>}
+              {user && <Link to="/settings" className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setShowUserMenu(false)}><Settings className="h-4 w-4" />Settings</Link>}
+              {visibleAccountItems.length > 0 && <div className="my-1 border-t border-slate-100 pt-1">
+                <p className="px-3 pb-1 pt-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">Administration</p>
+                {visibleAccountItems.map(({ label, to, Icon }) => (
+                  <Link key={to} to={to} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setShowUserMenu(false)}><Icon className="h-4 w-4" />{label}</Link>
+                ))}
+              </div>}
               <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50"><LogOut className="h-4 w-4" />Sign out</button>
             </div>}
           </div>
@@ -266,31 +325,72 @@ export function Navbar() {
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          {showModuleNavigation && <>
-          {moduleNavOverflow && <button data-module-scroll-control onClick={() => scrollModules(-1)} className="shrink-0 rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700" aria-label="Scroll modules left"><ChevronLeft className="h-4 w-4" /></button>}
+          {showModuleNavigation && (
           <nav
             ref={moduleNavRef}
-            className="module-nav-scroll module-nav-track flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain scroll-smooth px-2 py-2"
+            className="module-nav-track flex min-w-0 flex-1 flex-wrap items-center gap-1 px-2 py-2"
             aria-label="Dashboard modules"
-            style={{ '--module-active-left': `${activeIndicator.left}px`, '--module-active-width': `${activeIndicator.width}px` }}
+            style={{
+              '--module-active-left': `${activeIndicator.left}px`,
+              '--module-active-top': `${activeIndicator.top}px`,
+              '--module-active-width': `${activeIndicator.width}px`,
+              '--module-active-height': `${activeIndicator.height}px`,
+            }}
           >
             <span aria-hidden="true" className={`module-nav-active-indicator${activeIndicator.ready ? ' is-ready' : ''}`} />
-            {visibleModules.map(({ label, to, Icon }, index) => (
-              <NavLink
-                key={label}
-                ref={(element) => { moduleLinkRefs.current[index] = element }}
-                to={to}
-                end={to === '/dashboard'}
-                title={label}
-                className={({ isActive }) => `module-nav-link flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition sm:px-3.5 sm:text-sm ${isActive ? 'is-active' : 'text-slate-600 hover:bg-white/80 hover:text-slate-950'}`}
-              >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>{label}</span>
-              </NavLink>
-            ))}
+            {visibleModules.map((item, index) => {
+              const { label, to, Icon, children } = item
+              const itemClass = (active) => `module-nav-link flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition sm:px-3.5 sm:text-sm ${active ? 'is-active' : 'text-slate-600 hover:bg-white/80 hover:text-slate-950'}`
+              if (!children) {
+                return (
+                  <NavLink
+                    key={label}
+                    ref={(element) => { moduleLinkRefs.current[index] = element }}
+                    to={to}
+                    end={to === '/dashboard'}
+                    title={label}
+                    className={() => itemClass(index === activeModuleIndex)}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>{label}</span>
+                  </NavLink>
+                )
+              }
+              const isOpen = openGroup === label
+              return (
+                <div key={label} ref={(element) => { moduleLinkRefs.current[index] = element }} className={`relative shrink-0 ${isOpen ? 'z-50' : 'z-[1]'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroup(isOpen ? null : label)}
+                    className={itemClass(index === activeModuleIndex)}
+                    aria-haspopup="menu"
+                    aria-expanded={isOpen}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>{label}</span>
+                    <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                  </button>
+                  {isOpen && (
+                    <div role="menu" className="absolute left-0 z-50 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10">
+                      {children.map((child) => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to}
+                          role="menuitem"
+                          onClick={() => setOpenGroup(null)}
+                          className={({ isActive }) => `block rounded-xl px-3 py-2.5 transition ${isActive ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                        >
+                          <span className="block text-sm font-semibold text-slate-900">{child.label}</span>
+                          <span className="block text-xs text-slate-500">{child.hint}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </nav>
-          {moduleNavOverflow && <button data-module-scroll-control onClick={() => scrollModules(1)} className="shrink-0 rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700" aria-label="Scroll modules right"><ChevronRight className="h-4 w-4" /></button>}
-          </>}
+          )}
         </div>
       </div>
     </header>

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Brain,
   Cpu,
   Activity,
   Sparkles,
@@ -19,6 +18,7 @@ import {
   claimService,
   investigationService,
 } from '../../services'
+import { formatApiError } from '../../services/api'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -77,7 +77,7 @@ export function AIOperations() {
       setFraudAlerts(unwrap(results[4]))
     } catch (err) {
       console.error('Failed to load AI operations data:', err)
-      setError(err.message || 'Failed to load AI operations data.')
+      setError(formatApiError(err, 'Failed to load AI operations data.'))
     } finally {
       setLoading(false)
     }
@@ -120,7 +120,7 @@ export function AIOperations() {
       claimNumber: f.claim_number,
       matchScore: Math.round(Number(f.risk_score) || 0),
       recommendedInvestigator: f.assigned_investigator_name,
-      reason: f.ai_recommendation || 'Matched based on fraud risk profile and SIU specialty.',
+      reason: f.ai_recommendation || 'Matched on fraud risk and investigator specialty.',
     }))
 
   // Module 3: Processing Time Estimates (assessments with repair_time_estimate_days)
@@ -162,19 +162,13 @@ export function AIOperations() {
       {/* Header */}
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-              <Brain className="w-3.5 h-3.5 text-emerald-600" />
-              Live model and workflow data
-            </span>
-          </div>
-          <h1 className="page-title">AI Operations Console</h1>
+          <h1 className="page-title">Model Health</h1>
           <p className="page-subtitle">
             Current model availability, assessments, and fraud reviews
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="primary" onClick={loadData} disabled={loading}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh Data
@@ -284,7 +278,7 @@ export function AIOperations() {
         <Card>
           <CardHeader
             title="2. Investigator Assignment"
-            subtitle="Skillset & specialty mapping matching case risk to SIU officers"
+            subtitle="How case risk is matched to investigator skills"
           />
           <CardContent className="p-6">
             <div className="space-y-3">

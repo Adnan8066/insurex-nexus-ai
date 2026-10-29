@@ -12,6 +12,8 @@ const EmployeeDashboard = lazy(() => import('../pages/dashboard/EmployeeDashboar
 const PolicyList = lazy(() => import('../pages/policies/PolicyList').then((module) => ({ default: module.PolicyList })))
 const PolicyDetails = lazy(() => import('../pages/policies/PolicyDetails').then((module) => ({ default: module.PolicyDetails })))
 const PolicyForm = lazy(() => import('../pages/policies/PolicyForm').then((module) => ({ default: module.PolicyForm })))
+const PolicyRequests = lazy(() => import('../pages/policies/PolicyRequests').then((module) => ({ default: module.PolicyRequests })))
+const RequestPolicy = lazy(() => import('../pages/policies/RequestPolicy').then((module) => ({ default: module.RequestPolicy })))
 const VehicleList = lazy(() => import('../pages/vehicles/VehicleList').then((module) => ({ default: module.VehicleList })))
 const VehicleDetails = lazy(() => import('../pages/vehicles/VehicleDetails').then((module) => ({ default: module.VehicleDetails })))
 const VehicleForm = lazy(() => import('../pages/vehicles/VehicleForm').then((module) => ({ default: module.VehicleForm })))
@@ -34,7 +36,7 @@ const Settings = lazy(() => import('../pages/settings/Settings').then((module) =
 const LandingPage = lazy(() => import('../pages/LandingPage').then((module) => ({ default: module.LandingPage })))
 
 function ProtectedRoute({ children, roles }) {
-  const { isAuthenticated, user, hasRole, loading } = useAuth()
+  const { isAuthenticated, hasRole, loading } = useAuth()
   if (loading) return <div className="p-8 text-center text-gray-500" role="status">Checking your session…</div>
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (roles && !hasRole(roles)) return <Navigate to="/dashboard" replace />
@@ -70,12 +72,14 @@ export default function AppRoutes() {
         <Route path="dashboard" element={<RoleBasedDashboard />} />
         <Route path="policies" element={<PolicyList />} />
         <Route path="policies/new" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
+        <Route path="policies/requests" element={<ProtectedRoute roles={['employee', 'admin']}><PolicyRequests /></ProtectedRoute>} />
         <Route path="policies/:id" element={<PolicyDetails />} />
         <Route path="policies/:id/edit" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
         <Route path="vehicles" element={<VehicleList />} />
-        <Route path="vehicles/new" element={<VehicleForm />} />
+        <Route path="vehicles/new" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><VehicleForm /></ProtectedRoute>} />
         <Route path="vehicles/:id" element={<VehicleDetails />} />
-        <Route path="vehicles/:id/edit" element={<VehicleForm />} />
+        <Route path="vehicles/:id/insure" element={<ProtectedRoute roles={['customer']}><RequestPolicy /></ProtectedRoute>} />
+        <Route path="vehicles/:id/edit" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><VehicleForm /></ProtectedRoute>} />
         <Route path="claims" element={<ClaimList />} />
         <Route path="claims/:id" element={<ClaimDetails />} />
         <Route path="claims/new" element={<SubmitClaim />} />
@@ -83,7 +87,7 @@ export default function AppRoutes() {
         <Route path="ai-assessment" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIAssessment /></ProtectedRoute>} />
         <Route path="routing-advisory" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><RoutingAdvisory /></ProtectedRoute>} />
         <Route path="fraud" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><FraudDashboard /></ProtectedRoute>} />
-        <Route path="investigators" element={<InvestigatorDashboard />} />
+        <Route path="investigators" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><InvestigatorDashboard /></ProtectedRoute>} />
         <Route path="analytics" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="admin/users" element={<ProtectedRoute roles={['admin']}><UserManagement /></ProtectedRoute>} />
         <Route path="ai-decision" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><ErrorBoundary><AIDecisionCenter /></ErrorBoundary></ProtectedRoute>} />

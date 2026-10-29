@@ -15,6 +15,9 @@ import {
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
 import { claimService } from '../../services'
+import { formatApiError } from '../../services/api'
+import { canDeleteClaim } from '../../utils/claimPermissions'
+import { CLAIM_STATUSES, PENDING_CLAIM_STATUSES, INCIDENT_TYPES, labelFor } from '../../constants/domain'
 import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
@@ -25,25 +28,15 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
 
 const incidentTypes = [
-  { value: '', label: 'All Incident Types' },
-  { value: 'collision', label: 'Collision' },
-  { value: 'comprehensive', label: 'Comprehensive' },
-  { value: 'theft', label: 'Theft' },
-  { value: 'vandalism', label: 'Vandalism' },
+  { value: '', label: 'All incident types' },
+  ...INCIDENT_TYPES.map(({ value, label }) => ({ value, label })),
 ]
 
 const statusOptions = [
-  { value: '', label: 'All Statuses' },
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'under_review', label: 'Under Review' },
-  { value: 'ai_assessment', label: 'AI Assessment' },
-  { value: 'investigation', label: 'Investigation' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'closed', label: 'Closed' },
+  { value: '', label: 'All statuses' },
+  { value: 'pending', label: 'All pending' },
+  ...CLAIM_STATUSES,
 ]
-
-const PENDING_STATUSES = ['submitted', 'under_review', 'ai_assessment', 'investigation']
 
 export function ClaimList() {
   const { user } = useAuth()
@@ -57,7 +50,10 @@ export function ClaimList() {
   const [filteredClaims, setFilteredClaims] = useState([])
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState(statusParam === 'ai_assessment' && !canViewAI ? 'under_review' : (statusParam || ''))
+  const [statusFilter, setStatusFilter] = useState(() => {
+    if (statusParam === 'ai_assessment' && !canViewAI) return 'under_review'
+    return statusOptions.some((option) => option.value === statusParam) ? statusParam : ''
+  })
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [sortConfig, setSortConfig] = useState({ key: 'submittedAt', direction: 'desc' })
@@ -98,7 +94,7 @@ export function ClaimList() {
         propertyDamage: c.property_damage,
         witnesses: c.witnesses,
         policeReport: c.police_report,
-        claimAmount: c.claim_amount,
+        claimAmount: Number(c.claim_amount) || 0,
         description: c.description,
         status: !canViewAI && c.status === 'ai_assessment' ? 'under_review' : c.status,
         priority: c.priority,
@@ -117,7 +113,7 @@ export function ClaimList() {
       setClaims(mapped)
       setFilteredClaims(mapped)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load claims')
+      setError(formatApiError(err, 'Failed to load claims'))
       setClaims([])
       setFilteredClaims([])
     } finally {
@@ -150,7 +146,7 @@ export function ClaimList() {
 
     if (statusFilter) {
       if (statusFilter === 'pending') {
-        result = result.filter((c) => PENDING_STATUSES.includes(c.status))
+        result = result.filter((c) => PENDING_CLAIM_STATUSES.includes(c.status))
       } else {
         result = result.filter((c) => c.status === statusFilter)
       }
@@ -187,7 +183,7 @@ export function ClaimList() {
       setDeleteTarget(null)
       setDeleteError('')
     } catch (err) {
-      setDeleteError(err.response?.data?.detail || err.response?.data?.error?.message || 'Failed to delete claim')
+      setDeleteError(formatApiError(err, 'Failed to delete claim'))
     } finally {
       setDeleting(false)
     }
@@ -200,7 +196,7 @@ export function ClaimList() {
 
   const stats = {
     total: claims.length,
-    pending: claims.filter((c) => PENDING_STATUSES.includes(c.status)).length,
+    pending: claims.filter((c) => PENDING_CLAIM_STATUSES.includes(c.status)).length,
     approved: claims.filter((c) => c.status === 'approved').length,
     closed: claims.filter((c) => c.status === 'closed').length,
   }
@@ -223,8 +219,8 @@ export function ClaimList() {
     <div className="page">
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="page-title">Claim Management</h1>
-          <p className="page-subtitle">Track, review, and manage all auto insurance claims across their full lifecycle</p>
+          <h1 className="page-title">Claims</h1>
+          <p className="page-subtitle">{canViewAI ? 'Review and track every claim from submission to settlement' : 'See and track the claims you have made'}</p>
         </div>
         <div className="flex gap-2">
           {canSubmitClaim && <Button asChild variant="primary"><Link to="/claims/new"><Plus className="w-4 h-4 mr-2" />Submit Claim</Link></Button>}
@@ -281,29 +277,29 @@ export function ClaimList() {
         <CardContent className="p-6">
           {/* Filters Bar */}
           <div className="flex flex-col md:flex-row gap-3 mb-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="flex-1">
               <Input
-                placeholder="Search by Claim ID, customer, vehicle, location..."
+                placeholder="Search by claim ID, customer, vehicle, location..."
+                aria-label="Search claims"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                leftIcon={<Search className="w-4 h-4 text-gray-400" />}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Select
                 options={incidentTypes}
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                placeholder="Incident Type"
-                className="w-44"
+                aria-label="Filter by incident type"
+                className="sm:w-48"
               />
               <Select
                 options={canViewAI ? statusOptions : statusOptions.filter((option) => option.value !== 'ai_assessment')}
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                placeholder="Status"
-                className="w-44"
+                aria-label="Filter by status"
+                className="sm:w-48"
               />
             </div>
           </div>
@@ -360,7 +356,7 @@ export function ClaimList() {
                           <div className="text-xs text-gray-500">{formatRelativeTime(claim.submittedAt)}</div>
                         </TableCell>
                         <TableCell>
-                          <span className="text-sm font-medium text-gray-900 capitalize">{claim.incidentType}</span>
+                          <span className="text-sm font-medium text-gray-900">{labelFor(INCIDENT_TYPES, claim.incidentType)}</span>
                           <span className={clsx(
                             'ml-1.5 inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded',
                             claim.incidentSeverity === 'major' || claim.incidentSeverity === 'total_loss' ? 'bg-red-100 text-red-700' :
@@ -399,16 +395,20 @@ export function ClaimList() {
                             <Link to={`/claims/${claim.id}/tracking`} className="btn btn-outline btn-sm" title="Track Workflow">
                               Track
                             </Link>
-                            <button
-                              onClick={() => {
-                                setDeleteError('')
-                                setDeleteTarget(claim)
-                              }}
-                              className="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
-                              title="Delete claim"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {canDeleteClaim(user?.role, claim.status) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeleteError('')
+                                  setDeleteTarget(claim)
+                                }}
+                                className="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
+                                title="Delete claim"
+                                aria-label={`Delete claim ${claim.claimNumber}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -428,7 +428,7 @@ export function ClaimList() {
               <EmptyState
                 icon={<Briefcase className="w-12 h-12" />}
                 title="No claims match your criteria"
-                description={search || typeFilter || statusFilter ? 'Try clearing your search or filter filters.' : 'No claims have been submitted yet.'}
+                description={search || typeFilter || statusFilter ? 'Try clearing your search or filters.' : 'No claims have been submitted yet.'}
                 action={canSubmitClaim ? <Button asChild><Link to="/claims/new">Submit a New Claim</Link></Button> : undefined}
               />
             )}

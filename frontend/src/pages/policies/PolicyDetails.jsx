@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   Edit,
   Download,
-  MoreVertical,
   CheckCircle,
   AlertTriangle,
   Clock,
@@ -17,11 +16,39 @@ import {
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate } from '../../utils/helpers'
 import { policyService } from '../../services'
+import { formatApiError } from '../../services/api'
 import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Modal } from '../../components/ui/Modal'
+import { DocumentUpload } from '../../components/forms/DocumentUpload'
+import { labelFor } from '../../constants/domain'
+
+const POLICY_DOCUMENT_TYPES = [
+  { value: 'policy', label: 'Policy Document' },
+  { value: 'declaration', label: 'Declaration Page' },
+  { value: 'endorsement', label: 'Endorsement' },
+  { value: 'binder', label: 'Binder' },
+  { value: 'other', label: 'Other' },
+]
+
+const mapDocument = (d) => ({
+  id: d.id,
+  name: d.original_name,
+  type: d.document_type,
+  file: d.file,
+  uploadedAt: d.uploaded_at,
+})
+
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}[char]))
 
 const mapPolicy = (p) => ({
   id: p.id,
@@ -52,7 +79,7 @@ const mapPolicy = (p) => ({
   propertyType: p.property_type,
   propertyYearBuilt: p.property_year_built,
   propertySquareFootage: p.property_square_footage,
-  documents: p.documents || [],
+  documents: (p.documents || []).map(mapDocument),
   premiumHistory: p.premium_history || [],
   createdAt: p.created_at,
   updatedAt: p.updated_at,
@@ -67,6 +94,7 @@ export function PolicyDetails() {
   const [policy, setPolicy] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [error, setError] = useState('')
+  const [notFound, setNotFound] = useState(false)
   const [endorsements, setEndorsements] = useState([])
   const [endorsementDraft, setEndorsementDraft] = useState({ change_type: 'mid_term_adjustment', deductible: '', premium_delta: '0', asset_description: '', asset_value: '' })
   const [endorsementError, setEndorsementError] = useState('')
@@ -75,10 +103,21 @@ export function PolicyDetails() {
   const [scheduleOpen, setScheduleOpen] = useState(false)
 
   const downloadCertificate = () => {
-    const certificate = window.open('', '_blank', 'width=900,height=700')
-    if (!certificate) return
-    certificate.document.write(`<!doctype html><html><head><title>Policy Certificate ${policy.policyNumber || ''}</title><style>body{font:16px Arial,sans-serif;color:#172033;margin:48px}h1{color:#1e3a5f}table{border-collapse:collapse;width:100%;margin-top:24px}td{padding:12px;border:1px solid #d1d5db}small{color:#6b7280}@media print{button{display:none}}</style></head><body><h1>Insurance Certificate</h1><p>This document confirms the policy details shown below.</p><table><tr><td>Policy number</td><td>${policy.policyNumber || '—'}</td></tr><tr><td>Policy holder</td><td>${policy.customerName || '—'}</td></tr><tr><td>Policy type</td><td>${policy.policyPlan?.name || policy.type || '—'}</td></tr><tr><td>Effective date</td><td>${formatDate(policy.startDate)}</td></tr><tr><td>Expiration date</td><td>${formatDate(policy.endDate)}</td></tr><tr><td>Status</td><td>${policy.status || '—'}</td></tr><tr><td>Annual premium</td><td>${formatCurrency(policy.premium)}</td></tr></table><p><small>Generated from InsureX Nexus AI policy records.</small></p><button onclick="window.print()">Print / Save as PDF</button></body></html>`)
-    certificate.document.close()
+    // Every interpolated value is HTML-escaped, and the certificate opens as an isolated blob
+    // document with noopener so it has no handle back to this app.
+    const rows = [
+      ['Policy number', policy.policyNumber || '—'],
+      ['Policy holder', policy.customerName || '—'],
+      ['Policy type', policy.policyPlan?.name || policy.type || '—'],
+      ['Effective date', formatDate(policy.startDate)],
+      ['Expiration date', formatDate(policy.endDate)],
+      ['Status', policy.status || '—'],
+      ['Annual premium', formatCurrency(policy.premium)],
+    ].map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join('')
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Policy Certificate ${escapeHtml(policy.policyNumber || '')}</title><style>body{font:16px Arial,sans-serif;color:#172033;margin:48px}h1{color:#1e3a5f}table{border-collapse:collapse;width:100%;margin-top:24px}td{padding:12px;border:1px solid #d1d5db}small{color:#6b7280}</style></head><body><h1>Insurance Certificate</h1><p>This document confirms the policy details shown below.</p><table>${rows}</table><p><small>Generated from InsureX Nexus AI policy records. Use your browser's Print command (Ctrl+P) to print or save as PDF.</small></p></body></html>`
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }))
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
   }
 
   const installmentsPerYear = ({ monthly: 12, quarterly: 4, semi_annual: 2, annual: 1 }[policy?.paymentFrequency] || 1)
@@ -94,6 +133,7 @@ export function PolicyDetails() {
     const fetchPolicy = async () => {
       setLoading(true)
       setError('')
+      setNotFound(false)
       try {
         const res = await policyService.getPolicy(id)
         if (!cancelled) {
@@ -101,7 +141,8 @@ export function PolicyDetails() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err.response?.data?.detail || 'Failed to load policy')
+          setNotFound(err.response?.status === 404)
+          setError(formatApiError(err, 'Failed to load policy'))
           setPolicy(null)
         }
       } finally {
@@ -142,7 +183,7 @@ export function PolicyDetails() {
       setEndorsements((current) => [created, ...current])
       setEndorsementDraft({ change_type: 'mid_term_adjustment', deductible: '', premium_delta: '0', asset_description: '', asset_value: '' })
     } catch (err) {
-      setEndorsementError(err.response?.data?.detail || 'Unable to submit the endorsement for review.')
+      setEndorsementError(formatApiError(err, 'Unable to submit the endorsement for review.'))
     } finally {
       setSavingEndorsement(false)
     }
@@ -155,7 +196,7 @@ export function PolicyDetails() {
       const refreshed = await policyService.getPolicy(id)
       setPolicy(mapPolicy(refreshed))
     } catch (err) {
-      setEndorsementError(err.response?.data?.detail || 'Unable to approve this endorsement.')
+      setEndorsementError(formatApiError(err, 'Unable to approve this endorsement.'))
     }
   }
 
@@ -189,9 +230,20 @@ export function PolicyDetails() {
             Back to Policies
           </Link>
         </div>
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
-        )}
+        <Card>
+          <EmptyState
+            icon={<FileText className="w-12 h-12" />}
+            title={notFound ? 'Policy not found' : 'Could not load this policy'}
+            description={notFound
+              ? 'This policy does not exist or you do not have access to it.'
+              : error || 'Please try again in a moment.'}
+            action={(
+              <Button variant="outline" asChild>
+                <Link to="/policies">Back to Policies</Link>
+              </Button>
+            )}
+          />
+        </Card>
       </div>
     )
   }
@@ -218,19 +270,16 @@ export function PolicyDetails() {
           </div>
           <p className="page-subtitle">{policy.policyPlan?.name || policy.type || ''} • {policy.customerName || ''}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" onClick={downloadCertificate}>
             <Download className="w-4 h-4 mr-2" />
             Download
-          </Button>
-          <Button variant="ghost" size="sm" className="relative">
-            <MoreVertical className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
       <div className="border-b border-gray-200 mb-6">
-        <nav className="flex gap-1" aria-label="Policy tabs">
+        <nav className="flex gap-1 overflow-x-auto" aria-label="Policy tabs">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -345,7 +394,7 @@ export function PolicyDetails() {
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <dt className="text-sm font-medium text-gray-500">Payment per Period</dt>
                       <dd className="mt-1 text-2xl font-bold text-gray-900">
-                        {formatCurrency(policy.paymentFrequency === 'monthly' ? (Number(policy.premium) || 0) / 12 : (Number(policy.premium) || 0))}
+                        {formatCurrency(installmentAmount)}
                       </dd>
                     </div>
                   </div>
@@ -422,14 +471,45 @@ export function PolicyDetails() {
 
           {activeTab === 'documents' && (
             <Card>
-              <CardHeader title="Policy Documents" action={<Button variant="outline" size="sm">Upload</Button>} />
-              <CardContent>
-                <EmptyState
-                  icon={<FileText className="w-12 h-12" />}
-                  title="No documents uploaded"
-                  description="Policy documents will appear here once uploaded."
-                  action={<Button variant="outline" size="sm">Upload Document</Button>}
-                />
+              <CardHeader title="Policy Documents" />
+              <CardContent className="space-y-6">
+                {canEditPolicy && (
+                  <DocumentUpload
+                    documentTypes={POLICY_DOCUMENT_TYPES}
+                    onUpload={(formData) => policyService.uploadPolicyDocument(policy.id, formData)}
+                    onUploaded={(doc) => {
+                      if (!doc) return
+                      setPolicy((current) => ({ ...current, documents: [mapDocument(doc), ...current.documents] }))
+                    }}
+                  />
+                )}
+                {policy.documents.length > 0 ? (
+                  <div className="space-y-3">
+                    {policy.documents.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="w-10 h-10 flex-shrink-0 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <FileText className="w-5 h-5 text-primary" aria-hidden="true" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-gray-900">{doc.name}</p>
+                            <p className="text-sm text-gray-500">{labelFor(POLICY_DOCUMENT_TYPES, doc.type, '')} • {formatDate(doc.uploadedAt)}</p>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" asChild>
+                          <a href={doc.file} target="_blank" rel="noopener noreferrer">View</a>
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={<FileText className="w-12 h-12" />}
+                    title="No documents yet"
+                    description="Policy documents will appear here once your insurer adds them. You can download the certificate any time."
+                    action={<Button variant="outline" size="sm" onClick={downloadCertificate}><Download className="w-4 h-4 mr-2" />Download Certificate</Button>}
+                  />
+                )}
               </CardContent>
             </Card>
           )}
@@ -522,16 +602,23 @@ export function PolicyDetails() {
           </Card>
         </div>
       </div>
-      {scheduleOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setScheduleOpen(false) }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="payment-schedule-title" className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-4"><div><h2 id="payment-schedule-title" className="text-xl font-semibold">Payment Schedule</h2><p className="mt-1 text-sm text-gray-500">{policy.policyNumber} · {policy.paymentFrequency?.replace(/_/g, ' ') || 'annual'} installments</p></div><button className="text-gray-500" onClick={() => setScheduleOpen(false)} aria-label="Close payment schedule">×</button></div>
-            <div className="mt-5 divide-y divide-gray-100">{paymentSchedule.map((payment, index) => <div key={index} className="flex justify-between py-3"><span>Installment {index + 1} · {formatDate(payment.date)}</span><strong>{formatCurrency(payment.amount)}</strong></div>)}</div>
-            <p className="mt-4 text-sm text-gray-500">This schedule is calculated from the policy premium and frequency. Contact your insurer to arrange or confirm payment.</p>
-            <div className="mt-5 flex justify-end"><Button variant="primary" onClick={() => setScheduleOpen(false)}>Done</Button></div>
-          </section>
+      <Modal
+        isOpen={scheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+        title="Payment Schedule"
+        description={`${policy.policyNumber || ''} · ${policy.paymentFrequency?.replace(/_/g, ' ') || 'annual'} installments`}
+        footer={<Button variant="primary" onClick={() => setScheduleOpen(false)}>Done</Button>}
+      >
+        <div className="divide-y divide-gray-100">
+          {paymentSchedule.map((payment, index) => (
+            <div key={index} className="flex justify-between gap-4 py-3">
+              <span>Installment {index + 1} · {formatDate(payment.date)}</span>
+              <strong>{formatCurrency(payment.amount)}</strong>
+            </div>
+          ))}
         </div>
-      )}
+        <p className="mt-4 text-sm text-gray-500">This schedule is calculated from the policy premium and frequency. Contact your insurer to arrange or confirm payment.</p>
+      </Modal>
     </div>
   )
 }

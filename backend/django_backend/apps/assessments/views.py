@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 
-from .models import ClaimAssessment, AgentOutput, DecisionFlow, ModelPerformance
+from .models import ClaimAssessment, AgentOutput, DecisionFlow, ModelPerformance, AssessmentStatus
 from .serializers import (
     ClaimAssessmentSerializer, ClaimAssessmentCreateSerializer,
     AgentOutputSerializer, DecisionFlowSerializer, ModelPerformanceSerializer
@@ -13,7 +13,19 @@ from .serializers import (
 from common.permissions import IsStaffMember
 
 
-class ClaimAssessmentViewSet(viewsets.ModelViewSet):
+class InvestigatorClaimScopeMixin:
+    """Investigators only see AI records for claims assigned to them, matching
+    the claim list scoping in ClaimViewSet.get_queryset."""
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if getattr(user, 'role', None) == 'investigator':
+            return queryset.filter(claim__assigned_investigator=user)
+        return queryset
+
+
+class ClaimAssessmentViewSet(InvestigatorClaimScopeMixin, viewsets.ModelViewSet):
     queryset = ClaimAssessment.objects.select_related('claim', 'claim__customer', 'reviewed_by').all()
     serializer_class = ClaimAssessmentSerializer
     permission_classes = [IsAuthenticated, IsStaffMember]
@@ -31,7 +43,7 @@ class ClaimAssessmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='review')
     def review(self, request, pk=None):
         assessment = self.get_object()
-        assessment.status = ClaimAssessment.AssessmentStatus.COMPLETED
+        assessment.status = AssessmentStatus.COMPLETED
         assessment.reviewed_by = request.user
         assessment.reviewed_at = timezone.now()
         assessment.save(update_fields=['status', 'reviewed_by', 'reviewed_at'])
@@ -42,14 +54,14 @@ class ClaimAssessmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='request-review')
     def request_review(self, request, pk=None):
         assessment = self.get_object()
-        assessment.status = ClaimAssessment.AssessmentStatus.REQUIRES_REVIEW
+        assessment.status = AssessmentStatus.REQUIRES_REVIEW
         assessment.save(update_fields=['status'])
         
         serializer = self.get_serializer(assessment)
         return Response(serializer.data)
 
 
-class AgentOutputViewSet(viewsets.ReadOnlyModelViewSet):
+class AgentOutputViewSet(InvestigatorClaimScopeMixin, viewsets.ReadOnlyModelViewSet):
     queryset = AgentOutput.objects.select_related('claim').all()
     serializer_class = AgentOutputSerializer
     permission_classes = [IsAuthenticated, IsStaffMember]
@@ -60,7 +72,7 @@ class AgentOutputViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-created_at']
 
 
-class DecisionFlowViewSet(viewsets.ReadOnlyModelViewSet):
+class DecisionFlowViewSet(InvestigatorClaimScopeMixin, viewsets.ReadOnlyModelViewSet):
     queryset = DecisionFlow.objects.select_related('claim').all()
     serializer_class = DecisionFlowSerializer
     permission_classes = [IsAuthenticated, IsStaffMember]

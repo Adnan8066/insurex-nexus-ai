@@ -22,20 +22,53 @@ import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/forms/FormFields'
+import { INCIDENT_SEVERITIES, INCIDENT_TYPES, POLICY_TYPES, labelFor } from '../../constants/domain'
+import { formatCurrency, formatDate } from '../../utils/helpers'
 
-const incidentTypeOptions = [
-  { value: 'collision', label: 'Collision (Vehicle vs Vehicle/Object)' },
-  { value: 'comprehensive', label: 'Comprehensive (Hail, Weather, Animal)' },
-  { value: 'theft', label: 'Theft / Stolen Vehicle' },
-  { value: 'vandalism', label: 'Vandalism / Criminal Damage' },
-]
+const incidentTypeOptions = INCIDENT_TYPES.map(({ value, label, hint }) => ({ value, label: `${label} - ${hint}` }))
+const severityOptions = INCIDENT_SEVERITIES.map(({ value, label, hint }) => ({ value, label: `${label} - ${hint}` }))
 
-const severityOptions = [
-  { value: 'minor', label: 'Minor (Scratches, Dents, Operable)' },
-  { value: 'moderate', label: 'Moderate (Body Damage, Radiator/Bumper)' },
-  { value: 'major', label: 'Major (Structural, Airbags Deployed, Inoperable)' },
-  { value: 'total_loss', label: 'Total Loss (Vehicle Beyond Repair)' },
-]
+// Local dates/times (toISOString would give the UTC date, which is yesterday early in the morning in India).
+const pad = (n) => String(n).padStart(2, '0')
+const localToday = () => {
+  const now = new Date()
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+const localNowTime = () => {
+  const now = new Date()
+  return `${pad(now.getHours())}:${pad(now.getMinutes())}`
+}
+
+const FIELD_LABELS = {
+  policy: 'Policy',
+  vehicle: 'Vehicle',
+  incident_date: 'Incident date',
+  incident_time: 'Incident time',
+  incident_type: 'Incident type',
+  incident_severity: 'Severity',
+  location: 'Location',
+  number_of_vehicles: 'Vehicles involved',
+  claim_amount: 'Claim amount',
+  description: 'Description',
+}
+
+// Turn a DRF error response into one readable sentence.
+function describeSubmitError(err) {
+  if (!err.response) return 'Could not reach the claims service. Check your connection and try again.'
+  const data = err.response.data
+  if (typeof data?.detail === 'string' && data.detail) return data.detail
+  const fieldErrors = data?.error?.details || data?.errors || data
+  if (fieldErrors && typeof fieldErrors === 'object') {
+    const messages = Object.entries(fieldErrors)
+      .filter(([field]) => !['success', 'error', 'detail', 'status_code'].includes(field))
+      .flatMap(([field, msgs]) => (Array.isArray(msgs) ? msgs : [msgs])
+        .filter((msg) => typeof msg === 'string')
+        .map((msg) => `${FIELD_LABELS[field] || field.replace(/_/g, ' ')}: ${msg}`))
+    if (messages.length) return messages.join(' ')
+  }
+  if (typeof data?.error?.message === 'string') return data.error.message
+  return 'We could not submit your claim. Please check the details and try again.'
+}
 
 export function SubmitClaim() {
   const navigate = useNavigate()
@@ -45,6 +78,12 @@ export function SubmitClaim() {
   const preselectedPolicy = searchParams.get('policy')
   const preselectedVehicle = searchParams.get('vehicle')
 
+  const steps = [
+    { number: 1, label: 'Policy & vehicle' },
+    { number: 2, label: 'What happened' },
+    { number: 3, label: 'Injuries & reports' },
+    { number: 4, label: 'Amount, photos & review' },
+  ]
   const [currentStep, setCurrentStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -61,8 +100,8 @@ export function SubmitClaim() {
     policyId: preselectedPolicy || '',
     vehicleId: preselectedVehicle || '',
     customerId: canSelectCustomer ? '' : String(user?.id || ''),
-    incidentDate: new Date().toISOString().split('T')[0],
-    incidentTime: '14:30',
+    incidentDate: localToday(),
+    incidentTime: localNowTime(),
     incidentType: 'collision',
     incidentSeverity: 'moderate',
     location: '',
@@ -200,6 +239,8 @@ export function SubmitClaim() {
     } else if (currentStep === 2) {
       if (!formData.incidentDate || !formData.incidentTime || !formData.location.trim()) {
         message = 'Enter the incident date, time, and location to continue.'
+      } else if (formData.incidentDate > localToday()) {
+        message = 'The incident date cannot be in the future.'
       } else if (Number(formData.numberOfVehicles) < 1) {
         message = 'Enter at least one vehicle involved in the incident.'
       }
@@ -220,6 +261,11 @@ export function SubmitClaim() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    // Pressing Enter on an earlier step moves forward instead of submitting an unfinished claim.
+    if (currentStep < steps.length) {
+      handleNextStep()
+      return
+    }
     if (!validateCurrentStep()) return
     setSubmitting(true)
     setError('')
@@ -242,17 +288,8 @@ export function SubmitClaim() {
         }
       }
       setSuccessClaim(response)
-      setTimeout(() => navigate('/claims'), 4000)
     } catch (err) {
-      const details = err.response?.data
-      if (details && typeof details === 'object') {
-        const messages = Object.entries(details)
-          .flatMap(([field, msgs]) => (Array.isArray(msgs) ? msgs : [msgs]).map((message) => `${field}: ${message}`))
-          .join('; ')
-        setError(messages || 'Failed to submit claim')
-      } else {
-        setError(err.response?.data?.detail || (err.response ? 'Failed to submit claim. Check the entered details and try again.' : 'Could not reach the claims service. Check that the backend is running and try again.'))
-      }
+      setError(describeSubmitError(err))
     } finally {
       setSubmitting(false)
     }
@@ -264,32 +301,26 @@ export function SubmitClaim() {
         <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
           <CheckCircle2 className="w-9 h-9" />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Claim Successfully Filed</h1>
-        <p className="text-gray-600 mb-4">
-          Your claim reference is <span className="font-mono font-bold text-gray-900">{successClaim.claim_number || successClaim.id}</span>. It has entered the automated intake queue.
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Your claim has been submitted</h1>
+        <p className="text-gray-600 mb-2">
+          Your claim number is <span className="font-mono font-bold text-gray-900">{successClaim.claim_number || successClaim.id}</span>. Keep it for your records.
         </p>
+        <p className="text-gray-600 mb-4">A claims specialist will review it, and you&apos;ll get a notification each time it moves forward.</p>
         {uploadWarning && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">{uploadWarning}</p>}
-        <div className="flex justify-center gap-3">
-          <Button variant="secondary" onClick={() => navigate('/claims')}>
-            View All Claims
+        <div className="flex flex-wrap justify-center gap-3">
+          <Button variant="primary" onClick={() => navigate(`/claims/${successClaim.id}/tracking`)}>
+            Track this claim
           </Button>
-          <Button variant="primary" onClick={() => navigate(`/claims/${successClaim.id}`)}>
-            View Claim Details
+          <Button variant="secondary" onClick={() => navigate(`/claims/${successClaim.id}`)}>
+            View claim details
           </Button>
-          <Button variant="outline" onClick={() => navigate(`/claims/${successClaim.id}/tracking`)}>
-            Track Workflow
+          <Button variant="ghost" onClick={() => navigate('/claims')}>
+            All my claims
           </Button>
         </div>
       </div>
     )
   }
-
-  const steps = [
-    { number: 1, label: 'Policy & Vehicle' },
-    { number: 2, label: 'Incident Details' },
-    { number: 3, label: 'Injuries & Reports' },
-    { number: 4, label: 'Amount & Evidence' },
-  ]
 
   const customerPolicies = canSelectCustomer
     ? policies.filter((policy) => String(policy.customer) === String(formData.customerId))
@@ -297,6 +328,8 @@ export function SubmitClaim() {
   const customerVehicles = canSelectCustomer
     ? vehicles.filter((vehicle) => String(vehicle.customer) === String(formData.customerId))
     : vehicles
+  const selectedPolicy = policies.find((policy) => String(policy.id) === String(formData.policyId))
+  const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(formData.vehicleId))
 
   return (
     <div className="page max-w-4xl mx-auto">
@@ -306,8 +339,8 @@ export function SubmitClaim() {
             <ArrowLeft className="w-4 h-4" />
             Back to claims
           </Link>
-          <h1 className="page-title">Submit Insurance Claim</h1>
-          <p className="page-subtitle">Complete the guided intake form to begin claim processing</p>
+          <h1 className="page-title">File a claim</h1>
+          <p className="page-subtitle">Four short steps. It takes about 5 minutes, and you can add more documents later.</p>
         </div>
       </div>
 
@@ -315,19 +348,24 @@ export function SubmitClaim() {
 
       {/* Stepper Header */}
       <div className="mb-8">
-        <div className="grid grid-cols-4 gap-2">
+        <p className="mb-2 text-sm font-semibold text-primary sm:hidden">
+          Step {currentStep} of {steps.length}: {steps[currentStep - 1].label}
+        </p>
+        <ol className="grid grid-cols-4 gap-2" aria-label="Claim form steps">
           {steps.map((s) => (
-            <div
+            <li
               key={s.number}
+              aria-current={currentStep === s.number ? 'step' : undefined}
               className={clsx(
-                'border-t-4 pt-2 text-xs font-semibold uppercase transition-colors',
+                'border-t-4 pt-2 text-xs font-semibold transition-colors',
                 currentStep >= s.number ? 'border-primary text-primary' : 'border-gray-200 text-gray-400'
               )}
             >
-              Step {s.number}: {s.label}
-            </div>
+              <span className="hidden sm:inline">{s.number}. {s.label}</span>
+              <span className="sr-only sm:hidden">Step {s.number}: {s.label}</span>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -354,7 +392,7 @@ export function SubmitClaim() {
                     onChange={handleChange}
                     options={customerPolicies.map((p) => ({
                       value: String(p.id),
-                      label: `${p.policy_number} - ${(p.type || '').replace(/_/g, ' ')}`,
+                      label: `${p.policy_number} - ${labelFor(POLICY_TYPES, p.type)}`,
                     }))}
                     placeholder="Select a policy"
                     required
@@ -379,15 +417,31 @@ export function SubmitClaim() {
                   </div>
                 )}
                 {policies.length === 0 && (
-                  <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">A policy is required to submit a claim. Contact your insurer if your policy is not listed.</p>
-                )}
-                <div className="p-4 bg-blue-50/60 rounded-xl text-sm text-blue-800 flex items-start gap-3">
-                  <Shield className="w-5 h-5 flex-shrink-0 text-primary mt-0.5" />
-                  <div>
-                    <span className="font-semibold block">Coverage Verification</span>
-                    Selected policy covers Collision, Comprehensive up to ₹50,000 with a ₹500 deductible.
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p>A policy is required to submit a claim.</p>
+                    {user?.role === 'customer' && vehicles.length > 0 && (
+                      <Link to={`/vehicles/${formData.vehicleId || vehicles[0].id}/insure`} className="mt-2 inline-flex font-semibold text-primary hover:underline">Insure your vehicle</Link>
+                    )}
                   </div>
-                </div>
+                )}
+                {selectedPolicy && (
+                  <div className={clsx(
+                    'p-4 rounded-xl text-sm flex items-start gap-3',
+                    selectedPolicy.status === 'active' ? 'bg-blue-50/60 text-blue-900' : 'bg-amber-50 text-amber-900'
+                  )}
+                  >
+                    <Shield className="w-5 h-5 flex-shrink-0 text-primary mt-0.5" aria-hidden="true" />
+                    <div>
+                      <span className="font-semibold block">
+                        {selectedPolicy.policy_number} · {labelFor(POLICY_TYPES, selectedPolicy.type)}
+                      </span>
+                      Valid {formatDate(selectedPolicy.start_date)} to {formatDate(selectedPolicy.end_date)} · Deductible {formatCurrency(selectedPolicy.deductible)}
+                      {selectedPolicy.status !== 'active' && (
+                        <span className="mt-1 block font-medium">This policy is {selectedPolicy.status}. Claims are normally only paid on active policies.</span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -399,6 +453,7 @@ export function SubmitClaim() {
                   <Input
                     label="Incident Date"
                     type="date"
+                    max={localToday()}
                     name="incidentDate"
                     value={formData.incidentDate}
                     onChange={handleChange}
@@ -431,7 +486,7 @@ export function SubmitClaim() {
                   <Input
                     label="Incident Location (Address / Crossroads)"
                     name="location"
-                    placeholder="e.g. I-95 & Exit 42, Springfield, IL"
+                    placeholder="e.g. MG Road near Trinity Metro, Bengaluru"
                     value={formData.location}
                     onChange={handleChange}
                     required
@@ -565,7 +620,7 @@ export function SubmitClaim() {
                     required
                   />
                   <div className="p-3 bg-gray-50 rounded-xl text-xs text-gray-600 flex items-center">
-                    Note: Our ML Damage Assessment model will cross-verify this estimate against damage photos and OEM parts catalogs.
+                    Your best estimate is fine. We&apos;ll compare it with your photos and any repair quote before deciding.
                   </div>
                 </div>
 
@@ -641,6 +696,21 @@ export function SubmitClaim() {
               </div>
             )}
 
+            {currentStep === 4 && (
+              <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm" aria-label="Review your claim">
+                <h3 className="font-semibold text-gray-900">Check your details</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                  <div><dt className="text-gray-500">Vehicle</dt><dd className="font-medium text-gray-900">{selectedVehicle ? `${selectedVehicle.year} ${selectedVehicle.make} ${selectedVehicle.model} (${selectedVehicle.license_plate})` : '—'}</dd></div>
+                  <div><dt className="text-gray-500">Policy</dt><dd className="font-medium text-gray-900">{selectedPolicy?.policy_number || '—'}</dd></div>
+                  <div><dt className="text-gray-500">When</dt><dd className="font-medium text-gray-900">{formatDate(formData.incidentDate)} at {formData.incidentTime}</dd></div>
+                  <div><dt className="text-gray-500">Where</dt><dd className="font-medium text-gray-900">{formData.location || '—'}</dd></div>
+                  <div><dt className="text-gray-500">What happened</dt><dd className="font-medium text-gray-900">{labelFor(INCIDENT_TYPES, formData.incidentType)} · {labelFor(INCIDENT_SEVERITIES, formData.incidentSeverity)}</dd></div>
+                  <div><dt className="text-gray-500">Documents</dt><dd className="font-medium text-gray-900">{attachments.length ? `${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : 'None yet (you can add them later)'}</dd></div>
+                </dl>
+                <p className="mt-3 text-xs text-gray-500">Need to change something? Use Previous to go back; your answers are kept.</p>
+              </section>
+            )}
+
             {/* Stepper Navigation Buttons */}
             <div className="flex items-center justify-between pt-4 border-t border-gray-200">
               {currentStep > 1 ? (
@@ -654,12 +724,12 @@ export function SubmitClaim() {
 
               {currentStep < 4 ? (
                 <Button variant="primary" type="button" onClick={handleNextStep}>
-                  Next Step
+                  Next
                   <ArrowRight className="w-4 h-4 ml-1.5" />
                 </Button>
               ) : (
-                <Button variant="primary" type="submit" loading={submitting}>
-                  Submit Insurance Claim
+                <Button variant="primary" type="submit" loading={submitting} disabled={submitting}>
+                  {submitting ? 'Submitting…' : 'Submit claim'}
                 </Button>
               )}
             </div>
