@@ -185,6 +185,13 @@ class AuthViewSet(viewsets.GenericViewSet):
         serializer = AdminUserCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        if user.role == Role.EMPLOYEE:
+            # Work that arrived while no employee was available goes to the new hire.
+            try:
+                from apps.assessments.assignment import assign_waiting_work
+                assign_waiting_work()
+            except Exception:
+                logger.exception('Handing waiting work to new employee %s failed', user.email)
         return Response({
             'success': True,
             'data': {'user': UserSerializer(user).data},

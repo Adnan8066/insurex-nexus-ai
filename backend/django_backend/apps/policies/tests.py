@@ -180,3 +180,39 @@ class PolicyRequestAssignmentTests(APITestCase):
         self.assertEqual(self.client.get('/api/v1/policies/applications/').json()['count'], 1)
         self.client.force_authenticate(owner)
         self.assertEqual(self.client.post('/api/v1/policies/bind-quote/', bind, format='json').status_code, 201)
+
+
+@override_settings(ALLOWED_HOSTS=['testserver'], SECURE_SSL_REDIRECT=False, MEDIA_ROOT=TEMP_MEDIA)
+class NoEmployeeAvailableTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from apps.vehicles.models import Vehicle
+        User = get_user_model()
+        cls.admin = User.objects.create_user(username='nadm', email='nadm@example.com', password='x', role='admin')
+        cls.customer = User.objects.create_user(username='ncust', email='ncust@example.com', password='x', role='customer')
+        cls.vehicle = Vehicle.objects.create(customer=cls.customer, make='Make', model='Solo', year=2024,
+                                             vin='VINTEST0000000061', color='Red', license_plate='KL61', license_state='KL')
+
+    def test_admin_is_alerted_and_new_employee_receives_waiting_request(self):
+        from apps.notifications.models import Notification
+        self.client.force_authenticate(self.customer)
+        application = self.client.post('/api/v1/policies/quote/', {
+            'customer': self.customer.pk, 'policy_type': 'auto_comprehensive', 'applicant_details': {},
+            'asset_details': {}, 'risk_factors': {}, 'asset_value': '500000', 'coverage_limit': '500000',
+            'deductible': '1000', 'risk_score': '0',
+            'policy_terms': {'start_date': '2026-11-01', 'end_date': '2027-10-31', 'vehicle': self.vehicle.pk},
+        }, format='json').json()
+        self.assertIsNone(application['assigned_to'])
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.admin, title='Policy request waiting: no employee available').exists())
+
+        self.client.force_authenticate(self.admin)
+        created = self.client.post('/api/v1/auth/users/', {
+            'first_name': 'New', 'last_name': 'Hire', 'email': 'hire@example.com', 'role': 'employee',
+            'password': 'Str0ng-pass-123', 'password_confirm': 'Str0ng-pass-123',
+        }, format='json')
+        self.assertEqual(created.status_code, 201, created.content)
+        hire = get_user_model().objects.get(email='hire@example.com')
+        detail = self.client.get(f"/api/v1/policies/applications/{application['id']}/").json()
+        self.assertEqual(detail['assigned_to'], hire.pk)
+        self.assertTrue(Notification.objects.filter(recipient=hire, title='New policy request assigned to you').exists())
