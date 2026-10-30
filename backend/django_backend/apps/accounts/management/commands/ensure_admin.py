@@ -2,7 +2,8 @@
 
 Free hosting tiers such as Render's have no shell for ``createsuperuser``, so the
 build runs this command. It does nothing when the variables are unset or the
-account already exists, so it is safe to run on every deploy.
+account already exists, so it is safe to run on every deploy. Set
+``DJANGO_SUPERUSER_RESET_PASSWORD=true`` to overwrite an existing admin's password.
 """
 
 import os
@@ -21,7 +22,14 @@ class Command(BaseCommand):
             self.stdout.write("DJANGO_SUPERUSER_EMAIL/PASSWORD not set; skipping admin creation.")
             return
         User = get_user_model()
-        if User.objects.filter(email=email).exists():
+        existing = User.objects.filter(email=email).first()
+        if existing:
+            # Lets a forgotten password be reset from the host's environment, without a shell.
+            if os.environ.get("DJANGO_SUPERUSER_RESET_PASSWORD", "").strip().lower() in ("1", "true", "yes"):
+                existing.set_password(password)
+                existing.save(update_fields=["password"])
+                self.stdout.write(self.style.SUCCESS(f"Reset password for admin {email}."))
+                return
             self.stdout.write(f"Admin {email} already exists; leaving it unchanged.")
             return
         User.objects.create_superuser(

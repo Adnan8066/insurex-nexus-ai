@@ -110,3 +110,17 @@ class EnsureAdminCommandTests(TestCase):
         self.assertEqual(admin.role, 'admin')
         self.assertTrue(admin.is_superuser)
         self.assertTrue(admin.check_password('S3cure-pass!'))
+
+    def test_resets_existing_admin_password_only_when_asked(self):
+        from unittest import mock
+        from django.core.management import call_command
+        env = {'DJANGO_SUPERUSER_EMAIL': 'boss@example.com', 'DJANGO_SUPERUSER_PASSWORD': 'S3cure-pass!'}
+        with mock.patch.dict('os.environ', env):
+            call_command('ensure_admin', stdout=io.StringIO())
+        with mock.patch.dict('os.environ', {**env, 'DJANGO_SUPERUSER_PASSWORD': 'demo1234'}):
+            call_command('ensure_admin', stdout=io.StringIO())
+            self.assertTrue(get_user_model().objects.get(email='boss@example.com').check_password('S3cure-pass!'))
+        reset_env = {**env, 'DJANGO_SUPERUSER_PASSWORD': 'demo1234', 'DJANGO_SUPERUSER_RESET_PASSWORD': 'true'}
+        with mock.patch.dict('os.environ', reset_env):
+            call_command('ensure_admin', stdout=io.StringIO())
+        self.assertTrue(get_user_model().objects.get(email='boss@example.com').check_password('demo1234'))
