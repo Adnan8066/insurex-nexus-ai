@@ -46,7 +46,7 @@ export function RoutingAdvisory() {
     ]).then(([roster, claims, status]) => {
       if (cancelled) return
       setLiveAgents(roster.agents || [])
-      setSelectedLiveAgentIds((roster.agents || []).length <= 5 ? (roster.agents || []).map((agent) => agent.id) : [])
+      setSelectedLiveAgentIds((roster.agents || []).length <= 10 ? (roster.agents || []).map((agent) => agent.id) : [])
       setLiveClaims(Array.isArray(claims) ? claims : [])
       setModelStatus(status)
     }).catch((requestError) => {
@@ -65,8 +65,8 @@ export function RoutingAdvisory() {
 
   const useLiveRoster = () => {
     const selectedAgents = liveAgents.filter((agent) => selectedLiveAgentIds.includes(agent.id))
-    if (selectedAgents.length < 3 || selectedAgents.length > 5) {
-      setError(`Select between 3 and 5 of the ${liveAgents.length} configured agents for this advisory comparison.`)
+    if (selectedAgents.length < 1 || selectedAgents.length > 10) {
+      setError(`Select between 1 and 10 of the ${liveAgents.length} configured agents for this advisory comparison.`)
       return
     }
     setError('')
@@ -202,7 +202,7 @@ export function RoutingAdvisory() {
             {agentSource === 'live' && <button className="btn btn-secondary" type="button" onClick={useSampleRoster}>Use sample data</button>}
           </div>
           {liveAgents.length > 0 && <div className="mb-4 rounded-lg border border-gray-200 p-3">
-            <p className="mb-2 text-sm text-gray-600">Choose 3–5 staff candidates. The model currently scores at most five agents per comparison.</p>
+            <p className="mb-2 text-sm text-gray-600">Choose 1–10 staff candidates. The model scores at most ten agents per comparison.</p>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {liveAgents.map((agent) => <label key={agent.id} className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={selectedLiveAgentIds.includes(agent.id)} onChange={(event) => setSelectedLiveAgentIds((current) => event.target.checked ? [...current, agent.id] : current.filter((id) => id !== agent.id))} />

@@ -154,8 +154,6 @@ POLICY_RATING_VERSION = os.environ.get('POLICY_RATING_VERSION', 'demo-v1')
 POLICY_DEFAULT_RISK_SCORE = os.environ.get('POLICY_DEFAULT_RISK_SCORE', '25')
 CLAIM_ANNUAL_DEPRECIATION_RATE = os.environ.get('CLAIM_ANNUAL_DEPRECIATION_RATE', '0.05')
 CLAIM_MAX_DEPRECIATION_RATE = os.environ.get('CLAIM_MAX_DEPRECIATION_RATE', '0.80')
-# New claims go to the least-busy employee whenever the RL router does not assign them.
-CLAIM_AUTO_ASSIGN_LEAST_BUSY = os.environ.get('CLAIM_AUTO_ASSIGN_LEAST_BUSY', 'True').lower() == 'true'
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.environ.get('STATIC_ROOT', BASE_DIR / 'staticfiles')

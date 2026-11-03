@@ -19,6 +19,23 @@ from .environment import (
 Policy = Callable[[ClaimRoutingEnv, np.ndarray], int]
 
 
+def masked_model_action(model: Any, observation: np.ndarray) -> int:
+    """Highest-probability PPO action among slots marked available.
+
+    Availability is the fourth feature of each agent block, so padded and
+    absent employees are never chosen, matching live recommendation scoring.
+    """
+    observation_tensor, _vectorized = model.policy.obs_to_tensor(observation)
+    probabilities = (
+        model.policy.get_distribution(observation_tensor)
+        .distribution.probs.detach().cpu().numpy().reshape(-1)
+    )
+    available = np.asarray(observation).reshape(-1)[6::4][:MAX_AGENTS] > 0.5
+    if not available.any():
+        raise ValueError("No available agents to evaluate.")
+    return int(np.argmax(np.where(available, probabilities, -1.0)))
+
+
 def _random_action(env: ClaimRoutingEnv, _observation: np.ndarray) -> int:
     """Choose a random agent."""
     candidates = [
@@ -82,10 +99,10 @@ def _reward_aware_action(
         # Simulate the environment's workload and queue updates without
         # changing the actual environment.
         next_workloads = np.maximum(
-            0.0, env.workloads - 4.0
+            0.0, env.workloads[: env.n_agents] - 4.0
         )
         next_queues = np.maximum(
-            0.0, env.queue_lengths - 1.0
+            0.0, env.queue_lengths[: env.n_agents] - 1.0
         )
 
         next_workloads[agent] = min(
@@ -129,6 +146,7 @@ def evaluate_policy(
     steps: int = 100,
     n_agents: int = MAX_AGENTS,
     seed: int = 123,
+    randomize_fleet: bool = True,
 ) -> dict[str, Any]:
     """Evaluate one policy for a fixed number of synthetic arrivals."""
     if steps < 1:
@@ -137,6 +155,7 @@ def evaluate_policy(
     env = ClaimRoutingEnv(
         n_agents=n_agents,
         max_episode_steps=steps,
+        randomize_fleet=randomize_fleet,
     )
     observation, _ = env.reset(seed=seed)
     env.action_space.seed(seed + 1)
@@ -186,6 +205,7 @@ def evaluate_baselines(
     steps: int = 100,
     n_agents: int = MAX_AGENTS,
     seed: int = 123,
+    randomize_fleet: bool = True,
 ) -> dict[str, dict[str, Any]]:
     """Compare random, least-workload, and reward-aware policies."""
     return {
@@ -194,18 +214,21 @@ def evaluate_baselines(
             steps=steps,
             n_agents=n_agents,
             seed=seed,
+            randomize_fleet=randomize_fleet,
         ),
         "least_workload": evaluate_policy(
             _least_workload_action,
             steps=steps,
             n_agents=n_agents,
             seed=seed,
+            randomize_fleet=randomize_fleet,
         ),
         "reward_aware": evaluate_policy(
             _reward_aware_action,
             steps=steps,
             n_agents=n_agents,
             seed=seed,
+            randomize_fleet=randomize_fleet,
         ),
     }
 
@@ -216,23 +239,15 @@ def evaluate_model(
     steps: int = 100,
     n_agents: int = MAX_AGENTS,
     seed: int = 123,
+    randomize_fleet: bool = True,
 ) -> dict[str, Any]:
     """Evaluate an SB3-compatible model deterministically."""
-
-    def model_action(
-        _env: ClaimRoutingEnv,
-        observation: np.ndarray,
-    ) -> int:
-        action, _state = model.predict(
-            observation, deterministic=True
-        )
-        return int(np.asarray(action).item())
-
     return evaluate_policy(
-        model_action,
+        lambda _env, observation: masked_model_action(model, observation),
         steps=steps,
         n_agents=n_agents,
         seed=seed,
+        randomize_fleet=randomize_fleet,
     )
 
 
@@ -242,6 +257,7 @@ def evaluate_across_seeds(
     seeds: tuple[int, ...] = tuple(range(1000, 1010)),
     model: Any | None = None,
     n_agents: int = MAX_AGENTS,
+    randomize_fleet: bool = True,
 ) -> dict[str, Any]:
     """Compare policies across repeatable synthetic scenarios.
 
@@ -258,17 +274,7 @@ def evaluate_across_seeds(
     }
 
     if model is not None:
-
-        def model_action(
-            _env: ClaimRoutingEnv,
-            observation: np.ndarray,
-        ) -> int:
-            action, _state = model.predict(
-                observation, deterministic=True
-            )
-            return int(np.asarray(action).item())
-
-        policies["ppo"] = model_action
+        policies["ppo"] = lambda _env, observation: masked_model_action(model, observation)
 
     metric_names = (
         "average_reward",
@@ -286,6 +292,7 @@ def evaluate_across_seeds(
                 steps=steps,
                 n_agents=n_agents,
                 seed=seed,
+                randomize_fleet=randomize_fleet,
             )
             for seed in seeds
         ]

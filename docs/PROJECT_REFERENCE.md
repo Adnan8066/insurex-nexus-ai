@@ -441,8 +441,8 @@ The current artifacts come from this command, trained from `backend/data/`.
 ## 9. RL claim-routing advisory
 
 ### Environment (`rl/environment.py`, `ClaimRoutingEnv`)
-- **Agents**: 3–5 adjusters; max queue 20, max workload 100, skill tiers 1–5.
-- **Observation** (23 floats in [0,1]): `[complexity, severity, difficulty]` + per agent `[queue/20, workload/100, skill_ok, available]` × 5.
+- **Agents**: 1–10 adjusters (training randomizes team size and absences); max queue 20, max workload 100, skill tiers 1–5.
+- **Observation** (43 floats in [0,1]): `[complexity, severity, difficulty]` + per agent `[queue/20, workload/100, skill_ok, available]` × 10.
 - **Action**: index of the agent to assign.
 - **Dynamics**: `claim_workload = 1 + 4·complexity + 5·difficulty`; each step every agent's workload −4 and queue −1; the chosen agent gets +workload and +1 queue.
 - **Reward**:
@@ -469,7 +469,7 @@ wait   = queue·1.5 + workload/4
 The simple heuristic still beats PPO, so production recommendations and auto-assignment stay **disabled** (`CLAIM_ROUTING_ENFORCE_EVALUATION_GATE=True`).
 
 ### Recommendation engine (`rl/recommendation.py`)
-Encodes the claim and 3–5 agents → PPO deterministic action + action probabilities (renormalised over available agents) → ranked options with match %, predicted wait, skill match, workload before/after. The response always carries `advisory_only: true`, `automated_assignment: false`, `requires_human_review: true`.
+Encodes the claim and 1–10 agents → PPO deterministic action + action probabilities (renormalised over available agents) → ranked options with match %, predicted wait, skill match, workload before/after. The response always carries `advisory_only: true`, `automated_assignment: false`, `requires_human_review: true`.
 
 ### Claim → RL features (`rl_views._claim_routing_features`)
 - severity: minor 0.15, moderate 0.4, major 0.7, total_loss 1.0
@@ -477,7 +477,7 @@ Encodes the claim and 3–5 agents → PPO deterministic action + action probabi
 - difficulty: `0.65·severity + 0.15·injuries + 0.08·property + 0.06·witnesses + 0.06·police`
 
 ### Auto-assignment (fail-closed)
-`auto_assign_new_claim` only acts if **all** of these hold: auto-assign is enabled, the gate passed, there are 3–5 real (non-demo) available employee profiles, and the recommended agent has a skill match. Today it never fires.
+The RL model is the only automatic claim router (no least-busy fallback). `auto_assign_new_claim` assigns when auto-assign is enabled (default) and the gate passed, choosing among active, available, non-demo employees with the required skill tier (no profile = tier 3); rosters over 10 compete in groups of 10. Otherwise the claim waits, admins are notified with the reason, and it is retried when an employee is created or via `manage.py assign_waiting_claims`.
 
 ---
 
@@ -579,7 +579,7 @@ Tailwind + a large `index.css` with CSS-variable design tokens (primary #2563eb,
 | `CLAIM_ANNUAL_DEPRECIATION_RATE`, `CLAIM_MAX_DEPRECIATION_RATE` | 0.05, 0.80 | payout formula |
 | `CLAIM_ROUTING_MODEL_PATH` | `backend/rl/models/claim_routing_ppo.zip` | |
 | `CLAIM_ROUTING_ENFORCE_EVALUATION_GATE` | | block advice if the gate failed |
-| `CLAIM_ROUTING_AUTO_ASSIGN_ENABLED` | false | |
+| `CLAIM_ROUTING_AUTO_ASSIGN_ENABLED` | true | RL is the only automatic claim router; false leaves new claims unassigned |
 | `THROTTLE_*_RATE`, `MAX_UPLOAD_BYTES` | see §6, 25 MB | |
 | `EMAIL_*` | console backend | password reset emails |
 | `LOG_LEVEL` | INFO | |

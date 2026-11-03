@@ -14,6 +14,7 @@ from stable_baselines3 import PPO
 from .environment import (
     MAX_AGENTS,
     MAX_QUEUE_LENGTH,
+    MIN_AGENTS,
     MAX_SKILL_TIER,
     MAX_WORKLOAD,
     QUEUE_WAIT_UNIT,
@@ -21,6 +22,11 @@ from .environment import (
     estimate_claim_workload,
     estimate_wait_time,
 )
+
+
+def required_skill_tier(severity_score: float) -> int:
+    """Minimum agent skill tier for a normalized claim severity."""
+    return min(MAX_SKILL_TIER, max(1, int(math.ceil(severity_score * MAX_SKILL_TIER))))
 
 
 class RecommendationInputError(ValueError):
@@ -38,6 +44,7 @@ class ClaimRecommendationEngine:
     ``complexity_score``, ``severity_score``, and ``processing_difficulty``.
     Agent records require ``id``, ``queue_length``, ``workload``, and
     ``skill_tier`` (1 through 5); ``available`` defaults to ``True``.
+    Between ``MIN_AGENTS`` and ``MAX_AGENTS`` agents can be scored at once.
     """
 
     OBSERVATION_SIZE = 3 + MAX_AGENTS * 4
@@ -209,8 +216,10 @@ class ClaimRecommendationEngine:
             active_agents_status, Sequence
         ):
             raise RecommendationInputError("active_agents_status must be a list.")
-        if not 3 <= len(active_agents_status) <= MAX_AGENTS:
-            raise RecommendationInputError("Provide between 3 and 5 agent records.")
+        if not MIN_AGENTS <= len(active_agents_status) <= MAX_AGENTS:
+            raise RecommendationInputError(
+                f"Provide between {MIN_AGENTS} and {MAX_AGENTS} agent records."
+            )
 
         agents: list[dict[str, Any]] = []
         ids: set[str] = set()
@@ -264,10 +273,7 @@ class ClaimRecommendationEngine:
             claim["severity_score"],
             claim["processing_difficulty"],
         ]
-        required_tier = min(
-            MAX_SKILL_TIER,
-            max(1, int(math.ceil(claim["severity_score"] * MAX_SKILL_TIER))),
-        )
+        required_tier = required_skill_tier(claim["severity_score"])
         for agent in agents:
             offset = 3 + int(agent["index"]) * 4
             observation[offset : offset + 4] = [
@@ -303,10 +309,7 @@ class ClaimRecommendationEngine:
         *,
         rank: int,
     ) -> dict[str, Any]:
-        required_tier = min(
-            MAX_SKILL_TIER,
-            max(1, int(math.ceil(claim["severity_score"] * MAX_SKILL_TIER))),
-        )
+        required_tier = required_skill_tier(claim["severity_score"])
         skill_match = int(agent["skill_tier"]) >= required_tier
         decayed_workload = max(
             0.0, float(agent["workload"]) - SERVICE_CAPACITY_PER_STEP

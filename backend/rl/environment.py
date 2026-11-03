@@ -14,8 +14,8 @@ import numpy as np
 from gymnasium import spaces
 
 
-MAX_AGENTS = 5
-MIN_AGENTS = 3
+MAX_AGENTS = 10
+MIN_AGENTS = 1
 MAX_QUEUE_LENGTH = 20.0
 MAX_WORKLOAD = 100.0
 MAX_SKILL_TIER = 5
@@ -24,6 +24,8 @@ SERVICE_CAPACITY_PER_STEP = 4.0
 BASE_CLAIM_WORKLOAD = 1.0
 COMPLEXITY_WORKLOAD = 4.0
 DIFFICULTY_WORKLOAD = 5.0
+# Chance that a simulated employee is off work for an episode when the fleet is randomized.
+UNAVAILABLE_PROBABILITY = 0.15
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,8 @@ class RewardWeights:
     imbalance: float = 2.0
     skill_mismatch: float = 8.0
     assignment: float = 1.0
+    # Choosing a padded or unavailable slot assigns nothing.
+    invalid_action: float = 10.0
 
 
 def estimate_claim_workload(complexity: float, processing_difficulty: float) -> float:
@@ -52,11 +56,15 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
 
     Observation layout:
         [complexity, severity, processing_difficulty,
-         (queue_length, workload, skill_match, available) * 5 agents]
+         (queue_length, workload, skill_match, available) * MAX_AGENTS]
 
     Claim attributes and agent status are synthetic. One step represents one
     scheduling interval: existing agents make natural progress, then the
     selected agent receives the incoming claim.
+
+    The action space always has MAX_AGENTS slots. With ``randomize_fleet`` each
+    episode draws 1..n_agents employees and marks some unavailable, so the
+    policy learns to handle padding and absences like live rosters.
     """
 
     metadata = {"render_modes": []}
@@ -66,6 +74,7 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
         n_agents: int = MAX_AGENTS,
         max_episode_steps: int = 100,
         reward_weights: RewardWeights | None = None,
+        randomize_fleet: bool = False,
     ) -> None:
         super().__init__()
         if not MIN_AGENTS <= n_agents <= MAX_AGENTS:
@@ -73,12 +82,14 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
         if max_episode_steps < 1:
             raise ValueError("max_episode_steps must be positive.")
 
+        self.max_fleet_size = n_agents
+        self.randomize_fleet = randomize_fleet
         self.n_agents = n_agents
         self.max_episode_steps = max_episode_steps
         self.reward_weights = reward_weights or RewardWeights()
-        self.action_space = spaces.Discrete(n_agents)
-        # Padding keeps the observation shape fixed so models trained with five
-        # agents can score live requests that contain three or four agents.
+        self.action_space = spaces.Discrete(MAX_AGENTS)
+        # Padding keeps the observation shape fixed so one model can score
+        # live requests with any number of employees up to MAX_AGENTS.
         self.observation_space = spaces.Box(
             low=0.0,
             high=1.0,
@@ -86,10 +97,11 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
             dtype=np.float32,
         )
 
-        self.queue_lengths = np.zeros(n_agents, dtype=np.float32)
-        self.workloads = np.zeros(n_agents, dtype=np.float32)
-        self.skill_tiers = np.ones(n_agents, dtype=np.int8)
-        self.available = np.ones(n_agents, dtype=np.float32)
+        self.queue_lengths = np.zeros(MAX_AGENTS, dtype=np.float32)
+        self.workloads = np.zeros(MAX_AGENTS, dtype=np.float32)
+        self.skill_tiers = np.ones(MAX_AGENTS, dtype=np.int8)
+        self.available = np.zeros(MAX_AGENTS, dtype=np.float32)
+        self.available[:n_agents] = 1.0
         self.claim_complexity = 0.5
         self.claim_severity = 0.5
         self.processing_difficulty = 0.5
@@ -104,19 +116,49 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
     ) -> tuple[np.ndarray, dict[str, Any]]:
         super().reset(seed=seed)
         self.steps = 0
-        self.queue_lengths = self.np_random.integers(0, 7, size=self.n_agents).astype(np.float32)
-        self.workloads = self.np_random.uniform(0, 24, size=self.n_agents).astype(np.float32)
-        self.skill_tiers = self.np_random.integers(1, MAX_SKILL_TIER + 1, size=self.n_agents, dtype=np.int8)
-        self.available = np.ones(self.n_agents, dtype=np.float32)
+        if self.randomize_fleet:
+            self.n_agents = int(self.np_random.integers(MIN_AGENTS, self.max_fleet_size + 1))
+        else:
+            self.n_agents = self.max_fleet_size
+        n = self.n_agents
+        self.queue_lengths = np.zeros(MAX_AGENTS, dtype=np.float32)
+        self.workloads = np.zeros(MAX_AGENTS, dtype=np.float32)
+        self.skill_tiers = np.ones(MAX_AGENTS, dtype=np.int8)
+        self.available = np.zeros(MAX_AGENTS, dtype=np.float32)
+        self.queue_lengths[:n] = self.np_random.integers(0, 7, size=n)
+        self.workloads[:n] = self.np_random.uniform(0, 24, size=n)
+        self.skill_tiers[:n] = self.np_random.integers(1, MAX_SKILL_TIER + 1, size=n)
+        self.available[:n] = 1.0
+        if self.randomize_fleet:
+            self.available[:n] = self.np_random.random(n) >= UNAVAILABLE_PROBABILITY
+            if not self.available[:n].any():
+                self.available[int(self.np_random.integers(n))] = 1.0
         self._sample_claim()
         return self._get_observation(), self._get_info()
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         if not self.action_space.contains(action):
-            raise ValueError(f"Action must be an agent index from 0 to {self.n_agents - 1}.")
+            raise ValueError(f"Action must be an agent index from 0 to {MAX_AGENTS - 1}.")
         selected = int(action)
         if not self.available[selected]:
-            raise ValueError("The selected agent is unavailable.")
+            # Nobody receives the claim; it is offered again next interval.
+            self.steps += 1
+            info = self._get_info()
+            info.update({
+                "invalid_action": True,
+                "assigned_agent_index": None,
+                "predicted_wait_time": 0.0,
+                "workload_standard_deviation": round(float(np.std(self.workloads[: self.n_agents])), 4),
+                "claim_workload": 0.0,
+                "skill_mismatch": False,
+                "wait_penalty": 0.0,
+                "imbalance_penalty": 0.0,
+                "mismatch_penalty": 0.0,
+            })
+            return (
+                self._get_observation(), -float(self.reward_weights.invalid_action),
+                self.steps >= self.max_episode_steps, False, info,
+            )
 
         wait_time = estimate_wait_time(
             float(self.queue_lengths[selected]), float(self.workloads[selected])
@@ -137,7 +179,7 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
             MAX_QUEUE_LENGTH, self.queue_lengths[selected] + 1.0
         )
 
-        workload_std = float(np.std(self.workloads))
+        workload_std = float(np.std(self.workloads[: self.n_agents]))
         normalized_wait = wait_time / (QUEUE_WAIT_UNIT * MAX_QUEUE_LENGTH + MAX_WORKLOAD / SERVICE_CAPACITY_PER_STEP)
         normalized_imbalance = workload_std / MAX_WORKLOAD
         weights = self.reward_weights
@@ -155,6 +197,7 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
         info = self._get_info()
         info.update(
             {
+                "invalid_action": False,
                 "assigned_agent_index": selected,
                 "predicted_wait_time": round(wait_time, 4),
                 "workload_standard_deviation": round(workload_std, 4),
@@ -188,17 +231,16 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
                 float(self.skill_tiers[index] >= self.required_skill_tier),
                 float(self.available[index]),
             ]
-        # Padded agents have availability 0 so recommendation callers can
-        # exclude them from the candidate list.
-        for index in range(self.n_agents, MAX_AGENTS):
-            observation[3 + index * 4 + 3] = 0.0
+        # Padded agents stay all-zero (availability 0) so callers can exclude them.
         return observation
 
     def _get_info(self) -> dict[str, Any]:
+        n = self.n_agents
         return {
             "step": self.steps,
             "required_skill_tier": self.required_skill_tier,
-            "agent_skill_tiers": self.skill_tiers.astype(int).tolist(),
-            "agent_queue_lengths": self.queue_lengths.astype(float).tolist(),
-            "agent_workloads": self.workloads.astype(float).tolist(),
+            "agent_skill_tiers": self.skill_tiers[:n].astype(int).tolist(),
+            "agent_queue_lengths": self.queue_lengths[:n].astype(float).tolist(),
+            "agent_workloads": self.workloads[:n].astype(float).tolist(),
+            "agent_available": self.available[:n].astype(bool).tolist(),
         }

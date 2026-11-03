@@ -57,13 +57,15 @@ least-workload policy on average reward, wait, workload imbalance, and skill
 mismatch across all held-out seeds. A failed gate marks the candidate as not
 qualified for an advisory pilot; do not promote it based only on training success.
 
-The simulator supports 3–5 agents. PPO is trained against the five-agent
-observation/action space. The recommendation service accepts 3–5 current agent
-records, pads missing slots, and filters unavailable agents from its ranking.
+The simulator supports 1–10 agents. PPO is trained against the ten-slot
+observation/action space with randomized team sizes and absences, so it sees
+padding and unavailable employees during training. The recommendation service
+accepts 1–10 current agent records, pads missing slots, and filters unavailable
+agents from its ranking.
 
 ## Recommendation input
 
-The service expects normalized claim values between 0 and 1 and three to five
+The service expects normalized claim values between 0 and 1 and one to ten
 agent records:
 
 ```python
@@ -75,7 +77,7 @@ claim_data = {
 active_agents_status = [
     {"id": "agent-1", "queue_length": 2, "workload": 12.0,
      "skill_tier": 4, "available": True},
-    # Provide at least two more agents, up to five total.
+    # Up to ten agents total.
 ]
 ```
 
@@ -98,8 +100,8 @@ for each eligible employee or investigator. Set the skill tier and availability
 from an approved source. The application calculates queue length from active
 claims assigned to each person and estimates workload using the simulator's
 documented feature weights. Estimated wait is not a measured time. The policy
-accepts at most five candidates per recommendation. The website requires a
-reviewer to choose the 3–5 candidates when the configured roster is larger.
+accepts at most ten candidates per recommendation. The website requires a
+reviewer to choose 1–10 candidates when the configured roster is larger.
 
 `GET /api/v1/ai/routing-agents/` supplies the configured team.
 `GET /api/v1/ai/routing-claims/` supplies unassigned open claims with normalized
@@ -142,18 +144,21 @@ wait, imbalance, and mismatch metrics.
 
 ## Automatic claim assignment
 
-New claim intake calls the routing hook after the claim is saved. Assignment is
-off by default. It proceeds only when `CLAIM_ROUTING_AUTO_ASSIGN_ENABLED=True`,
-the deployed model's adjacent `.evaluation.json` passes the evaluation gate,
-and there are 3-5 active, available, non-demo employee routing profiles. The
-selected employee must also meet the model's required skill tier. Otherwise,
-the claim remains unassigned and can be handled through the existing staff
-assignment flow. Successful assignments are recorded in the claim timeline.
+The RL model is the only automatic claim router; there is no formula
+fallback. New claim intake calls `auto_assign_new_claim` after the claim is
+saved. It assigns only when `CLAIM_ROUTING_AUTO_ASSIGN_ENABLED` is true (the
+default) and the deployed model's adjacent `.evaluation.json` passes the
+evaluation gate. Candidates are all active, available, non-demo employees
+whose skill tier meets the claim's required tier; employees without a routing
+profile count as tier 3. Teams larger than ten are compared in groups of ten
+and the group winners compete until one remains.
 
-Before enabling this setting, retrain and evaluate with representative,
-reviewed operational data. The current evaluation is synthetic and fails the
-gate, so it cannot trigger automatic assignments. Do not enable the setting
-with that candidate.
+When the claim cannot be routed (routing off, gate not passed, model load
+failure, nobody available, or nobody skilled enough) it stays unassigned and
+admins get a notification naming the reason. Waiting claims are retried when
+an employee is created, or on demand with
+`python manage.py assign_waiting_claims` (for example after deploying a newly
+qualified model). Successful assignments are recorded in the claim timeline.
 
 ## Checks
 

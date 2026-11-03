@@ -3,6 +3,7 @@
 from functools import lru_cache
 from importlib.util import find_spec
 import json
+import logging
 import os
 from pathlib import Path
 import sys
@@ -18,6 +19,15 @@ from rest_framework.response import Response
 
 from common.permissions import IsStaffMember
 from .models import RoutingAgentProfile, RoutingRecommendationReview
+
+logger = logging.getLogger(__name__)
+
+
+def _make_rl_importable():
+    """Put ``backend/`` on sys.path so the sibling ``rl`` package can be imported."""
+    backend_root = str(Path(__file__).resolve().parents[3])
+    if backend_root not in sys.path:
+        sys.path.insert(0, backend_root)
 
 
 def _model_artifact_path():
@@ -38,34 +48,41 @@ def _evaluation_gate_passed(model_path):
         return False
 
 
-def auto_assign_new_claim(claim):
-    """Assign a new claim only when routing is enabled and the PPO is qualified.
+def _employee_skill_tier(user):
+    """Profile skill tier, or the profile default for employees without one."""
+    try:
+        return user.routing_profile.skill_tier
+    except RoutingAgentProfile.DoesNotExist:
+        return RoutingAgentProfile._meta.get_field('skill_tier').default
 
-    This is deliberately fail-closed: missing staff profiles, model artifacts,
-    dependencies, or a passing evaluation leave the claim unassigned.
+
+def _route_claim_with_rl(claim):
+    """Pick an employee for the claim with the RL model.
+
+    Returns ``(employee, result)`` on success or ``(None, reason)`` when the
+    claim cannot be routed. Rosters larger than the model's slot count are
+    compared in groups; group winners then compete until one remains.
     """
-    if os.environ.get('CLAIM_ROUTING_AUTO_ASSIGN_ENABLED', 'false').lower() != 'true':
-        return False
+    if os.environ.get('CLAIM_ROUTING_AUTO_ASSIGN_ENABLED', 'true').lower() != 'true':
+        return None, 'automatic RL routing is switched off'
+    if not _evaluation_gate_passed(_model_artifact_path()):
+        return None, 'no RL model has passed its evaluation gate'
 
-    model_path = _model_artifact_path()
-    if not _evaluation_gate_passed(model_path):
-        return False
+    from .assignment import available_employees
 
-    from apps.accounts.models import Role
-    from apps.claims.models import Claim, ClaimTimeline
+    employees = {user.id: user for user in available_employees().select_related('routing_profile')}
+    if not employees:
+        return None, 'no employee is available'
+    try:
+        engine = _load_recommendation_engine()
+        _make_rl_importable()
+        from rl.environment import MAX_AGENTS
+        from rl.recommendation import required_skill_tier
+    except Exception:
+        logger.exception('RL routing model could not be loaded')
+        return None, 'the RL model could not be loaded'
 
-    profiles = list(RoutingAgentProfile.objects.select_related('user').filter(
-        user__role=Role.EMPLOYEE,
-        user__is_active=True,
-        is_available=True,
-        is_demo=False,
-    ))
-    agent_status = [_agent_status(profile) for profile in profiles]
-    # The model accepts 3-5 candidates. Avoid inventing/fabricating roster data.
-    if not 3 <= len(agent_status) <= 5:
-        return False
-
-    values = {
+    features = _claim_routing_features({
         'incident_severity': claim.incident_severity,
         'number_of_vehicles': claim.number_of_vehicles,
         'injuries': claim.injuries,
@@ -73,31 +90,66 @@ def auto_assign_new_claim(claim):
         'witnesses': claim.witnesses,
         'police_report': claim.police_report,
         'complexity_score': claim.complexity_score,
-    }
-    result = _load_recommendation_engine().get_routing_recommendations(
-        _claim_routing_features(values), agent_status,
-    )
-    if result.get('status') != 'recommendation_available':
-        return False
+    })
+    required_tier = required_skill_tier(features['severity_score'])
+    candidates = []
+    for user in employees.values():
+        queue_length, workload = open_claim_load(user)
+        tier = _employee_skill_tier(user)
+        if tier >= required_tier:
+            candidates.append({
+                'id': user.id, 'queue_length': queue_length, 'workload': workload,
+                'skill_tier': tier, 'available': True,
+            })
+    if not candidates:
+        return None, f'no available employee has skill tier {required_tier} or higher'
 
-    selected = next((
-        profile for profile in profiles
-        if str(profile.user_id) == str(result.get('recommended_agent_id'))
-    ), None)
-    option = next((
-        item for item in result.get('ranked_options', [])
-        if str(item.get('agent_id')) == str(result.get('recommended_agent_id'))
-    ), None)
-    if selected is None or not option or not option.get('skill_match'):
+    try:
+        while True:
+            groups = [candidates[i:i + MAX_AGENTS] for i in range(0, len(candidates), MAX_AGENTS)]
+            winners = []
+            for group in groups:
+                result = engine.get_routing_recommendations(features, group)
+                if result.get('status') != 'recommendation_available':
+                    return None, 'the RL model returned no recommendation'
+                winners.append(next(a for a in group if str(a['id']) == str(result['recommended_agent_id'])))
+            if len(groups) == 1:
+                return employees[winners[0]['id']], result
+            candidates = winners
+    except Exception:
+        logger.exception('RL routing failed for claim %s', claim.claim_number)
+        return None, 'the RL model failed while scoring employees'
+
+
+def auto_assign_new_claim(claim, *, notify_admins=True):
+    """Assign an open, unassigned claim using the qualified RL model.
+
+    The RL policy is the only automatic claim router, and it is fail-closed:
+    when routing is off, no model has passed its evaluation gate, or no
+    available employee has the required skill tier, the claim stays unassigned
+    and admins are told why. ``assignment.assign_waiting_work`` retries waiting
+    claims when an employee joins.
+    """
+    from apps.claims.models import Claim, ClaimTimeline
+    from .assignment import OPEN_CLAIM_STATUSES, _notify_admins_unassigned, notify_claim_assignee
+
+    employee, result = _route_claim_with_rl(claim)
+    if employee is None:
+        if notify_admins:
+            _notify_admins_unassigned(
+                'Claim waiting: not assigned automatically',
+                f'Claim {claim.claim_number} was not assigned because {result}. Assign it manually; '
+                'otherwise it is retried when an employee is added.',
+                f'/claims/{claim.id}', 'claim', claim.id,
+            )
         return False
 
     from django.db import transaction
     with transaction.atomic():
         # Conditional update prevents a concurrent/manual assignment being overwritten.
         updated = Claim.objects.filter(
-            pk=claim.pk, assigned_adjuster__isnull=True,
-            status__in=['submitted', 'under_review', 'ai_assessment'],
-        ).update(assigned_adjuster=selected.user)
+            pk=claim.pk, assigned_adjuster__isnull=True, status__in=OPEN_CLAIM_STATUSES,
+        ).update(assigned_adjuster=employee)
         if not updated:
             return False
         ClaimTimeline.objects.create(
@@ -105,14 +157,13 @@ def auto_assign_new_claim(claim):
             status=claim.status,
             title='Automatically Assigned to Adjuster',
             description=(
-                f'Claim was routed to {selected.user.get_full_name() or selected.user.email} '
+                f'Claim was routed to {employee.get_full_name() or employee.email} '
                 f'by the qualified RL model ({result.get("model_version", "unknown")}).'
             ),
             is_system=True,
         )
-    claim.assigned_adjuster = selected.user
-    from .assignment import notify_claim_assignee
-    notify_claim_assignee(claim, selected.user)
+    claim.assigned_adjuster = employee
+    notify_claim_assignee(claim, employee)
     return True
 
 
@@ -127,7 +178,7 @@ class ActiveAgentStatusSerializer(serializers.Serializer):
 class RoutingRecommendationRequestSerializer(serializers.Serializer):
     claim_data = serializers.DictField(child=serializers.FloatField(min_value=0, max_value=1))
     claim_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
-    active_agents_status = ActiveAgentStatusSerializer(many=True, min_length=3, max_length=5)
+    active_agents_status = ActiveAgentStatusSerializer(many=True, min_length=1, max_length=10)
 
     def validate(self, attrs):
         claim_id = attrs.get('claim_id')
@@ -176,7 +227,7 @@ class RoutingReviewRequestSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(choices=RoutingRecommendationReview.Decision.choices)
     notes = serializers.CharField(required=False, allow_blank=True, max_length=2000)
     claim_data = serializers.DictField(child=serializers.FloatField(min_value=0, max_value=1))
-    active_agents_status = ActiveAgentStatusSerializer(many=True, min_length=3, max_length=5)
+    active_agents_status = ActiveAgentStatusSerializer(many=True, min_length=1, max_length=10)
     recommendation = serializers.DictField()
     review_token = serializers.CharField()
 
@@ -279,7 +330,10 @@ def routing_model_status(request):
         'dataset_pretraining': dataset_pretraining,
         'dependencies': dependencies,
         'advisory_only': True,
-        'automated_assignment': False,
+        'automated_assignment': (
+            os.environ.get('CLAIM_ROUTING_AUTO_ASSIGN_ENABLED', 'true').lower() == 'true'
+            and artifact_present and evaluation_gate_passed
+        ),
         'detail': None if artifact_present else 'Supply the trained PPO archive and set CLAIM_ROUTING_MODEL_PATH.',
     })
 
@@ -346,9 +400,7 @@ def open_claim_load(user):
         'incident_severity', 'number_of_vehicles', 'injuries', 'property_damage', 'witnesses', 'police_report', 'complexity_score'
     ))
     try:
-        backend_root = str(Path(__file__).resolve().parents[3])
-        if backend_root not in sys.path:
-            sys.path.insert(0, backend_root)
+        _make_rl_importable()
         from rl.environment import estimate_claim_workload
         workload = sum(
             estimate_claim_workload(
@@ -372,9 +424,7 @@ def open_claim_load(user):
 def _load_recommendation_engine():
     # Keep Torch/SB3 imports out of Django startup; load the policy only when
     # an authorized user requests an advisory recommendation.
-    backend_root = str(Path(__file__).resolve().parents[3])
-    if backend_root not in sys.path:
-        sys.path.insert(0, backend_root)
+    _make_rl_importable()
     from rl.recommendation import ClaimRecommendationEngine
 
     return ClaimRecommendationEngine.load()

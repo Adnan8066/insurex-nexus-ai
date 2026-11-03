@@ -47,7 +47,7 @@ def generate_dataset(
     if episodes < 1 or steps_per_episode < 1:
         raise ValueError("episodes and steps_per_episode must be positive")
     rng = np.random.default_rng(seed)
-    env = ClaimRoutingEnv(n_agents=MAX_AGENTS, max_episode_steps=steps_per_episode)
+    env = ClaimRoutingEnv(n_agents=MAX_AGENTS, max_episode_steps=steps_per_episode, randomize_fleet=True)
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     columns = [

@@ -38,4 +38,4 @@ services:
       - key: CLAIM_ROUTING_ENFORCE_EVALUATION_GATE
         value: "True"
       - key: CLAIM_ROUTING_AUTO_ASSIGN_ENABLED
-        value: "False"
+        value: "True"

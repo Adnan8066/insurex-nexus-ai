@@ -2,6 +2,7 @@ import io
 import shutil
 import tempfile
 from datetime import timedelta
+from unittest.mock import patch
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -338,19 +339,78 @@ class ClaimAutoAssessmentTests(ClaimTestBase):
 class ClaimAutoAssignmentTests(ClaimTestBase):
     claim_payload = ClaimInputValidationTests.claim_payload
 
-    def test_new_claim_goes_to_least_busy_employee_and_notifies_them(self):
-        from apps.notifications.models import Notification
-        User = get_user_model()
-        idle = User.objects.create_user(username='idle', email='idle@example.com', password='x', role='employee')
-        self.make_claim(assigned_adjuster=self.employee)
-        response = self.as_user(self.customer).post('/api/v1/claims/', self.claim_payload(), format='json')
-        self.assertEqual(response.status_code, 201, response.content)
-        claim = Claim.objects.get(claim_number=response.json()['claim_number'])
-        self.assertEqual(claim.assigned_adjuster, idle)
-        self.assertTrue(claim.timeline.filter(title='Automatically Assigned to Adjuster').exists())
-        self.assertTrue(Notification.objects.filter(recipient=idle, title='New claim assigned to you').exists())
+    class FakeEngine:
+        """Stands in for the PPO engine: recommends the candidate with the highest id."""
 
-    @override_settings(CLAIM_AUTO_ASSIGN_LEAST_BUSY=False)
-    def test_least_busy_assignment_can_be_switched_off(self):
-        response = self.as_user(self.customer).post('/api/v1/claims/', self.claim_payload(), format='json')
-        self.assertIsNone(Claim.objects.get(claim_number=response.json()['claim_number']).assigned_adjuster)
+        def __init__(self):
+            self.group_sizes = []
+
+        def get_routing_recommendations(self, claim_data, agents):
+            self.group_sizes.append(len(agents))
+            return {'status': 'recommendation_available', 'model_version': 'fake',
+                    'recommended_agent_id': max(agent['id'] for agent in agents)}
+
+    def route_with(self, engine, gate_passed=True):
+        return (
+            patch('apps.assessments.rl_views._evaluation_gate_passed', return_value=gate_passed),
+            patch('apps.assessments.rl_views._load_recommendation_engine', return_value=engine),
+        )
+
+    def post_claim(self, **overrides):
+        response = self.as_user(self.customer).post('/api/v1/claims/', self.claim_payload(**overrides), format='json')
+        self.assertEqual(response.status_code, 201, response.content)
+        return Claim.objects.get(claim_number=response.json()['claim_number'])
+
+    def test_new_claim_is_routed_by_rl_model_and_notifies_employee(self):
+        from apps.notifications.models import Notification
+        newest = get_user_model().objects.create_user(username='idle', email='idle@example.com', password='x', role='employee')
+        gate, engine = self.route_with(self.FakeEngine())
+        with gate, engine:
+            claim = self.post_claim()
+        self.assertEqual(claim.assigned_adjuster, newest)
+        entry = claim.timeline.get(title='Automatically Assigned to Adjuster')
+        self.assertIn('RL model', entry.description)
+        self.assertTrue(Notification.objects.filter(recipient=newest, title='New claim assigned to you').exists())
+
+    def test_claim_waits_and_admins_are_told_why_without_a_qualified_model(self):
+        from apps.notifications.models import Notification
+        gate, engine = self.route_with(self.FakeEngine(), gate_passed=False)
+        with gate, engine:
+            claim = self.post_claim()
+        self.assertIsNone(claim.assigned_adjuster)
+        alert = Notification.objects.get(recipient=self.admin, title='Claim waiting: not assigned automatically')
+        self.assertIn('evaluation gate', alert.message)
+
+    def test_claim_waits_when_no_available_employee_has_the_required_skill(self):
+        from apps.assessments.models import RoutingAgentProfile
+        from apps.notifications.models import Notification
+        RoutingAgentProfile.objects.create(user=self.employee, skill_tier=1)
+        gate, engine = self.route_with(self.FakeEngine())
+        with gate, engine:
+            claim = self.post_claim(incident_severity='total_loss')
+        self.assertIsNone(claim.assigned_adjuster)
+        alert = Notification.objects.get(recipient=self.admin, title='Claim waiting: not assigned automatically')
+        self.assertIn('skill tier 5', alert.message)
+
+    def test_rosters_larger_than_the_model_compete_in_groups(self):
+        User = get_user_model()
+        hires = [User.objects.create_user(username=f'h{i}', email=f'h{i}@example.com', password='x', role='employee')
+                 for i in range(11)]
+        fake = self.FakeEngine()
+        gate, engine = self.route_with(fake)
+        with gate, engine:
+            claim = self.post_claim()
+        self.assertEqual(claim.assigned_adjuster, hires[-1])
+        self.assertEqual(fake.group_sizes, [10, 2, 2])
+
+    def test_waiting_claim_is_routed_when_work_is_handed_over_again(self):
+        from apps.assessments.assignment import assign_waiting_work
+        gate, engine = self.route_with(self.FakeEngine(), gate_passed=False)
+        with gate, engine:
+            claim = self.post_claim()
+        self.assertIsNone(claim.assigned_adjuster)
+        gate, engine = self.route_with(self.FakeEngine())
+        with gate, engine:
+            self.assertEqual(assign_waiting_work(), (0, 1))
+        claim.refresh_from_db()
+        self.assertEqual(claim.assigned_adjuster, self.employee)

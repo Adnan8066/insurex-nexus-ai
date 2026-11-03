@@ -8,7 +8,6 @@ from django.db import transaction
 from django.db.models import Q
 from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
-from django.conf import settings
 from apps.accounts.models import Role
 
 from django.shortcuts import get_object_or_404
@@ -149,13 +148,11 @@ class ClaimViewSet(viewsets.ModelViewSet):
             run_claim_assessment(claim)
         except Exception:
             logger.exception('Automatic AI assessment failed for claim %s', claim.claim_number)
-        # The RL router assigns only when enabled and its evaluation gate has
-        # passed; otherwise the least-busy employee takes the claim.
+        # Only the qualified RL model assigns claims; otherwise the claim waits
+        # and admins are notified.
         try:
             from apps.assessments.rl_views import auto_assign_new_claim
-            from apps.assessments.assignment import assign_claim_to_least_busy
-            if not auto_assign_new_claim(claim) and settings.CLAIM_AUTO_ASSIGN_LEAST_BUSY:
-                assign_claim_to_least_busy(claim)
+            auto_assign_new_claim(claim)
         except Exception:
             # A routing/model outage must never roll back a customer's claim.
             logger.exception('Automatic routing failed for claim %s', claim.claim_number)
