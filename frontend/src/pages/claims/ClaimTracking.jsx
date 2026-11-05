@@ -55,7 +55,7 @@ const CUSTOMER_NEXT = {
 const STAFF_NEXT = {
   submitted: 'Review the claim details and assign an adjuster.',
   under_review: 'Run the AI assessment or record a decision.',
-  ai_assessment: 'Check the AI results in Automated Review, then decide.',
+  ai_assessment: 'Check the AI results in Claim assessment, then decide.',
   investigation: 'Waiting for the investigator to finish their review.',
   approved: 'Arrange the repair or settlement.',
   rejected: 'No further action unless the customer appeals.',
@@ -161,7 +161,7 @@ export function ClaimTracking() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary"><Link to={`/claims/${claim.id}`}><FileText className="w-4 h-4 mr-2" />Claim details</Link></Button>
-          {isStaff && <Button asChild variant="primary"><Link to="/ai-decision"><Brain className="w-4 h-4 mr-2" />Automated Review</Link></Button>}
+          {isStaff && <Button asChild variant="primary"><Link to={`/ai-assessment?claim=${claim.id}`}><Brain className="w-4 h-4 mr-2" />Claim assessment</Link></Button>}
         </div>
       </div>
 

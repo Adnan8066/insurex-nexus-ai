@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-10-14T07:17:40.003629+00:00",
+  "trained_at": "2026-11-04T07:42:37.027237+00:00",
   "datasets": {
     "insurance_claims": {
       "file": "insurance_claims.csv",
@@ -139,6 +139,135 @@
       }
     }
   },
+  "feature_sets": {
+    "fraud_risk": [
+      "age",
+      "policy_deductable",
+      "policy_annual_premium",
+      "incident_type",
+      "incident_severity",
+      "number_of_vehicles_involved",
+      "property_damage",
+      "bodily_injuries",
+      "witnesses",
+      "police_report_available",
+      "auto_make",
+      "auto_model",
+      "auto_year",
+      "total_claim_amount"
+    ],
+    "repair_cost": [
+      "age",
+      "policy_deductable",
+      "policy_annual_premium",
+      "incident_type",
+      "incident_severity",
+      "number_of_vehicles_involved",
+      "property_damage",
+      "bodily_injuries",
+      "witnesses",
+      "police_report_available",
+      "auto_make",
+      "auto_model",
+      "auto_year"
+    ],
+    "total_loss": [
+      "age",
+      "policy_deductable",
+      "policy_annual_premium",
+      "incident_type",
+      "number_of_vehicles_involved",
+      "property_damage",
+      "bodily_injuries",
+      "witnesses",
+      "police_report_available",
+      "auto_make",
+      "auto_model",
+      "auto_year"
+    ],
+    "fraud_oracle_fraud": [
+      "Month",
+      "WeekOfMonth",
+      "DayOfWeek",
+      "Make",
+      "AccidentArea",
+      "DayOfWeekClaimed",
+      "MonthClaimed",
+      "WeekOfMonthClaimed",
+      "Sex",
+      "MaritalStatus",
+      "Age",
+      "Fault",
+      "PolicyType",
+      "VehicleCategory",
+      "VehiclePrice",
+      "Deductible",
+      "DriverRating",
+      "Days_Policy_Accident",
+      "Days_Policy_Claim",
+      "PastNumberOfClaims",
+      "AgeOfVehicle",
+      "AgeOfPolicyHolder",
+      "PoliceReportFiled",
+      "WitnessPresent",
+      "AgentType",
+      "NumberOfSuppliments",
+      "AddressChange_Claim",
+      "NumberOfCars",
+      "Year",
+      "BasePolicy"
+    ]
+  },
+  "feature_baselines": {
+    "fraud_risk": {
+      "age": 38.0,
+      "policy_deductable": 1000.0,
+      "policy_annual_premium": 1257.1999999999998,
+      "incident_type": "Multi-vehicle Collision",
+      "incident_severity": "Minor Damage",
+      "number_of_vehicles_involved": 1.0,
+      "property_damage": "?",
+      "bodily_injuries": 1.0,
+      "witnesses": 1.0,
+      "police_report_available": "?",
+      "auto_make": "Dodge",
+      "auto_model": "RAM",
+      "auto_year": 2005.0,
+      "total_claim_amount": 58055.0
+    },
+    "fraud_oracle_fraud": {
+      "Month": "Jan",
+      "WeekOfMonth": 3.0,
+      "DayOfWeek": "Monday",
+      "Make": "Pontiac",
+      "AccidentArea": "Urban",
+      "DayOfWeekClaimed": "Monday",
+      "MonthClaimed": "Jan",
+      "WeekOfMonthClaimed": 3.0,
+      "Sex": "Male",
+      "MaritalStatus": "Married",
+      "Age": 38.0,
+      "Fault": "Policy Holder",
+      "PolicyType": "Sedan - Collision",
+      "VehicleCategory": "Sedan",
+      "VehiclePrice": "20000 to 29000",
+      "Deductible": 400.0,
+      "DriverRating": 2.0,
+      "Days_Policy_Accident": "more than 30",
+      "Days_Policy_Claim": "more than 30",
+      "PastNumberOfClaims": "2 to 4",
+      "AgeOfVehicle": "7 years",
+      "AgeOfPolicyHolder": "31 to 35",
+      "PoliceReportFiled": "No",
+      "WitnessPresent": "No",
+      "AgentType": "External",
+      "NumberOfSuppliments": "none",
+      "AddressChange_Claim": "no change",
+      "NumberOfCars": "1 vehicle",
+      "Year": 1995.0,
+      "BasePolicy": "Collision"
+    }
+  },
   "decision_thresholds": {
     "insurance_fraud": 0.5,
     "fraud_oracle_fraud": 0.1
@@ -150,13 +279,40 @@
       "precision": 0.6316,
       "recall": 0.7347,
       "f1": 0.6792,
-      "roc_auc": 0.7651,
+      "roc_auc": 0.7724,
+      "pr_auc": 0.546,
+      "confusion_matrix": {
+        "tn": 130,
+        "fp": 21,
+        "fn": 13,
+        "tp": 36
+      },
       "decision_threshold": 0.5,
       "holdout_rows": 200,
       "calibration_rows": 0,
       "class_counts": {
         "0": 753,
         "1": 247
+      },
+      "cross_validation": {
+        "folds": 5,
+        "roc_auc": {
+          "mean": 0.7388,
+          "std": 0.0368
+        },
+        "pr_auc": {
+          "mean": 0.497,
+          "std": 0.0484
+        },
+        "recall": {
+          "mean": 0.6718,
+          "std": 0.076
+        },
+        "precision": {
+          "mean": 0.6067,
+          "std": 0.0497
+        },
+        "pr_auc_baseline": 0.247
       }
     },
     {
@@ -173,12 +329,39 @@
       "recall": 0.5179,
       "f1": 0.4531,
       "roc_auc": 0.6856,
+      "pr_auc": 0.3829,
+      "confusion_matrix": {
+        "tn": 101,
+        "fp": 43,
+        "fn": 27,
+        "tp": 29
+      },
       "decision_threshold": 0.5,
       "holdout_rows": 200,
       "calibration_rows": 0,
       "class_counts": {
         "0": 720,
         "1": 280
+      },
+      "cross_validation": {
+        "folds": 5,
+        "roc_auc": {
+          "mean": 0.618,
+          "std": 0.0419
+        },
+        "pr_auc": {
+          "mean": 0.3474,
+          "std": 0.0414
+        },
+        "recall": {
+          "mean": 0.4786,
+          "std": 0.1109
+        },
+        "precision": {
+          "mean": 0.3304,
+          "std": 0.053
+        },
+        "pr_auc_baseline": 0.28
       }
     },
     {

@@ -343,7 +343,6 @@ export function AIAssessment() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button asChild variant="outline"><Link to="/ai-decision">Inspect Decision Flow</Link></Button>
                 <Button asChild variant="secondary"><Link to="/fraud">Fraud Alerts</Link></Button>
               </div>
             </div>

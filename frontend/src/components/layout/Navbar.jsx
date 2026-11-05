@@ -57,7 +57,6 @@ const navItems = [
     Icon: Brain,
     children: [
       { label: 'Claim assessment', to: '/ai-assessment', hint: 'Repair cost, fraud and total-loss estimates', roles: STAFF_ROLES },
-      { label: 'Automated review', to: '/ai-decision', hint: 'Step-by-step checks before a human decides', roles: STAFF_ROLES },
     ],
   },
   { label: 'Analytics', to: '/analytics', Icon: BarChart3, roles: ['employee', 'investigator'] },

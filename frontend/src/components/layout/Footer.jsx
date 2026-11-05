@@ -24,7 +24,6 @@ const moduleGroups = [
     links: [
       { label: 'Claim Assessment', to: '/ai-assessment', roles: reviewRoles },
       { label: 'Fraud Alerts', to: '/fraud', roles: reviewRoles },
-      { label: 'Automated Review', to: '/ai-decision', roles: reviewRoles },
       { label: 'Analytics', to: '/analytics', roles: reviewRoles },
     ],
     secondBadge: 'CLAIM SUPPORT',

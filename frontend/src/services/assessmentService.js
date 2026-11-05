@@ -31,11 +31,6 @@ export const assessmentService = {
     return response.data
   },
 
-  async getDecisionFlows(params = {}) {
-    const response = await api.get('/assessments/decision-flows/', { params })
-    return response.data
-  },
-
   async getDecisionFlowForClaim(claimId) {
     const response = await api.get(`/ai/decision-flow/${claimId}/`)
     return response.data
@@ -68,11 +63,6 @@ export const assessmentService = {
 
   async predictTotalLoss(data) {
     const response = await api.post('/ai/predict-total-loss/', data)
-    return response.data
-  },
-
-  async runAgent(agentType, data = {}) {
-    const response = await api.post(`/ai/run-agent/${agentType}/`, data)
     return response.data
   },
 

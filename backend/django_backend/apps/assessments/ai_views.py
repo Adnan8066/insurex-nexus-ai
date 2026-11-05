@@ -20,7 +20,9 @@ from ml_service import (
     predict_repair_cost_ml,
     predict_total_loss_ml,
     MLModelUnavailable,
+    CURRENCY_PER_DATASET_UNIT,
 )
+from .fraud_rules import ALERT_MIN_RED_FLAGS, connected_claims, red_flags
 from common.permissions import IsStaffMember
 from common.params import parse_int
 from common.risk import FRAUD_HIGH_THRESHOLD, fraud_risk_band
@@ -131,6 +133,8 @@ def run_claim_assessment(claim):
         'score': fraud_score['score'],
         'level': assessment.risk_level,
         'factors': fraud_score['factors'],
+        'explanations': fraud_score.get('explanations', []),
+        'red_flags': fraud_score.get('red_flags', []),
     }
     claim.ai_assessment = stored
     claim.fraud_risk_score = fraud_score['score']
@@ -162,7 +166,7 @@ def _sync_fraud_alert(claim, assessment):
         for field, value in model_fields.items():
             setattr(alert, field, value)
         alert.save()
-    elif assessment.risk_level != 'low':
+    elif assessment.risk_level != 'low' or len(assessment.behavioral_indicators or []) >= ALERT_MIN_RED_FLAGS:
         FraudAlert.objects.create(claim=claim, **model_fields)
 
 
@@ -171,7 +175,12 @@ def predict_repair_cost_internal(claim):
 
 
 def detect_fraud_internal(claim):
-    return detect_fraud_ml(claim_model_input(claim))
+    """Model score plus the database red flags the model cannot see."""
+    result = dict(detect_fraud_ml(claim_model_input(claim)))
+    result['red_flags'] = red_flags(claim)
+    result['behavioral'] = [flag['message'] for flag in result['red_flags']]
+    result['network'] = connected_claims(claim)
+    return result
 
 
 def predict_total_loss_internal(claim):
@@ -192,12 +201,14 @@ def claim_model_input(claim):
         'theft': 'Vehicle Theft',
         'comprehensive': 'Parked Car',
     }
+    # The training data grades damage Trivial < Minor < Major < Total Loss.
     severities = {
-        'minor': 'Minor Damage',
+        'minor': 'Trivial Damage',
         'moderate': 'Minor Damage',
         'major': 'Major Damage',
         'total_loss': 'Total Loss',
     }
+    rate = CURRENCY_PER_DATASET_UNIT
     vehicle = claim.vehicle
     policy = claim.policy
     customer_age = None
@@ -210,9 +221,10 @@ def claim_model_input(claim):
 
     return {
         '_source_dataset': 'insurance_claims',
+        '_currency_factor': rate,
         'age': customer_age,
-        'policy_deductable': float(policy.deductible or 0),
-        'policy_annual_premium': float(policy.premium or 0),
+        'policy_deductable': float(policy.deductible or 0) / rate,
+        'policy_annual_premium': float(policy.premium or 0) / rate,
         'incident_type': incident_types.get(claim.incident_type, 'Other'),
         'incident_severity': severities.get(claim.incident_severity, 'Minor Damage'),
         'number_of_vehicles_involved': claim.number_of_vehicles,
@@ -223,7 +235,7 @@ def claim_model_input(claim):
         'auto_make': vehicle.make,
         'auto_model': vehicle.model,
         'auto_year': vehicle.year,
-        'claim_amount': float(claim.claim_amount or 0),
+        'total_claim_amount': float(claim.claim_amount or 0) / rate,
     }
 
 

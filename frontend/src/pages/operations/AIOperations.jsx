@@ -173,7 +173,6 @@ export function AIOperations() {
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh Data
           </Button>
-          <Button asChild variant="outline"><Link to="/ai-decision">Decision Center</Link></Button>
         </div>
       </div>
 

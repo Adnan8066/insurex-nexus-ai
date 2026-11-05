@@ -4,14 +4,7 @@ import { format, parseISO } from 'date-fns'
 import { useLocation } from 'react-router-dom'
 import { analyticsService } from '../../services'
 import { Button } from '../../components/ui/Button'
-import {
-  ChartCard,
-  BarChart,
-  ComboChart,
-  DoughnutChart,
-  ChartLegend,
-} from '../../components/charts/ChartComponents'
-import { countAndPercentLabel } from '../../components/charts/chartUtils'
+import { ChartCard, ComboChart } from '../../components/charts/ChartComponents'
 import { formatCurrency, formatCurrencyCompact } from '../../utils/helpers'
 import { formatApiError } from '../../services/api'
 
@@ -28,11 +21,7 @@ const DATE_RANGES = [
 // Short ranges are shown per day; longer ones per month.
 const TREND_GRANULARITY = { week: 'day', month: 'day', quarter: 'month', ytd: 'month', year: 'month' }
 
-const FRAUD_BAND_COLORS = { low: '#15803d', medium: '#d97706', high: '#dc2626' }
-const TOTAL_LOSS_COLORS = { repairable: '#2563eb', totalLoss: '#dc2626' }
-
 const CHART_HEIGHT = 280
-const SIDE_CHART_HEIGHT = 180
 
 function formatPeriod(period) {
   if (!period?.start) return 'All time'
@@ -67,7 +56,6 @@ export function AdminDashboard() {
   const pageTitle = useLocation().pathname === '/analytics' ? 'Analytics' : 'Dashboard'
   const [dateRange, setDateRange] = useState('quarter')
   const [summary, setSummary] = useState(null)
-  const [fraudRisk, setFraudRisk] = useState(null)
   const [trend, setTrend] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -78,13 +66,11 @@ export function AdminDashboard() {
     setLoading(true)
     setError(null)
     try {
-      const [summaryRes, fraudRes, trendRes] = await Promise.all([
+      const [summaryRes, trendRes] = await Promise.all([
         analyticsService.getDashboardSummary(dateRange),
-        analyticsService.getFraudRiskDistribution(dateRange),
         analyticsService.getClaimsTrendForTimeframe(dateRange, granularity),
       ])
       setSummary(summaryRes)
-      setFraudRisk(fraudRes)
       setTrend(Array.isArray(trendRes) ? trendRes : [])
     } catch (err) {
       console.error('Failed to load analytics:', err)
@@ -106,17 +92,15 @@ export function AdminDashboard() {
   const periodText = formatPeriod(period)
 
   const statusDistribution = claims.status_distribution || []
-  const byIncidentType = claims.by_incident_type || {}
   const pendingClaims = statusDistribution
     .filter((s) => PENDING_STATUSES.includes(s.status))
     .reduce((sum, s) => sum + s.count, 0)
   const totalClaims = claims.total || 0
   const totalLossCases = claims.total_loss_cases || 0
-  const repairableCases = claims.repairable_cases ?? Math.max(totalClaims - totalLossCases, 0)
   const totalClaimAmount = Number(claims.total_amount) || 0
   const averageClaimCost = totalClaims > 0 ? Math.round(totalClaimAmount / totalClaims) : 0
 
-  // 1. Claims over time: bars for intake (left axis), line for amount (right axis)
+  // Claims over time: bars for intake (left axis), line for amount (right axis)
   const trendLabels = trend.map((d) => format(parseISO(String(d.date)), granularity === 'month' ? 'MMM yyyy' : 'd MMM'))
   const hasTrendData = trend.some((d) => d.count > 0)
   const claimsOverTimeData = {
@@ -166,75 +150,6 @@ export function AdminDashboard() {
         },
       },
     },
-  }
-
-  // 2. Fraud risk distribution (horizontal bars so small bands stay readable)
-  const fraudBands = fraudRisk?.bands || []
-  const fraudScoredTotal = fraudBands.reduce((sum, b) => sum + b.count, 0)
-  const fraudDistributionData = {
-    labels: fraudBands.map((b) => b.label),
-    datasets: [
-      {
-        label: 'Claims',
-        data: fraudBands.map((b) => b.count),
-        backgroundColor: fraudBands.map((b) => FRAUD_BAND_COLORS[b.level]),
-        borderRadius: 4,
-        maxBarThickness: 28,
-      },
-    ],
-  }
-  const fraudDistributionOptions = {
-    indexAxis: 'y',
-    scales: {
-      x: { beginAtZero: true, ticks: { precision: 0, color: '#94a3b8' }, grid: { color: '#e2e8f0' } },
-      y: { grid: { display: false }, ticks: { display: false } },
-    },
-    plugins: { tooltip: { callbacks: { label: countAndPercentLabel } } },
-  }
-
-  // 3. Claim status distribution: actual counts for every lifecycle status
-  const claimStatusDistributionData = {
-    labels: statusDistribution.map((s) => s.label),
-    datasets: [
-      {
-        label: 'Claims',
-        data: statusDistribution.map((s) => s.count),
-        backgroundColor: '#1e3a5f',
-        borderRadius: 4,
-        maxBarThickness: 48,
-      },
-    ],
-  }
-  const countTooltipOptions = { plugins: { tooltip: { callbacks: { label: countAndPercentLabel } } } }
-
-  // 4. Total-loss cases vs repairable
-  const totalLossData = {
-    labels: ['Repairable', 'Total Loss'],
-    datasets: [
-      {
-        data: [repairableCases, totalLossCases],
-        backgroundColor: [TOTAL_LOSS_COLORS.repairable, TOTAL_LOSS_COLORS.totalLoss],
-        borderWidth: 0,
-      },
-    ],
-  }
-  const totalLossOptions = {
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: countAndPercentLabel } } },
-  }
-
-  // 5. Claims by incident type
-  const incidentLabels = Object.keys(byIncidentType)
-  const incidentTypeData = {
-    labels: incidentLabels.map((t) => (t || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())),
-    datasets: [
-      {
-        label: 'Claims',
-        data: incidentLabels.map((t) => byIncidentType[t]),
-        backgroundColor: '#007bff',
-        borderRadius: 4,
-        maxBarThickness: 48,
-      },
-    ],
   }
 
   const noClaimsMessage = `No claims submitted in this period (${periodText}).`
@@ -334,79 +249,13 @@ export function AdminDashboard() {
         <StatTile label="Avg Claim Cost" value={formatCurrency(averageClaimCost)} caption={`Per claim · ${rangeLabel}`} valueClassName="text-emerald-700" />
       </div>
 
-      {/* Row 1: Claims Over Time + Fraud Risk Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="min-w-0 lg:col-span-2">
-          <ChartCard
-            title="1. Claims Over Time"
-            subtitle={`${granularity === 'month' ? 'Monthly' : 'Daily'} claim intake vs claim amount · ${periodText}`}
-          >
-            {hasTrendData
-              ? <ComboChart data={claimsOverTimeData} options={claimsOverTimeOptions} height={CHART_HEIGHT} />
-              : <EmptyChart height={CHART_HEIGHT} message={noClaimsMessage} />}
-          </ChartCard>
-        </div>
-
-        <div className="min-w-0">
-          <ChartCard
-            title="2. Fraud Risk Distribution"
-            subtitle={`Claims by fraud score band · ${fraudScoredTotal} claim${fraudScoredTotal === 1 ? '' : 's'}`}
-          >
-            {fraudScoredTotal > 0 ? (
-              <>
-                <BarChart data={fraudDistributionData} options={fraudDistributionOptions} height={SIDE_CHART_HEIGHT - 40} />
-                <ChartLegend items={fraudBands.map((b) => ({ label: b.label, value: b.count, color: FRAUD_BAND_COLORS[b.level] }))} />
-              </>
-            ) : (
-              <EmptyChart height={CHART_HEIGHT} message={noClaimsMessage} />
-            )}
-          </ChartCard>
-        </div>
-      </div>
-
-      {/* Row 2: Claim Status Distribution + Total Loss */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="min-w-0 lg:col-span-2">
-          <ChartCard
-            title="3. Claim Status Distribution"
-            subtitle={`Number of claims at each lifecycle stage · ${periodText}`}
-          >
-            {totalClaims > 0
-              ? <BarChart data={claimStatusDistributionData} options={countTooltipOptions} height={CHART_HEIGHT} />
-              : <EmptyChart height={CHART_HEIGHT} message={noClaimsMessage} />}
-          </ChartCard>
-        </div>
-
-        <div className="min-w-0">
-          <ChartCard
-            title="4. Total-Loss Cases vs Repairable"
-            subtitle={`Total loss = ≥${claims.total_loss_threshold ?? 50}% total-loss probability`}
-          >
-            {totalClaims > 0 ? (
-              <>
-                <DoughnutChart data={totalLossData} options={totalLossOptions} height={SIDE_CHART_HEIGHT} />
-                <ChartLegend
-                  items={[
-                    { label: 'Repairable', value: repairableCases, color: TOTAL_LOSS_COLORS.repairable },
-                    { label: 'Total Loss', value: totalLossCases, color: TOTAL_LOSS_COLORS.totalLoss },
-                  ]}
-                />
-              </>
-            ) : (
-              <EmptyChart height={CHART_HEIGHT} message={noClaimsMessage} />
-            )}
-          </ChartCard>
-        </div>
-      </div>
-
-      {/* Row 3: Claims by Incident Type */}
       <ChartCard
-        title="5. Claims by Incident Type"
-        subtitle={`Distribution of filed claims by loss cause · ${periodText}`}
+        title="Claims Over Time"
+        subtitle={`${granularity === 'month' ? 'Monthly' : 'Daily'} claim intake vs claim amount · ${periodText}`}
       >
-        {incidentLabels.length > 0
-          ? <BarChart data={incidentTypeData} options={countTooltipOptions} height={260} />
-          : <EmptyChart height={260} message={noClaimsMessage} />}
+        {hasTrendData
+          ? <ComboChart data={claimsOverTimeData} options={claimsOverTimeOptions} height={CHART_HEIGHT} />
+          : <EmptyChart height={CHART_HEIGHT} message={noClaimsMessage} />}
       </ChartCard>
     </div>
   )

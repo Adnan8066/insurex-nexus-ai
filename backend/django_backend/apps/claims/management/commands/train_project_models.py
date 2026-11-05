@@ -19,7 +19,7 @@ from sklearn.metrics import (accuracy_score, average_precision_score, confusion_
                              f1_score, log_loss, mean_absolute_error, precision_recall_curve,
                              precision_score, r2_score, recall_score, roc_auc_score, roc_curve,
                              root_mean_squared_error)
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from lightgbm import LGBMClassifier
@@ -36,6 +36,11 @@ INSURANCE_NUMERIC = [
     "number_of_vehicles_involved", "bodily_injuries", "witnesses", "auto_year",
 ]
 INSURANCE_CATEGORICAL = [name for name in INSURANCE_FEATURES if name not in INSURANCE_NUMERIC]
+# The fraud model also sees the claimed amount, which the claim form collects.
+# Repair cost and total loss leave it out: the amount is largely the repair cost itself.
+INSURANCE_FRAUD_FEATURES = INSURANCE_FEATURES + ["total_claim_amount"]
+INSURANCE_FRAUD_NUMERIC = INSURANCE_NUMERIC + ["total_claim_amount"]
+CV_FOLDS = 5
 
 ORACLE_FEATURES = [
     "Month", "WeekOfMonth", "DayOfWeek", "Make", "AccidentArea",
@@ -291,6 +296,36 @@ def regressor(numeric, categorical):
     return build_pipeline(numeric, categorical, model)
 
 
+def feature_baselines(X, numeric):
+    """Typical value per feature (median or most common), used to explain single scores."""
+    baselines = {}
+    for column in X.columns:
+        values = X[column].dropna()
+        if values.empty:
+            continue
+        if column in numeric:
+            baselines[column] = float(pd.to_numeric(values, errors="coerce").median())
+        else:
+            baselines[column] = str(values.astype(str).mode().iloc[0])
+    return baselines
+
+
+def cross_validated_metrics(template, X, y):
+    """Mean and spread over stratified folds; one 200-row holdout is too noisy to trust alone."""
+    scores = cross_validate(
+        template(), X, y, cv=StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=42),
+        scoring={"roc_auc": "roc_auc", "pr_auc": "average_precision", "recall": "recall", "precision": "precision"},
+    )
+    return {
+        "folds": CV_FOLDS,
+        **{
+            name: {"mean": round(float(scores[f"test_{name}"].mean()), 4), "std": round(float(scores[f"test_{name}"].std()), 4)}
+            for name in ("roc_auc", "pr_auc", "recall", "precision")
+        },
+        "pr_auc_baseline": round(float(y.mean()), 4),
+    }
+
+
 def evaluate_classifier(template, X, y, name, minimum_precision=None):
     X_development, X_test, y_development, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y,
@@ -321,16 +356,20 @@ def evaluate_classifier(template, X, y, name, minimum_precision=None):
     model.fit(X_train, y_train)
     probabilities = model.predict_proba(X_test)[:, list(model.classes_).index(1)]
     predictions = (probabilities >= threshold).astype(int)
+    tn, fp, fn, tp = confusion_matrix(y_test, predictions, labels=[0, 1]).ravel()
     metrics = {
         "accuracy": round(float(accuracy_score(y_test, predictions)), 4),
         "precision": round(float(precision_score(y_test, predictions, zero_division=0)), 4),
         "recall": round(float(recall_score(y_test, predictions, zero_division=0)), 4),
         "f1": round(float(f1_score(y_test, predictions, zero_division=0)), 4),
         "roc_auc": round(float(roc_auc_score(y_test, probabilities)), 4),
+        "pr_auc": round(float(average_precision_score(y_test, probabilities)), 4),
+        "confusion_matrix": {"tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp)},
         "decision_threshold": round(threshold, 6),
         "holdout_rows": int(len(y_test)),
         "calibration_rows": calibration_rows,
         "class_counts": {str(k): int(v) for k, v in y.value_counts().sort_index().items()},
+        "cross_validation": cross_validated_metrics(template, X, y),
     }
     fitted = template()
     fitted.fit(X, y)
@@ -385,9 +424,10 @@ class Command(BaseCommand):
         if insurance_y.isna().any() or insurance_y.nunique() != 2:
             raise CommandError("Insurance fraud_reported must contain both Y and N labels.")
 
+        insurance_fraud_X = insurance[INSURANCE_FRAUD_FEATURES].copy()
         fraud_model, fraud_metrics = evaluate_classifier(
-            lambda: classifier(INSURANCE_NUMERIC, INSURANCE_CATEGORICAL),
-            insurance_X, insurance_y.astype(int), "insurance_fraud",
+            lambda: classifier(INSURANCE_FRAUD_NUMERIC, INSURANCE_CATEGORICAL),
+            insurance_fraud_X, insurance_y.astype(int), "insurance_fraud",
         )
 
         cost_y = pd.to_numeric(insurance["vehicle_claim"], errors="coerce")
@@ -436,6 +476,16 @@ class Command(BaseCommand):
                 "fraud_oracle_fraud": "FraudFound_P equals 1",
             },
             "data_audit": data_audit,
+            "feature_sets": {
+                "fraud_risk": INSURANCE_FRAUD_FEATURES,
+                "repair_cost": INSURANCE_FEATURES,
+                "total_loss": total_loss_features,
+                "fraud_oracle_fraud": ORACLE_FEATURES,
+            },
+            "feature_baselines": {
+                "fraud_risk": feature_baselines(insurance_fraud_X, INSURANCE_FRAUD_NUMERIC),
+                "fraud_oracle_fraud": feature_baselines(oracle_X, ORACLE_NUMERIC),
+            },
             "decision_thresholds": {
                 "insurance_fraud": fraud_metrics["decision_threshold"],
                 "fraud_oracle_fraud": oracle_metrics["threshold"],

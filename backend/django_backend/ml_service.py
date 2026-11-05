@@ -15,6 +15,9 @@ _MODEL_FILES = {
     "total_loss": "total_loss.joblib",
     "fraud_oracle_fraud": "fraud_oracle_fraud.joblib",
 }
+# The insurance_claims training data is in US dollars; the app stores rupees.
+# Amounts are divided by this rate before scoring and predicted costs multiplied back.
+CURRENCY_PER_DATASET_UNIT = float(os.environ.get("ML_CURRENCY_PER_DATASET_UNIT", "83"))
 _models = {name: None for name in _MODEL_FILES}
 _model_mtimes = {}
 _model_load_errors = {}
@@ -86,8 +89,50 @@ def _configure_inference_model(model):
     return model
 
 
+_FEATURE_LABELS = {
+    "age": "Policyholder age",
+    "policy_deductable": "Deductible",
+    "policy_annual_premium": "Annual premium",
+    "incident_type": "Incident type",
+    "incident_severity": "Damage severity",
+    "number_of_vehicles_involved": "Vehicles involved",
+    "property_damage": "Property damage",
+    "bodily_injuries": "Bodily injuries",
+    "witnesses": "Witnesses",
+    "police_report_available": "Police report",
+    "auto_make": "Vehicle make",
+    "auto_model": "Vehicle model",
+    "auto_year": "Vehicle year",
+    "total_claim_amount": "Claimed amount",
+}
+_MONEY_FEATURES = {"policy_deductable", "policy_annual_premium", "total_claim_amount"}
+# Explanations below this many score points are noise, not reasons.
+_MIN_REASON_POINTS = 1.0
+_MAX_REASONS = 3
+
+
 def _input_frame(claim_data, feature_names):
     return pd.DataFrame([{name: claim_data.get(name) for name in feature_names}], columns=feature_names)
+
+
+def _currency_factor(claim_data):
+    """App claims carry the rate their amounts were divided by; dataset rows need none."""
+    return float(claim_data.get("_currency_factor") or 1.0)
+
+
+def _model_features(model, default):
+    """Columns the artifact was trained on; older artifacts fall back to the default list."""
+    names = getattr(model, "feature_names_in_", None)
+    return list(names) if names is not None else default
+
+
+def _training_report():
+    import json
+    try:
+        with open(os.path.join(MODELS_DIR, "training_report.json"), encoding="utf-8") as report_file:
+            return json.load(report_file)
+    except (OSError, ValueError):
+        return {}
 
 
 def _fraud_probability(model, frame):
@@ -97,7 +142,39 @@ def _fraud_probability(model, frame):
     return float(probabilities[positive_index])
 
 
-def _fraud_result(score, decision_threshold=FRAUD_HIGH_THRESHOLD):
+def _format_value(value):
+    if isinstance(value, float):
+        return f"{value:,.0f}" if abs(value) >= 100 else f"{value:g}"
+    return str(value)
+
+
+def _score_reasons(model, frame, score, baselines):
+    """Explain a score by resetting one input at a time to its typical training value.
+
+    The drop in score when a value is reset is how many points that value added.
+    Only values that pushed the score up are returned, largest first.
+    """
+    reasons = []
+    for column in frame.columns:
+        value = frame.at[0, column]
+        if column not in baselines or value is None or pd.isna(value) or value == baselines[column]:
+            continue
+        typical = frame.copy()
+        typical[column] = typical[column].astype(object)
+        typical.at[0, column] = baselines[column]
+        points = score - _fraud_probability(model, typical) * 100
+        if points >= _MIN_REASON_POINTS:
+            reasons.append({
+                "feature": column,
+                "value": value.item() if hasattr(value, "item") else value,
+                "points": round(points, 1),
+                "text": f"{_FEATURE_LABELS.get(column, column)} ({_format_value(value)}) added {points:.0f} points",
+            })
+    reasons.sort(key=lambda reason: reason["points"], reverse=True)
+    return reasons[:_MAX_REASONS]
+
+
+def _fraud_result(score, decision_threshold=FRAUD_HIGH_THRESHOLD, reasons=None):
     score = round(score, 2)
     medium_threshold = min(40.0, decision_threshold * 0.5)
     if score >= decision_threshold:
@@ -106,10 +183,13 @@ def _fraud_result(score, decision_threshold=FRAUD_HIGH_THRESHOLD):
         level, factors = "medium", ["model identified a moderate-risk pattern", "enhanced review recommended"]
     else:
         level, factors = "low", ["model identified a low-risk pattern"]
+    if reasons:
+        factors = [reason["text"] for reason in reasons]
     return {
         "score": score,
         "level": level,
         "factors": factors,
+        "explanations": reasons or [],
         "behavioral": [],
         "network": {"connected_claims": 0, "shared_parties": []},
     }
@@ -123,7 +203,8 @@ def predict_repair_cost_ml(claim_data):
     if model is None:
         raise MLModelUnavailable(_unavailable_model_message("repair_cost", "The trained repair-cost model is not available. Train the project models before assessing this claim."))
     try:
-        prediction = max(0.0, float(model.predict(_input_frame(claim_data, _INSURANCE_FEATURES))[0]))
+        frame = _input_frame(claim_data, _model_features(model, _INSURANCE_FEATURES))
+        prediction = max(0.0, float(model.predict(frame)[0])) * _currency_factor(claim_data)
         return {
             "cost": round(prediction, 2),
             "breakdown": {},
@@ -142,19 +223,20 @@ def detect_fraud_ml(claim_data):
     if model is None:
         model_name = "fraud_oracle_fraud" if oracle else "fraud_risk"
         raise MLModelUnavailable(_unavailable_model_message(model_name, "The trained fraud model for this claim type is not available. Train the project models before assessing this claim."))
-    features = _ORACLE_FEATURES if oracle else _INSURANCE_FEATURES
+    model_name = "fraud_oracle_fraud" if oracle else "fraud_risk"
+    features = _model_features(model, _ORACLE_FEATURES if oracle else _INSURANCE_FEATURES)
     try:
-        score = _fraud_probability(model, _input_frame(claim_data, features)) * 100
+        frame = _input_frame(claim_data, features)
+        score = _fraud_probability(model, frame) * 100
+        report = _training_report()
         threshold = FRAUD_HIGH_THRESHOLD
         if oracle:
-            report_path = os.path.join(MODELS_DIR, "training_report.json")
             try:
-                import json
-                with open(report_path, encoding="utf-8") as report_file:
-                    threshold = float(json.load(report_file)["decision_thresholds"]["fraud_oracle_fraud"]) * 100
-            except (OSError, ValueError, KeyError, TypeError):
+                threshold = float(report["decision_thresholds"]["fraud_oracle_fraud"]) * 100
+            except (KeyError, TypeError, ValueError):
                 pass
-        return _fraud_result(score, threshold)
+        baselines = report.get("feature_baselines", {}).get(model_name, {})
+        return _fraud_result(score, threshold, _score_reasons(model, frame, score, baselines))
     except (ValueError, TypeError, KeyError) as exc:
         raise MLModelUnavailable(f"The fraud model could not score this claim: {exc}") from exc
 
@@ -167,7 +249,7 @@ def predict_total_loss_ml(claim_data):
     if model is None:
         raise MLModelUnavailable(_unavailable_model_message("total_loss", "The trained total-loss model is not available. Train the project models before assessing this claim."))
     try:
-        probability = _fraud_probability(model, _input_frame(claim_data, _INSURANCE_FEATURES)) * 100
+        probability = _fraud_probability(model, _input_frame(claim_data, _model_features(model, _INSURANCE_FEATURES))) * 100
         return {"probability": round(min(max(probability, 0), 100), 2)}
     except (ValueError, TypeError, KeyError) as exc:
         raise MLModelUnavailable(f"The total-loss model could not score this claim: {exc}") from exc

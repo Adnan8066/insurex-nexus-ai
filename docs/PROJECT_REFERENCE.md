@@ -143,7 +143,7 @@ Related pages are grouped into dropdowns; a group with one visible page shows as
 | Claims | claim list, details, tracking | all |
 | Policies ▾ | Policies, Vehicles | customer, employee, admin |
 | Fraud ▾ | Fraud alerts (`/fraud`), Investigation cases (`/investigators`, employee/admin only) | employee, investigator, admin |
-| AI Tools ▾ | Claim assessment (`/ai-assessment`), Automated review (`/ai-decision`) | employee, investigator, admin |
+| AI Tools ▾ | Claim assessment (`/ai-assessment`) | employee, investigator, admin |
 | Analytics | `/analytics` | employee, investigator |
 | Help & Support | `/support` | customer |
 | User menu → Administration | User management (admin), Model health (`/operations`, staff) | |
@@ -525,7 +525,7 @@ All endpoints require a staff member; investigators can only act on their assign
 | `/vehicles`, `/vehicles/:id` | VehicleList, VehicleDetails | auth |
 | `/vehicles/new`, `/vehicles/:id/edit` | VehicleForm | customer, employee, admin |
 | `/claims`, `/claims/new`, `/claims/:id`, `/claims/:id/tracking` | claim pages | auth |
-| `/ai-assessment`, `/routing-advisory`, `/fraud`, `/investigators`, `/analytics`, `/ai-decision`, `/operations` | staff tools | employee, admin, investigator |
+| `/ai-assessment`, `/routing-advisory`, `/fraud`, `/investigators`, `/analytics`, `/operations` | staff tools | employee, admin, investigator |
 | `/admin/users` | UserManagement | admin |
 | `/notifications`, `/profile`, `/settings` | | auth |
 | `/support` | Support | customer, employee, admin |
@@ -549,7 +549,6 @@ All endpoints require a staff member; investigators can only act on their assign
 - **AIAssessment**: pick a claim, re-run inference, KPI cards (cost vs claimed, fraud band, total-loss, priority), recommendation, charts, contributing factors.
 - **RoutingAdvisory**: banners (advisory only, model readiness, gate status); pick a live claim or enter features; sample or live agents; get advice; ranked options table; accept/reject feedback.
 - **FraudDashboard**: alert queue with risk/status filters; Examine modal → dismiss / mark reviewed / escalate.
-- **AIDecisionCenter**: animated 5-agent pipeline run, agent tiles with input/output JSON, final decision (always human review).
 - **AIOperations**: model registry from `model-status`, agent executions, priority mismatches, investigator assignments, metrics table and chart.
 - **Notifications, Support, Profile, Settings**: inbox with filters; support contacts; profile and password; notification preferences + model availability (staff).
 
