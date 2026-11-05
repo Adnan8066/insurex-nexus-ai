@@ -59,6 +59,25 @@ pipeline {
             }
         }
 
+        stage('Check Training Datasets') {
+            steps {
+                dir('backend') {
+                    bat '''
+                        if not exist "data\\insurance_claims.csv" (
+                            echo Missing training dataset: backend\\data\\insurance_claims.csv
+                            exit /b 1
+                        )
+                        if not exist "data\\fraud_oracle.csv" (
+                            echo Missing training dataset: backend\\data\\fraud_oracle.csv
+                            exit /b 1
+                        )
+                        dir "data\\insurance_claims.csv"
+                        dir "data\\fraud_oracle.csv"
+                    '''
+                }
+            }
+        }
+
         stage('Train ML Models') {
             steps {
                 dir('backend\\django_backend') {
