@@ -72,7 +72,7 @@ class ClaimViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), CanIssuePolicy()]
         elif self.action in ['update_status', 'assign_adjuster', 'assign_investigator']:
             return [IsAuthenticated(), IsEmployee()]
-        elif self.action == 'submit_assessment':
+        elif self.action in ['submit_assessment', 'set_fraud_outcome']:
             return [IsAuthenticated(), IsStaffMember()]
         return [IsAuthenticated()]
 
@@ -171,6 +171,37 @@ class ClaimViewSet(viewsets.ModelViewSet):
         serializer = ClaimDocumentSerializer(documents, many=True, context={'request': request})
         return Response(serializer.data)
     
+    @action(detail=True, methods=['post'], url_path='fraud-outcome')
+    def set_fraud_outcome(self, request, pk=None):
+        """Record the final investigation result: fraud, genuine or unclear."""
+        from datetime import date as date_type
+        from .models import Claim as ClaimModel
+
+        claim = self.get_object()
+        outcome = str(request.data.get('outcome', '')).strip().lower()
+        valid = {choice for choice, _label in ClaimModel._meta.get_field('fraud_outcome').choices}
+        if outcome not in valid:
+            return Response({'detail': 'Outcome must be fraud, genuine or unclear.'}, status=status.HTTP_400_BAD_REQUEST)
+        note = str(request.data.get('note', '')).strip()
+        if len(note) > 500:
+            return Response({'detail': 'The note can be at most 500 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        outcome_date = request.data.get('outcome_date') or date_type.today().isoformat()
+        try:
+            outcome_date = date_type.fromisoformat(str(outcome_date))
+        except ValueError:
+            return Response({'detail': 'Use the date format YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        claim.fraud_outcome = outcome
+        claim.fraud_outcome_date = outcome_date
+        claim.fraud_outcome_note = note
+        claim.save(update_fields=['fraud_outcome', 'fraud_outcome_date', 'fraud_outcome_note', 'updated_at'])
+        return Response({
+            'claim_number': claim.claim_number,
+            'fraud_outcome': claim.fraud_outcome,
+            'fraud_outcome_date': claim.fraud_outcome_date.isoformat(),
+            'fraud_outcome_note': claim.fraud_outcome_note,
+        })
+
     @action(detail=True, methods=['post', 'patch'], url_path='update-status')
     def update_status(self, request, pk=None):
         claim = self.get_object()

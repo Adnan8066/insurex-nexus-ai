@@ -188,7 +188,10 @@ export function PolicyList() {
           <h1 className="page-title">Policies</h1>
           <p className="page-subtitle">Manage and view all insurance policies</p>
         </div>
-        {canCreatePolicy && <Button asChild><Link to="/policies/new"><Plus className="w-4 h-4 mr-2" />New Policy</Link></Button>}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild><Link to="/policies/plans">View and compare plans</Link></Button>
+          {canCreatePolicy && <Button asChild><Link to="/policies/new"><Plus className="w-4 h-4 mr-2" />New Policy</Link></Button>}
+        </div>
       </div>
 
       {error && (

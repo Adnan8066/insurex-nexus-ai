@@ -140,6 +140,12 @@ class UserLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
+
+class CustomerLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    license_plate = serializers.CharField(max_length=20)
+    mobile_number = serializers.CharField(max_length=20)
+
 class RefreshTokenRequestSerializer(serializers.Serializer):
     refresh = serializers.CharField()
 

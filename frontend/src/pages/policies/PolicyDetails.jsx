@@ -26,6 +26,12 @@ import { Modal } from '../../components/ui/Modal'
 import { DocumentUpload } from '../../components/forms/DocumentUpload'
 import { labelFor } from '../../constants/domain'
 
+const SERVICE_LABELS = {
+  renewal: 'Renewal',
+  cancellation: 'Cancellation',
+  vehicle_change: 'Vehicle or policy change',
+}
+
 const POLICY_DOCUMENT_TYPES = [
   { value: 'policy', label: 'Policy Document' },
   { value: 'declaration', label: 'Declaration Page' },
@@ -101,6 +107,60 @@ export function PolicyDetails() {
   const [savingEndorsement, setSavingEndorsement] = useState(false)
   const canManageEndorsements = ['employee', 'admin'].includes(user?.role)
   const [scheduleOpen, setScheduleOpen] = useState(false)
+  const isCustomer = user?.role === 'customer'
+  const [requestOpen, setRequestOpen] = useState(false)
+  const [requestType, setRequestType] = useState('renewal')
+  const [requestForm, setRequestForm] = useState({ reason: '', color: '', license_plate: '', current_mileage: '' })
+  const [requestError, setRequestError] = useState('')
+  const [requestSaving, setRequestSaving] = useState(false)
+  const [requestNotice, setRequestNotice] = useState('')
+  const [serviceRequests, setServiceRequests] = useState([])
+
+  const loadServiceRequests = async () => {
+    if (!isCustomer || !id) return
+    try {
+      setServiceRequests(await policyService.getServiceRequests(id))
+    } catch {
+      setServiceRequests([])
+    }
+  }
+
+  useEffect(() => {
+    loadServiceRequests()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isCustomer])
+
+  const openRequest = (type) => {
+    setRequestType(type)
+    setRequestError('')
+    setRequestNotice('')
+    setRequestOpen(true)
+  }
+
+  const submitRequest = async (event) => {
+    event.preventDefault()
+    setRequestSaving(true)
+    setRequestError('')
+    const payload = { change_type: requestType, reason: requestForm.reason }
+    if (requestType === 'vehicle_change') {
+      payload.vehicle = {
+        color: requestForm.color,
+        license_plate: requestForm.license_plate,
+        current_mileage: requestForm.current_mileage,
+      }
+    }
+    try {
+      await policyService.createServiceRequest(id, payload)
+      setRequestOpen(false)
+      setRequestNotice('Your request was sent. Staff will review it.')
+      setRequestForm({ reason: '', color: '', license_plate: '', current_mileage: '' })
+      await loadServiceRequests()
+    } catch (err) {
+      setRequestError(formatApiError(err, 'Could not send your request.'))
+    } finally {
+      setRequestSaving(false)
+    }
+  }
 
   const downloadCertificate = () => {
     // Every interpolated value is HTML-escaped, and the certificate opens as an isolated blob
@@ -568,7 +628,34 @@ export function PolicyDetails() {
                     File a Claim
                   </Link>
                 </Button>}
+                {isCustomer && (
+                  <>
+                    <Button variant="outline" className="w-full justify-start gap-3" onClick={() => openRequest('renewal')}>
+                      Request renewal
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start gap-3" onClick={() => openRequest('vehicle_change')}>
+                      Request vehicle or policy change
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start gap-3" onClick={() => openRequest('cancellation')}>
+                      Request cancellation
+                    </Button>
+                  </>
+                )}
               </div>
+              {requestNotice && <p className="mt-4 text-sm text-emerald-700">{requestNotice}</p>}
+              {isCustomer && serviceRequests.length > 0 && (
+                <div className="mt-5 border-t border-gray-100 pt-4">
+                  <p className="mb-2 text-sm font-medium text-gray-700">My requests</p>
+                  <div className="space-y-2">
+                    {serviceRequests.map((request) => (
+                      <div key={request.id} className="flex items-center justify-between gap-3 text-sm">
+                        <span>{SERVICE_LABELS[request.change_type] || request.change_type}</span>
+                        <Badge variant="neutral">{request.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -618,6 +705,68 @@ export function PolicyDetails() {
           ))}
         </div>
         <p className="mt-4 text-sm text-gray-500">This schedule is calculated from the policy premium and frequency. Contact your insurer to arrange or confirm payment.</p>
+      </Modal>
+      <Modal
+        isOpen={requestOpen}
+        onClose={() => setRequestOpen(false)}
+        title={`Request ${(SERVICE_LABELS[requestType] || '').toLowerCase()}`}
+        description={`${policy.policyNumber || ''}. Staff review every request before it takes effect.`}
+        footer={(
+          <>
+            <Button variant="outline" type="button" onClick={() => setRequestOpen(false)}>Cancel</Button>
+            <Button variant="primary" type="submit" form="service-request-form" disabled={requestSaving}>
+              {requestSaving ? 'Sending…' : 'Send request'}
+            </Button>
+          </>
+        )}
+      >
+        <form id="service-request-form" className="space-y-4" onSubmit={submitRequest}>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="request-type">Request type</label>
+            <select
+              id="request-type"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={requestType}
+              onChange={(event) => setRequestType(event.target.value)}
+            >
+              <option value="renewal">Renewal</option>
+              <option value="vehicle_change">Vehicle or policy change</option>
+              <option value="cancellation">Cancellation</option>
+            </select>
+          </div>
+
+          {requestType === 'vehicle_change' && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="request-color">Colour</label>
+                <input id="request-color" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" value={requestForm.color} onChange={(event) => setRequestForm({ ...requestForm, color: event.target.value })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="request-plate">Licence plate</label>
+                <input id="request-plate" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" value={requestForm.license_plate} onChange={(event) => setRequestForm({ ...requestForm, license_plate: event.target.value })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="request-mileage">Mileage (km)</label>
+                <input id="request-mileage" type="number" min="0" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" value={requestForm.current_mileage} onChange={(event) => setRequestForm({ ...requestForm, current_mileage: event.target.value })} />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="request-reason">Reason</label>
+            <textarea
+              id="request-reason"
+              required
+              maxLength={500}
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={requestForm.reason}
+              onChange={(event) => setRequestForm({ ...requestForm, reason: event.target.value })}
+            />
+          </div>
+
+          {requestError && <p className="text-sm text-red-700" role="alert">{requestError}</p>}
+        </form>
       </Modal>
     </div>
   )

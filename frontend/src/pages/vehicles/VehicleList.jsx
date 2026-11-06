@@ -11,6 +11,7 @@ import {
   FileText,
   AlertTriangle,
   Trash2,
+  ImagePlus,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
@@ -45,6 +46,7 @@ export function VehicleList() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [uploadingId, setUploadingId] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -74,6 +76,7 @@ export function VehicleList() {
           claims: v.claims || [],
           customer: v.customer,
           customerName: v.customer_name,
+          imageUrl: v.image_url,
         }))
         if (!cancelled) {
           setVehicles(mapped)
@@ -137,6 +140,27 @@ export function VehicleList() {
       setDeleteError(formatApiError(err, 'Failed to delete vehicle'))
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleImageUpload = async (event, vehicle) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setUploadingId(vehicle.id)
+    setError('')
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+      await vehicleService.updateVehicle(vehicle.id, formData)
+      const fresh = await vehicleService.getVehicle(vehicle.id)
+      const applyImage = (list) => list.map((v) => (v.id === vehicle.id ? { ...v, imageUrl: fresh.image_url } : v))
+      setVehicles(applyImage)
+      setFilteredVehicles(applyImage)
+    } catch (err) {
+      setError(formatApiError(err, 'Failed to upload the vehicle image'))
+    } finally {
+      setUploadingId(null)
     }
   }
 
@@ -241,14 +265,23 @@ export function VehicleList() {
                         key={vehicle.id}
                         clickable
                         onClick={(event) => {
-                          if (event.target.closest('button, a')) return
+                          if (event.target.closest('button, a, input')) return
                           navigate(`/vehicles/${vehicle.id}`)
                         }}
                       >
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <div className="w-12 h-8 bg-gray-100 rounded flex items-center justify-center">
-                              <Car className="w-5 h-5 text-gray-400" />
+                            <div className="w-20 h-12 bg-gray-100 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
+                              {vehicle.imageUrl ? (
+                                <img
+                                  src={vehicle.imageUrl}
+                                  alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <Car className="w-5 h-5 text-gray-400" />
+                              )}
                             </div>
                             <div>
                               <p className="font-medium text-gray-900">{vehicle.year} {vehicle.make} {vehicle.model}</p>
@@ -276,6 +309,29 @@ export function VehicleList() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Link to={`/vehicles/${vehicle.id}`} className="text-primary hover:underline text-sm">View</Link>
+                            {canManageVehicles && (
+                              <>
+                                <input
+                                  id={`vehicle-image-${vehicle.id}`}
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/webp,image/bmp"
+                                  className="hidden"
+                                  onChange={(event) => handleImageUpload(event, vehicle)}
+                                />
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    document.getElementById(`vehicle-image-${vehicle.id}`)?.click()
+                                  }}
+                                  disabled={uploadingId === vehicle.id}
+                                  className="text-primary hover:text-primary/80 p-1 disabled:opacity-50"
+                                  title="Upload vehicle image"
+                                  aria-label={`Upload image for ${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                                >
+                                  <ImagePlus className="w-4 h-4" aria-hidden="true" />
+                                </button>
+                              </>
+                            )}
                             {canManageVehicles && <button
                               onClick={(event) => {
                                 event.stopPropagation()

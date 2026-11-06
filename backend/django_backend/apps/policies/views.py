@@ -8,6 +8,8 @@ from django.db.models import Q
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.http import HttpResponse
+from datetime import timedelta
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.conf import settings
@@ -39,6 +41,59 @@ def _json_safe(value):
     if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
     return value
+
+
+# Customer-requested changes reuse the endorsement queue: staff approve or reject them.
+SERVICE_CHANGE_TYPES = {'renewal', 'cancellation', 'vehicle_change'}
+VEHICLE_EDITABLE_FIELDS = {'color', 'license_plate', 'current_mileage'}
+
+
+def _apply_service_request(policy, endorsement):
+    """Apply an approved renewal, cancellation or vehicle change to the policy."""
+    if endorsement.change_type == 'renewal' and policy.end_date:
+        policy.end_date = policy.end_date + timedelta(days=365)
+    elif endorsement.change_type == 'cancellation':
+        policy.status = 'cancelled'
+    elif endorsement.change_type == 'vehicle_change' and policy.vehicle_id:
+        vehicle = policy.vehicle
+        for field, value in (endorsement.proposed_changes.get('vehicle') or {}).items():
+            if field in VEHICLE_EDITABLE_FIELDS:
+                setattr(vehicle, field, value)
+        vehicle.save()
+
+
+def _policy_document_html(policy):
+    """A printable HTML policy summary the customer can save or print."""
+    from django.utils.html import escape
+    vehicle = policy.vehicle
+    plan_name = (policy.coverage or {}).get('policy_plan', {}).get('name') or policy.type
+    rows = [
+        ('Policy number', policy.policy_number),
+        ('Policy type', plan_name),
+        ('Status', policy.status),
+        ('Start date', policy.start_date),
+        ('End date', policy.end_date),
+        ('Annual premium (INR)', policy.premium),
+        ('Deductible (INR)', policy.deductible),
+        ('Payment frequency', policy.payment_frequency),
+        ('Auto-renew', 'Yes' if policy.auto_renew else 'No'),
+        ('Customer', policy.customer.get_full_name() or policy.customer.email),
+        ('Vehicle', f'{vehicle.year} {vehicle.make} {vehicle.model}' if vehicle else 'Not linked'),
+        ('Licence plate', vehicle.license_plate if vehicle else '-'),
+        ('Chassis number', vehicle.vin if vehicle else '-'),
+    ]
+    body = ''.join(f'<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>' for label, value in rows)
+    return (
+        '<!doctype html><html><head><meta charset="utf-8">'
+        f'<title>{escape(policy.policy_number)}</title>'
+        '<style>body{font-family:Arial,sans-serif;margin:40px;color:#111}h1{font-size:22px}'
+        'table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left}'
+        'th{width:220px;background:#f3f4f6}.note{color:#555;font-size:12px;margin-top:24px}</style>'
+        '</head><body><h1>InsureX Nexus AI - Policy document</h1>'
+        f'<table>{body}</table>'
+        '<p class="note">Demonstration document. Plan terms and premiums are sample values, '
+        'not an insurer policy wording.</p></body></html>'
+    )
 
 
 def _check_can_review(user, application):
@@ -237,6 +292,8 @@ class PolicyViewSet(viewsets.ModelViewSet):
             if endorsement.status != PolicyEndorsement.Status.PENDING:
                 return Response({'detail': 'This endorsement is no longer pending.'}, status=status.HTTP_409_CONFLICT)
             changes = endorsement.proposed_changes
+            if endorsement.change_type in SERVICE_CHANGE_TYPES:
+                _apply_service_request(policy, endorsement)
             coverage = dict(policy.coverage or {})
             coverage.update(changes.get('coverage', {}))
             if changes.get('assets_add'):
@@ -244,7 +301,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
             policy.coverage = coverage
             policy.deductible = changes.get('deductible', policy.deductible)
             policy.premium = policy.premium + endorsement.premium_delta
-            policy.save(update_fields=['coverage', 'deductible', 'premium', 'updated_at'])
+            policy.save(update_fields=['coverage', 'deductible', 'premium', 'end_date', 'status', 'updated_at'])
             endorsement.status = PolicyEndorsement.Status.APPROVED
             endorsement.reviewed_by = request.user
             endorsement.reviewed_at = timezone.now()
@@ -391,6 +448,73 @@ class PolicyViewSet(viewsets.ModelViewSet):
         serializer = PolicyDocumentSerializer(policy.documents.all(), many=True)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['get'], url_path='plans')
+    def plans(self, request):
+        """Demo plan catalogue for viewing and comparing policy tiers."""
+        from .plans import DEMO_NOTICE, PLAN_CATALOGUE
+        return Response({'notice': DEMO_NOTICE, 'plans': PLAN_CATALOGUE})
+
+    @action(detail=True, methods=['get', 'post'], url_path='service-requests')
+    def service_requests(self, request, pk=None):
+        """Customer requests for renewal, cancellation or vehicle changes; staff approve them."""
+        policy = self.get_object()
+        pending_queue = policy.endorsements.filter(change_type__in=SERVICE_CHANGE_TYPES)
+        if request.method == 'GET':
+            return Response(PolicyEndorsementSerializer(pending_queue, many=True).data)
+        if request.user.role != Role.CUSTOMER:
+            return Response({'detail': 'Only customers can submit service requests.'}, status=status.HTTP_403_FORBIDDEN)
+
+        change_type = request.data.get('change_type')
+        reason = str(request.data.get('reason', '')).strip()
+        if change_type not in SERVICE_CHANGE_TYPES:
+            return Response({'detail': 'Choose renewal, cancellation or vehicle_change.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not reason or len(reason) > 500:
+            return Response({'detail': 'Give a reason of up to 500 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        if pending_queue.filter(change_type=change_type, status=PolicyEndorsement.Status.PENDING).exists():
+            return Response({'detail': 'A request of this type is already waiting for review.'}, status=status.HTTP_409_CONFLICT)
+        if change_type == 'cancellation' and policy.status != 'active':
+            return Response({'detail': 'Only an active policy can be cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
+        if change_type == 'renewal' and policy.status not in ('active', 'expired'):
+            return Response({'detail': 'Only an active or expired policy can be renewed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        proposed = {'reason': reason}
+        if change_type == 'vehicle_change':
+            requested = request.data.get('vehicle') or {}
+            if not isinstance(requested, dict):
+                return Response({'detail': 'Vehicle changes must be an object.'}, status=status.HTTP_400_BAD_REQUEST)
+            allowed = {key: value for key, value in requested.items()
+                       if key in VEHICLE_EDITABLE_FIELDS and value not in (None, '')}
+            if not allowed:
+                return Response({'detail': 'Choose at least one vehicle detail: colour, licence plate or mileage.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if 'current_mileage' in allowed:
+                try:
+                    allowed['current_mileage'] = int(allowed['current_mileage'])
+                except (TypeError, ValueError):
+                    return Response({'detail': 'Mileage must be a whole number.'}, status=status.HTTP_400_BAD_REQUEST)
+                if allowed['current_mileage'] < 0:
+                    return Response({'detail': 'Mileage cannot be negative.'}, status=status.HTTP_400_BAD_REQUEST)
+            proposed['vehicle'] = _json_safe(allowed)
+
+        endorsement = PolicyEndorsement.objects.create(
+            policy=policy,
+            change_type=change_type,
+            proposed_changes=_json_safe(proposed),
+            premium_delta=Decimal('0'),
+            before_snapshot={'status': policy.status, 'end_date': str(policy.end_date), 'premium': str(policy.premium)},
+            after_snapshot={},
+            created_by=request.user,
+        )
+        return Response(PolicyEndorsementSerializer(endorsement).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'], url_path='policy-document')
+    def policy_document(self, request, pk=None):
+        """Download a printable policy summary (HTML)."""
+        policy = self.get_object()
+        response = HttpResponse(_policy_document_html(policy), content_type='text/html; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{policy.policy_number}.html"'
+        return response
+
     @action(detail=True, methods=['get'], url_path='premium-history')
     def premium_history(self, request, pk=None):
         policy = self.get_object()

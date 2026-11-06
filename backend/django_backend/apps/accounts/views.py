@@ -18,12 +18,24 @@ from .serializers import (
     UserSerializer, UserRegistrationSerializer, UserLoginSerializer, AdminUserCreateSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer, UserUpdateSerializer,
-    RefreshTokenRequestSerializer, LogoutRequestSerializer
+    RefreshTokenRequestSerializer, LogoutRequestSerializer, CustomerLoginSerializer
 )
 from common.permissions import IsAdmin
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def _normalize_plate(value):
+    """'KL 01 Z 7315', 'kl01z7315' -> 'KL01Z7315'."""
+    return ''.join(ch for ch in str(value or '').upper() if ch.isalnum())
+
+
+def _last_ten_digits(value):
+    """'+91 98120-34567' -> '9812034567' (the last 10 digits of the number)."""
+    digits = ''.join(ch for ch in str(value or '') if ch.isdigit())
+    return digits[-10:]
+
 
 class AuthViewSet(viewsets.GenericViewSet):
     permission_classes = [AllowAny]
@@ -33,6 +45,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     # REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']; keyed by client IP).
     THROTTLE_SCOPES = {
         'login': 'login',
+        'customer_login': 'login',
         'forgot_password': 'password_reset',
         'reset_password': 'password_reset',
         'register': 'register',
@@ -83,6 +96,48 @@ class AuthViewSet(viewsets.GenericViewSet):
             }
         }, status=status.HTTP_201_CREATED)
     
+    @action(detail=False, methods=['post'], url_path='customer-login')
+    def customer_login(self, request):
+        """Customers sign in with their vehicle registration number and mobile number."""
+        from apps.vehicles.models import Vehicle
+
+        serializer = CustomerLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        plate = _normalize_plate(serializer.validated_data['license_plate'])
+        mobile = _last_ten_digits(serializer.validated_data['mobile_number'])
+        email = serializer.validated_data['email'].strip().lower()
+        invalid = {
+            'success': False,
+            'error': {'code': 401, 'message': 'Email, vehicle number or mobile number is incorrect.'},
+        }
+        if not plate or len(mobile) != 10:
+            return Response(invalid, status=status.HTTP_401_UNAUTHORIZED)
+
+        customers = {
+            vehicle.customer_id: vehicle.customer
+            for vehicle in Vehicle.objects.select_related('customer').filter(
+                customer__role=Role.CUSTOMER, customer__is_active=True,
+            )
+            if _normalize_plate(vehicle.license_plate) == plate
+            and _last_ten_digits(vehicle.customer.phone) == mobile
+            and vehicle.customer.email.lower() == email
+        }
+        if len(customers) != 1:
+            return Response(invalid, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = next(iter(customers.values()))
+        user.last_login_ip = self.get_client_ip(request)
+        user.save(update_fields=['last_login_ip'])
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'success': True,
+            'data': {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UserSerializer(user).data
+            }
+        })
+
     @action(detail=False, methods=['post'])
     def login(self, request):
         serializer = self.get_serializer(data=request.data)

@@ -8,6 +8,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from apps.claims.models import Claim
+from common.risk import FRAUD_MODERATE_THRESHOLD
 
 NEW_POLICY_DAYS = 30
 POLICY_ENDING_DAYS = 15
@@ -21,9 +22,39 @@ AMOUNT_OVER_ESTIMATE_RATIO = Decimal('1.5')
 # Two independent red flags raise a fraud alert even when the model score is low.
 ALERT_MIN_RED_FLAGS = 2
 
+# Score points each red flag adds on top of the model's fraud probability.
+# The model only sees one claim, so these carry the history signals it cannot.
+# These are hand-picked review-priority weights, not fitted to data.
+RED_FLAG_POINTS = {
+    'repeat_vehicle': 25,
+    'amount_over_vehicle_price': 25,
+    'new_policy': 20,
+    'frequent_claims': 20,
+    'theft_without_police_report': 20,
+    'amount_over_estimate': 15,
+    'recent_policy_change': 15,
+    'policy_ending': 10,
+    'late_report': 10,
+    'injury_without_police_report': 10,
+}
+# A rule-boosted score never claims certainty.
+MAX_COMBINED_SCORE = 99.0
+
 
 def _flag(code, message):
-    return {'code': code, 'message': message}
+    return {'code': code, 'message': message, 'points': RED_FLAG_POINTS.get(code, 0)}
+
+
+def combined_fraud_score(model_score, flags):
+    """Model probability (0-100) plus red-flag points, capped below 100.
+
+    Two or more independent red flags lift the claim to at least the moderate
+    band, so a claim the model finds ordinary still gets reviewed.
+    """
+    score = float(model_score or 0) + sum(flag.get('points', 0) for flag in flags)
+    if len(flags) >= ALERT_MIN_RED_FLAGS:
+        score = max(score, float(FRAUD_MODERATE_THRESHOLD))
+    return round(min(score, MAX_COMBINED_SCORE), 2)
 
 
 def red_flags(claim):

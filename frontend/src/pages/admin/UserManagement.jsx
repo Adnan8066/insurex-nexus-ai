@@ -33,6 +33,17 @@ export function UserManagement() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [roleFilter, setRoleFilter] = useState('all')
+
+  const visibleUsers = roleFilter === 'all' ? users : users.filter((account) => account.role === roleFilter)
+  const filterOptions = [
+    { value: 'all', label: 'All', count: users.length },
+    ...Object.entries(roleLabels).map(([value, label]) => ({
+      value,
+      label: `${label}s`,
+      count: users.filter((account) => account.role === value).length,
+    })),
+  ]
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -112,18 +123,37 @@ export function UserManagement() {
       <Card>
         <CardHeader
           title="Managed Accounts"
-          subtitle={`${users.length} managed account${users.length === 1 ? '' : 's'}`}
+          subtitle={`${visibleUsers.length} of ${users.length} managed account${users.length === 1 ? '' : 's'}`}
           action={<Button variant="outline" size="sm" onClick={loadUsers} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>}
         />
         <CardContent>
+          <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filter accounts by role">
+            {filterOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setRoleFilter(option.value)}
+                aria-pressed={roleFilter === option.value}
+                className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
+                  roleFilter === option.value
+                    ? 'border-blue-600 bg-blue-600 text-white'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {option.label} <span className="opacity-80">({option.count})</span>
+              </button>
+            ))}
+          </div>
           {loading ? <p className="py-8 text-center text-sm text-gray-500">Loading accounts…</p> : users.length === 0 ? (
             <p className="py-8 text-center text-sm text-gray-500">No managed accounts yet. Create one above.</p>
+          ) : visibleUsers.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-500">No accounts match this filter.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-left text-sm">
                 <thead><tr className="border-b border-gray-200 text-gray-500"><th className="py-3 pr-4 font-medium">Name</th><th className="py-3 pr-4 font-medium">Email</th><th className="py-3 pr-4 font-medium">Role</th><th className="py-3 pr-4 font-medium">Department</th><th className="py-3 font-medium">Status</th></tr></thead>
                 <tbody className="divide-y divide-gray-100">
-                  {users.map((account) => (
+                  {visibleUsers.map((account) => (
                     <tr key={account.id}>
                       <td className="py-3 pr-4 font-medium text-gray-900">{account.full_name || account.name}</td>
                       <td className="py-3 pr-4 text-gray-600">{account.email}</td>

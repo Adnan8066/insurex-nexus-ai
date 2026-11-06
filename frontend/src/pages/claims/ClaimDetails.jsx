@@ -84,6 +84,9 @@ const mapClaim = (c) => ({
     factors: c.ai_assessment.contributing_factors || [],
   } : null,
   fraudRiskScore: c.fraud_risk_score,
+  fraudOutcome: c.fraud_outcome || '',
+  fraudOutcomeDate: c.fraud_outcome_date || '',
+  fraudOutcomeNote: c.fraud_outcome_note || '',
   totalLossProbability: c.total_loss_probability,
   submittedAt: c.submitted_at,
   updatedAt: c.updated_at,
@@ -109,6 +112,12 @@ const mapClaim = (c) => ({
   })),
   notes: c.notes || [],
 })
+
+const OUTCOME_OPTIONS = [
+  { value: 'fraud', label: 'Fraud (confirmed false or exaggerated)' },
+  { value: 'genuine', label: 'Genuine (valid claim)' },
+  { value: 'unclear', label: 'Unclear (not enough evidence)' },
+]
 
 const claimStatusOptions = CLAIM_STATUSES
 
@@ -140,6 +149,28 @@ export function ClaimDetails() {
   const lifecycleStatus = !canViewAI && claim?.status === 'ai_assessment' ? 'under_review' : (claim?.status || '')
   const [statusDraft, setStatusDraft] = useState('')
   const [savingStatus, setSavingStatus] = useState(false)
+  const canRecordOutcome = ['admin', 'employee', 'investigator'].includes(user?.role)
+  const [outcomeDraft, setOutcomeDraft] = useState({ outcome: '', note: '' })
+  const [savingOutcome, setSavingOutcome] = useState(false)
+
+  useEffect(() => {
+    setOutcomeDraft({ outcome: claim?.fraudOutcome || '', note: claim?.fraudOutcomeNote || '' })
+  }, [claim?.id, claim?.fraudOutcome, claim?.fraudOutcomeNote])
+
+  const saveOutcome = async () => {
+    if (!claim || !outcomeDraft.outcome) return
+    setSavingOutcome(true)
+    setError('')
+    try {
+      await claimService.setFraudOutcome(claim.id, { outcome: outcomeDraft.outcome, note: outcomeDraft.note })
+      const refreshed = mapClaim(await claimService.getClaim(claim.id))
+      setClaim(refreshed)
+    } catch (err) {
+      setError(formatApiError(err, 'Could not save the investigation outcome.'))
+    } finally {
+      setSavingOutcome(false)
+    }
+  }
   const [documentFiles, setDocumentFiles] = useState([])
   const [documentType, setDocumentType] = useState('photos')
   const [documentUploading, setDocumentUploading] = useState(false)
@@ -394,6 +425,37 @@ export function ClaimDetails() {
           <Button variant="primary" onClick={saveStatus} loading={savingStatus} disabled={savingStatus || statusDraft === claim.status}>
             Update Status
           </Button>
+        </div>
+      )}
+
+      {canRecordOutcome && (
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
+          <Select
+            label="Investigation outcome"
+            name="fraudOutcome"
+            value={outcomeDraft.outcome}
+            onChange={(event) => setOutcomeDraft((current) => ({ ...current, outcome: event.target.value }))}
+            options={OUTCOME_OPTIONS}
+            placeholder="Not decided"
+          />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700" htmlFor="outcome-note">Note (optional)</label>
+            <input
+              id="outcome-note"
+              maxLength={500}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={outcomeDraft.note}
+              onChange={(event) => setOutcomeDraft((current) => ({ ...current, note: event.target.value }))}
+            />
+          </div>
+          <Button variant="primary" onClick={saveOutcome} loading={savingOutcome} disabled={savingOutcome || !outcomeDraft.outcome}>
+            Save Outcome
+          </Button>
+          {claim.fraudOutcome && (
+            <p className="text-sm text-gray-600">
+              Recorded as <strong>{claim.fraudOutcome}</strong>{claim.fraudOutcomeDate ? ` on ${claim.fraudOutcomeDate}` : ''}
+            </p>
+          )}
         </div>
       )}
 

@@ -22,7 +22,7 @@ from ml_service import (
     MLModelUnavailable,
     CURRENCY_PER_DATASET_UNIT,
 )
-from .fraud_rules import ALERT_MIN_RED_FLAGS, connected_claims, red_flags
+from .fraud_rules import ALERT_MIN_RED_FLAGS, combined_fraud_score, connected_claims, red_flags
 from common.permissions import IsStaffMember
 from common.params import parse_int
 from common.risk import FRAUD_HIGH_THRESHOLD, fraud_risk_band
@@ -105,6 +105,7 @@ def run_claim_assessment(claim):
     assessment.risk_factors = fraud_score['factors']
     assessment.behavioral_indicators = fraud_score['behavioral']
     assessment.network_analysis = fraud_score['network']
+    assessment.contributing_factors = json_safe(_contributing_factors(fraud_score))
 
     assessment.total_loss_probability = total_loss_prob['probability']
 
@@ -131,6 +132,8 @@ def run_claim_assessment(claim):
     stored.update(json_safe(ClaimAssessmentSerializer(assessment).data))
     stored['fraud_risk'] = {
         'score': fraud_score['score'],
+        'model_score': fraud_score.get('model_score'),
+        'rule_points': fraud_score.get('rule_points'),
         'level': assessment.risk_level,
         'factors': fraud_score['factors'],
         'explanations': fraud_score.get('explanations', []),
@@ -175,12 +178,58 @@ def predict_repair_cost_internal(claim):
 
 
 def detect_fraud_internal(claim):
-    """Model score plus the database red flags the model cannot see."""
-    result = dict(detect_fraud_ml(claim_model_input(claim)))
-    result['red_flags'] = red_flags(claim)
-    result['behavioral'] = [flag['message'] for flag in result['red_flags']]
+    """Model score plus the database red flags the model cannot see.
+
+    `score` is the combined score used for banding, alerts and priority;
+    `model_score` keeps the model's own probability for transparency.
+    """
+    result = _model_fraud_result(claim)
+    flags = red_flags(claim)
+    model_score = float(result.get('score') or 0)
+    score = combined_fraud_score(model_score, flags)
+    result['model_score'] = round(model_score, 2)
+    result['rule_points'] = round(score - model_score, 2)
+    result['score'] = score
+    result['level'] = fraud_risk_band(score)
+    result['red_flags'] = flags
+    result['behavioral'] = [flag['message'] for flag in flags]
+    result['factors'] = [f"{flag['message']} (+{flag['points']} points)" for flag in flags] + list(result.get('factors') or [])
     result['network'] = connected_claims(claim)
     return result
+
+
+def _model_fraud_result(claim):
+    """App claims use the model trained on this app's investigated Indian claims and their
+    photos once it exists; imported dataset rows and untrained setups use the dataset models."""
+    if not (claim.ai_assessment or {}).get('source_data'):
+        from . import vehicle_fraud
+        result = vehicle_fraud.score_claim(claim)
+        if result is not None:
+            return dict(result)
+    return dict(detect_fraud_ml(claim_model_input(claim)))
+
+
+def _contributing_factors(fraud_score):
+    """Rows for the assessment page: red flags first, then the model's own reasons."""
+    rows = [
+        {
+            'factor': flag['message'],
+            'description': f"Red flag from claim and policy history: +{flag['points']} points",
+            'weight': flag['points'] / 100,
+            'impact': 'negative',
+        }
+        for flag in fraud_score.get('red_flags', [])
+    ]
+    rows += [
+        {
+            'factor': reason['text'],
+            'description': 'Fraud model attribution for this claim',
+            'weight': reason['points'] / 100,
+            'impact': 'negative',
+        }
+        for reason in fraud_score.get('explanations', [])
+    ]
+    return rows
 
 
 def predict_total_loss_internal(claim):

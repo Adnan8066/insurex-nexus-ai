@@ -2,7 +2,7 @@ import re
 
 from django.utils import timezone
 from rest_framework import serializers
-from common.uploads import validate_upload
+from common.uploads import IMAGE_EXTENSIONS, validate_upload
 from django.contrib.auth import get_user_model
 from apps.accounts.models import Role
 from .models import Vehicle, VehicleDocument, VehicleHistory
@@ -54,7 +54,14 @@ class VehicleSerializer(serializers.ModelSerializer):
     policy_number = serializers.CharField(source='policy.policy_number', read_only=True)
     documents = VehicleDocumentSerializer(many=True, read_only=True)
     history = VehicleHistorySerializer(many=True, read_only=True)
-    
+    image_url = serializers.SerializerMethodField()
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+
     class Meta:
         model = Vehicle
         fields = [
@@ -62,7 +69,7 @@ class VehicleSerializer(serializers.ModelSerializer):
             'make', 'model', 'year', 'vin', 'color', 'license_plate', 'license_state',
             'registration_expiry', 'purchase_date', 'purchase_price', 'current_mileage',
             'fuel_type', 'transmission', 'status', 'engine_size', 'body_style', 'features',
-            'created_at', 'updated_at', 'documents', 'history'
+            'image_url', 'created_at', 'updated_at', 'documents', 'history'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -109,8 +116,13 @@ class VehicleUpdateSerializer(VehicleValueValidationMixin, serializers.ModelSeri
             'policy', 'make', 'model', 'year', 'color', 'license_plate',
             'license_state', 'registration_expiry', 'purchase_date', 'purchase_price',
             'current_mileage', 'fuel_type', 'transmission', 'status',
-            'engine_size', 'body_style', 'features'
+            'engine_size', 'body_style', 'features', 'image'
         ]
+
+    def validate_image(self, value):
+        if value is None:
+            return value
+        return validate_upload(value, allowed_extensions=IMAGE_EXTENSIONS)
 
     def validate(self, attrs):
         policy = attrs.get('policy')
