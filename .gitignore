@@ -63,3 +63,6 @@ backend/django_backend/staticfiles/*
 
 # Stray folders created by tools that mis-expand Windows environment variables
 %LOCALAPPDATA%/
+
+# Demo data export with login passwords
+InsureX_Demo_Data.xlsx

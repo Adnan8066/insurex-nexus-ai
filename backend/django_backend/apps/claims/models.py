@@ -96,6 +96,14 @@ class Claim(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     closed_at = models.DateTimeField(_('closed at'), blank=True, null=True)
+    # Final result of the investigation, used later as the label for training fraud models.
+    fraud_outcome = models.CharField(_('fraud outcome'), max_length=10, blank=True, choices=[
+        ('fraud', _('Fraud')),
+        ('genuine', _('Genuine')),
+        ('unclear', _('Unclear')),
+    ])
+    fraud_outcome_date = models.DateField(_('fraud outcome date'), blank=True, null=True)
+    fraud_outcome_note = models.TextField(_('fraud outcome note'), blank=True, max_length=500)
     
     class Meta:
         db_table = 'claims'

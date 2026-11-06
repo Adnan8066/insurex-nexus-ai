@@ -71,10 +71,12 @@ class ClaimSerializer(serializers.ModelSerializer):
             'assigned_adjuster', 'assigned_adjuster_name',
             'assigned_investigator', 'assigned_investigator_name',
             'ai_assessment', 'fraud_risk_score', 'total_loss_probability',
+            'fraud_outcome', 'fraud_outcome_date', 'fraud_outcome_note',
             'submitted_at', 'updated_at', 'closed_at',
             'documents', 'status_history', 'timeline', 'notes'
         ]
-        read_only_fields = ['id', 'claim_number', 'submitted_at', 'updated_at', 'closed_at', 'complexity_score']
+        read_only_fields = ['id', 'claim_number', 'submitted_at', 'updated_at', 'closed_at', 'complexity_score',
+                            'fraud_outcome', 'fraud_outcome_date', 'fraud_outcome_note']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

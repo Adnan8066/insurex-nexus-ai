@@ -51,6 +51,11 @@ export const claimService = {
     return response.data
   },
 
+  async setFraudOutcome(claimId, { outcome, note }) {
+    const response = await api.post(`/claims/${claimId}/fraud-outcome/`, { outcome, note })
+    return response.data
+  },
+
   async assignInvestigator(claimId, investigatorId) {
     const response = await api.post(`/claims/${claimId}/assign-investigator/`, {
       investigator_id: investigatorId,

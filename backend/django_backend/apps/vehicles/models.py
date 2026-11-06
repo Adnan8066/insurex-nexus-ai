@@ -51,6 +51,7 @@ class Vehicle(models.Model):
     status = models.CharField(_('status'), max_length=20, choices=VehicleStatus.choices, default=VehicleStatus.ACTIVE)
     engine_size = models.DecimalField(_('engine size (L)'), max_digits=3, decimal_places=1, blank=True, null=True)
     body_style = models.CharField(_('body style'), max_length=30, blank=True)
+    image = models.ImageField(_('vehicle image'), upload_to='vehicle_images/', blank=True, null=True)
     features = models.JSONField(_('features'), default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

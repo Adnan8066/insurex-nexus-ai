@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Mail, AlertCircle, Car, Smartphone } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
 import { AuthLayout } from '../../components/auth/BrandArtwork'
 
+const emptyForm = { email: '', license_plate: '', mobile_number: '' }
+
 export function Login() {
   const navigate = useNavigate()
-  const { login } = useAuth()
-  const [formData, setFormData] = useState({ email: '', password: '' })
+  const { customerLogin } = useAuth()
+  const [formData, setFormData] = useState(emptyForm)
   const [errors, setErrors] = useState({})
-  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -19,7 +20,12 @@ export function Login() {
     const newErrors = {}
     if (!formData.email) newErrors.email = 'Email is required'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Invalid email format'
-    if (!formData.password) newErrors.password = 'Password is required'
+    if (!formData.license_plate.trim()) newErrors.license_plate = 'Vehicle registration number is required'
+    const digits = formData.mobile_number.replace(/\D/g, '')
+    if (!digits) newErrors.mobile_number = 'Mobile number is required'
+    else if (digits.length !== 10 && !(digits.length === 12 && digits.startsWith('91'))) {
+      newErrors.mobile_number = 'Enter a 10-digit mobile number'
+    }
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -31,7 +37,7 @@ export function Login() {
     setLoading(true)
     setError('')
 
-    const result = await login(formData)
+    const result = await customerLogin(formData)
     if (result.success) {
       navigate('/dashboard')
     } else {
@@ -54,8 +60,8 @@ export function Login() {
             <img src="/insurex-nexus-ai-logo.jpg" alt="InsureX Nexus AI logo" className="w-12 h-12 rounded-xl object-cover" />
             <span className="text-2xl font-bold text-gray-900">InsureX Nexus AI</span>
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Welcome back</h1>
-          <p className="mt-2 text-gray-600">Sign in to your account to continue</p>
+          <h1 className="text-3xl font-bold text-gray-900">Customer sign in</h1>
+          <p className="mt-2 text-gray-600">Sign in with your email, vehicle number and mobile number</p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -81,37 +87,37 @@ export function Login() {
             />
 
             <Input
-              label="Password"
-              type={showPassword ? 'text' : 'password'}
-              name="password"
-              value={formData.password}
+              label="Vehicle registration number"
+              name="license_plate"
+              value={formData.license_plate}
               onChange={handleChange}
-              error={errors.password}
-              placeholder="••••••••"
-              autoComplete="current-password"
+              error={errors.license_plate}
+              placeholder="KL 01 Z 7315"
+              autoComplete="off"
               required
-              leftIcon={<Lock className="w-5 h-5 text-gray-400" />}
-              rightIcon={
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-gray-400 hover:text-gray-600"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              }
+              leftIcon={<Car className="w-5 h-5 text-gray-400" />}
             />
-          </div>
 
-          <div className="flex items-center justify-end">
-            <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">
-              Forgot password?
-            </Link>
+            <Input
+              label="Mobile number"
+              type="tel"
+              name="mobile_number"
+              value={formData.mobile_number}
+              onChange={handleChange}
+              error={errors.mobile_number}
+              placeholder="+91 98120 34567"
+              autoComplete="tel"
+              required
+              leftIcon={<Smartphone className="w-5 h-5 text-gray-400" />}
+            />
           </div>
 
           <Button type="submit" fullWidth loading={loading} className="py-3">
             Sign in
+          </Button>
+
+          <Button type="button" variant="outline" fullWidth className="py-3" onClick={() => navigate('/staff-login')}>
+            Staff login
           </Button>
         </form>
 

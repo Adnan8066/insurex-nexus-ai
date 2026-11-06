@@ -46,6 +46,21 @@ export const policyService = {
     return response.data
   },
 
+  async getPlans() {
+    const response = await api.get('/policies/plans/')
+    return response.data
+  },
+
+  async getServiceRequests(policyId) {
+    const response = await api.get(`/policies/${policyId}/service-requests/`)
+    return response.data
+  },
+
+  async createServiceRequest(policyId, data) {
+    const response = await api.post(`/policies/${policyId}/service-requests/`, data)
+    return response.data
+  },
+
   async getEndorsements(policyId) {
     const response = await api.get(`/policies/${policyId}/endorsements/`)
     return response.data

@@ -274,6 +274,12 @@ def get_model_version():
     return "unknown"
 
 
+def _vehicle_fraud_report():
+    """Training report of the Indian vehicle fraud model, or None before it is trained."""
+    from apps.assessments.vehicle_fraud import training_report
+    return training_report()
+
+
 def get_model_status():
     models = load_models()
     report_path = os.path.join(MODELS_DIR, "training_report.json")
@@ -290,6 +296,7 @@ def get_model_status():
         "fraud_risk_model": models["fraud_risk"] is not None,
         "fraud_oracle_model": models["fraud_oracle_fraud"] is not None,
         "total_loss_model": models["total_loss"] is not None,
+        "vehicle_fraud_model": _vehicle_fraud_report(),
         "model_load_errors": dict(_model_load_errors),
         "training_report": report,
     }

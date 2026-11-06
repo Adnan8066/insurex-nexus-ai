@@ -8,6 +8,11 @@ export const authService = {
     return responseData(response)
   },
 
+  async customerLogin({ email, license_plate, mobile_number }) {
+    const response = await api.post('/auth/customer-login/', { email, license_plate, mobile_number })
+    return responseData(response)
+  },
+
   async register(userData) {
     // Public signup is customer-only; the backend enforces this independently.
     const registrationData = { ...userData }

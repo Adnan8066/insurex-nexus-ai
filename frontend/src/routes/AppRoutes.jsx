@@ -4,6 +4,7 @@ import { useAuth } from '../context/useAuth'
 import ErrorBoundary from '../components/ui/ErrorBoundary'
 
 const Login = lazy(() => import('../pages/auth/Login').then((module) => ({ default: module.Login })))
+const StaffLogin = lazy(() => import('../pages/auth/StaffLogin').then((module) => ({ default: module.StaffLogin })))
 const Register = lazy(() => import('../pages/auth/Register').then((module) => ({ default: module.Register })))
 const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword').then((module) => ({ default: module.ForgotPassword })))
 const MainLayout = lazy(() => import('../layouts/MainLayout').then((module) => ({ default: module.MainLayout })))
@@ -11,6 +12,7 @@ const CustomerDashboard = lazy(() => import('../pages/dashboard/CustomerDashboar
 const EmployeeDashboard = lazy(() => import('../pages/dashboard/EmployeeDashboard').then((module) => ({ default: module.EmployeeDashboard })))
 const PolicyList = lazy(() => import('../pages/policies/PolicyList').then((module) => ({ default: module.PolicyList })))
 const PolicyDetails = lazy(() => import('../pages/policies/PolicyDetails').then((module) => ({ default: module.PolicyDetails })))
+const PlanCompare = lazy(() => import('../pages/policies/PlanCompare').then((module) => ({ default: module.PlanCompare })))
 const PolicyForm = lazy(() => import('../pages/policies/PolicyForm').then((module) => ({ default: module.PolicyForm })))
 const PolicyRequests = lazy(() => import('../pages/policies/PolicyRequests').then((module) => ({ default: module.PolicyRequests })))
 const RequestPolicy = lazy(() => import('../pages/policies/RequestPolicy').then((module) => ({ default: module.RequestPolicy })))
@@ -63,6 +65,7 @@ export default function AppRoutes() {
     <Suspense fallback={<div className="p-8 text-center text-gray-500" role="status">Loading page…</div>}>
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/staff-login" element={<StaffLogin />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/" element={<PublicHome />} />
@@ -71,6 +74,7 @@ export default function AppRoutes() {
         <Route path="dashboard" element={<RoleBasedDashboard />} />
         <Route path="policies" element={<PolicyList />} />
         <Route path="policies/new" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
+        <Route path="policies/plans" element={<PlanCompare />} />
         <Route path="policies/requests" element={<ProtectedRoute roles={['employee', 'admin']}><PolicyRequests /></ProtectedRoute>} />
         <Route path="policies/:id" element={<PolicyDetails />} />
         <Route path="policies/:id/edit" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />

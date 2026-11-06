@@ -54,6 +54,18 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const customerLogin = async (credentials) => {
+    setError(null)
+    try {
+      const userData = storeSession(await authService.customerLogin(credentials))
+      return { success: true, user: userData }
+    } catch (err) {
+      const message = formatApiError(err, 'Login failed. Check your vehicle number and mobile number and try again.')
+      setError(message)
+      return { success: false, error: message }
+    }
+  }
+
   const register = async (registrationData) => {
     setError(null)
     try {
@@ -143,6 +155,7 @@ export function AuthProvider({ children }) {
     loading,
     error,
     login,
+    customerLogin,
     register,
     logout,
     forgotPassword,
