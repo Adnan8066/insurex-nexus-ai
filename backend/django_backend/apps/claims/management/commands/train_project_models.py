@@ -85,6 +85,11 @@ def classifier(numeric, categorical):
     return build_pipeline(numeric, categorical, model)
 
 
+def calibrated(pipeline):
+    """Sigmoid-calibrated wrapper, so a balanced-weight forest's scores read as real probabilities."""
+    return CalibratedClassifierCV(estimator=pipeline, method="sigmoid", cv=3)
+
+
 def oracle_classifier():
     """Calibrated LightGBM pipeline with a validation-selected fraud threshold."""
     estimator = LGBMClassifier(
@@ -437,14 +442,23 @@ class Command(BaseCommand):
             insurance_X.loc[cost_valid], cost_y.loc[cost_valid], "repair_cost",
         )
 
-        total_loss_y = insurance["incident_severity"].astype(str).str.strip().str.lower().eq("total loss").astype(int)
+        if "total_loss_outcome" in insurance.columns:
+            # The surveyor's decision is its own column, so the severity the customer reported
+            # is an honest input rather than a copy of the label.
+            total_loss_y = insurance["total_loss_outcome"].astype(str).str.strip().str.upper().eq("Y").astype(int)
+            total_loss_features = list(INSURANCE_FEATURES)
+            total_loss_categorical = list(INSURANCE_CATEGORICAL)
+            total_loss_target = "total_loss_outcome equals Y (surveyor outcome; reported incident_severity is a feature)"
+        else:
+            total_loss_y = insurance["incident_severity"].astype(str).str.strip().str.lower().eq("total loss").astype(int)
+            total_loss_features = [name for name in INSURANCE_FEATURES if name != "incident_severity"]
+            total_loss_categorical = [name for name in INSURANCE_CATEGORICAL if name != "incident_severity"]
+            total_loss_target = "incident_severity equals Total Loss (proxy; see data audit)"
         if total_loss_y.nunique() != 2:
             raise CommandError("The insurance data does not contain both total-loss classes.")
-        total_loss_features = [name for name in INSURANCE_FEATURES if name != "incident_severity"]
-        total_loss_categorical = [name for name in INSURANCE_CATEGORICAL if name != "incident_severity"]
         total_loss_model, total_loss_metrics = evaluate_classifier(
-            lambda: classifier(INSURANCE_NUMERIC, total_loss_categorical),
-            insurance_X[total_loss_features], total_loss_y, "total_loss",
+            lambda: calibrated(classifier(INSURANCE_NUMERIC, total_loss_categorical)),
+            insurance_X.reindex(columns=total_loss_features), total_loss_y, "total_loss",
         )
 
         oracle_X = oracle[ORACLE_FEATURES].copy()
@@ -471,7 +485,7 @@ class Command(BaseCommand):
             },
             "targets": {
                 "repair_cost": "vehicle_claim",
-                "total_loss": "incident_severity equals Total Loss (proxy; see data audit)",
+                "total_loss": total_loss_target,
                 "insurance_fraud": "fraud_reported equals Y",
                 "fraud_oracle_fraud": "FraudFound_P equals 1",
             },

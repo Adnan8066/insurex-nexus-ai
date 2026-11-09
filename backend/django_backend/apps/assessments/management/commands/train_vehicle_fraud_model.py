@@ -88,12 +88,34 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--models-dir', type=Path, default=None)
+        parser.add_argument('--dataset', type=Path, default=None,
+                            help='Train from a CSV in feature layout (with fraud_outcome) instead of the database.')
         parser.add_argument('--min-claims', type=int, default=40,
                             help='Refuse to train with fewer labelled claims than this (default 40).')
         parser.add_argument('--min-per-class', type=int, default=8,
                             help='Refuse to train with fewer fraud or genuine claims than this (default 8).')
 
     def handle(self, *args, **options):
+        if options['dataset']:
+            features, target = self.features_from_csv(options['dataset'])
+        else:
+            features, target = self.features_from_claims(options)
+        self.train(features, target, options)
+
+    def features_from_csv(self, path):
+        """Rows already in feature layout (e.g. data/india/india_vehicle_fraud.csv) with a fraud_outcome column."""
+        if not path.is_file():
+            raise CommandError(f'Dataset not found: {path}')
+        frame = pd.read_csv(path)
+        missing = [name for name in vf.FEATURES + ['fraud_outcome'] if name not in frame.columns]
+        if missing:
+            raise CommandError(f"Dataset is missing columns: {', '.join(missing)}")
+        frame = frame[frame['fraud_outcome'].isin(list(vf.LABELS))]
+        target = frame['fraud_outcome'].map(vf.LABELS).astype(int).reset_index(drop=True)
+        self.stdout.write(f'Labelled rows from {path.name}: {len(target)} ({int(target.sum())} fraud)')
+        return vf.feature_frame(frame.to_dict('records')), target
+
+    def features_from_claims(self, options):
         claims = list(
             Claim.objects.filter(fraud_outcome__in=list(vf.LABELS))
             .select_related('vehicle', 'policy').prefetch_related('documents')
@@ -119,11 +141,13 @@ class Command(BaseCommand):
         for claim in claims:
             others = [h for pk, hashes in hashes_by_claim.items() if pk != claim.pk for h in hashes]
             rows.append(vf.claim_features(claim, other_hashes=others))
-        features = vf.feature_frame(rows)
+        return vf.feature_frame(rows), target
 
+    def train(self, features, target, options):
+        fraud, genuine = int(target.sum()), int((target == 0).sum())
         folds = max(2, min(5, fraud, genuine))
         splitter = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
-        out_of_fold = cross_val_predict(build_model(len(claims)), features, target, cv=splitter, method='predict_proba')[:, 1]
+        out_of_fold = cross_val_predict(build_model(len(target)), features, target, cv=splitter, method='predict_proba')[:, 1]
         selected = choose_threshold(target, out_of_fold)
         evaluation = {
             'cross_validation_folds': folds,
@@ -133,13 +157,14 @@ class Command(BaseCommand):
             'at_selected_threshold': selected,
         }
 
-        model = build_model(len(claims))
+        model = build_model(len(target))
         model.fit(features, target)
         trained_at = datetime.now(timezone.utc).isoformat()
         report = {
             'model': 'vehicle_fraud',
             'trained_at': trained_at,
-            'labelled_claims': len(claims),
+            'training_source': str(options['dataset']) if options['dataset'] else 'database: Claim.fraud_outcome',
+            'labelled_claims': len(target),
             'fraud_claims': fraud,
             'genuine_claims': genuine,
             'claims_with_photos': int((features['photo_count'] > 0).sum()),

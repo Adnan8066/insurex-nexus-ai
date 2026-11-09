@@ -1,0 +1,56 @@
+{
+  "model": "vehicle_fraud",
+  "trained_at": "2026-11-09T07:18:57.270296+00:00",
+  "training_source": "..\\data\\india\\india_vehicle_fraud.csv",
+  "labelled_claims": 20000,
+  "fraud_claims": 1666,
+  "genuine_claims": 18334,
+  "claims_with_photos": 18860,
+  "label": "Claim.fraud_outcome: fraud = 1, genuine = 0 (unclear excluded)",
+  "threshold_rule": "highest precision with out-of-fold recall >= 0.75",
+  "features": [
+    "vehicle_age_years",
+    "claim_amount_inr",
+    "claim_to_repair_ratio",
+    "claim_to_vehicle_price_ratio",
+    "days_policy_to_incident",
+    "reporting_delay_days",
+    "police_report",
+    "witnesses",
+    "injuries",
+    "number_of_vehicles",
+    "past_claims_count",
+    "incident_at_night",
+    "photo_count",
+    "photos_reused_from_other_claims",
+    "photos_taken_before_incident",
+    "photo_days_before_incident",
+    "photos_edited",
+    "photos_without_camera_date",
+    "photos_small",
+    "vehicle_make",
+    "fuel_type",
+    "body_style",
+    "incident_type",
+    "incident_severity",
+    "district"
+  ],
+  "metrics": {
+    "cross_validation_folds": 5,
+    "roc_auc": 0.8571,
+    "pr_auc": 0.5265,
+    "pr_auc_baseline": 0.0833,
+    "at_selected_threshold": {
+      "threshold": 0.48,
+      "precision": 0.2438,
+      "recall": 0.7611,
+      "f1": 0.3693,
+      "confusion_matrix": {
+        "tn": 14401,
+        "fp": 3933,
+        "fn": 398,
+        "tp": 1268
+      }
+    }
+  }
+}

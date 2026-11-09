@@ -290,6 +290,14 @@ def _fake_models(fraud, total_loss=10.0):
 class ClaimAutoAssessmentTests(ClaimTestBase):
     claim_payload = ClaimInputValidationTests.claim_payload
 
+    def setUp(self):
+        super().setUp()
+        from unittest import mock
+        # These tests fake the dataset fraud model; keep the trained vehicle_fraud model out of the way.
+        patcher = mock.patch('apps.assessments.vehicle_fraud.score_claim', return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def submit(self):
         response = self.as_user(self.customer).post('/api/v1/claims/', self.claim_payload(), format='json')
         self.assertEqual(response.status_code, 201, response.content)
@@ -317,7 +325,7 @@ class ClaimAutoAssessmentTests(ClaimTestBase):
     def test_model_outage_does_not_block_submission(self):
         from unittest import mock
         from ml_service import MLModelUnavailable
-        with mock.patch('apps.assessments.ai_views.predict_repair_cost_ml', side_effect=MLModelUnavailable('down')):
+        with mock.patch('apps.assessments.ai_views.detect_fraud_ml', side_effect=MLModelUnavailable('down')):
             claim = self.submit()
         self.assertEqual(claim.fraud_risk_score, Decimal('0'))
 

@@ -377,7 +377,7 @@ export function AIAssessment() {
           <Card>
             <CardHeader
               title="Inference Contributing Factors"
-              subtitle="Stored assessment details and risk factors; model feature attribution is not available"
+              subtitle="Red flags from claim and policy history, and the fraud model's main reasons for this score"
             />
             <CardContent className="p-6">
               <div className="space-y-3">

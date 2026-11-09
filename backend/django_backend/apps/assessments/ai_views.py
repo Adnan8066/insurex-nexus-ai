@@ -174,6 +174,14 @@ def _sync_fraud_alert(claim, assessment):
 
 
 def predict_repair_cost_internal(claim):
+    """App claims get the calibrated Indian estimate (repair_estimate.py); the repair-cost model
+    is used for rows imported from a dataset, and for app vehicles with no purchase price."""
+    if not (claim.ai_assessment or {}).get('source_data'):
+        from .repair_estimate import RepairEstimateUnavailable, estimate_repair_cost
+        try:
+            return estimate_repair_cost(claim)
+        except RepairEstimateUnavailable:
+            pass
     return predict_repair_cost_ml(claim_model_input(claim))
 
 

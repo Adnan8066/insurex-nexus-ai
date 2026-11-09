@@ -21,6 +21,7 @@ from .serializers import (
     RefreshTokenRequestSerializer, LogoutRequestSerializer, CustomerLoginSerializer
 )
 from common.permissions import IsAdmin
+from .account_removal import MANAGED_ROLES, account_history_records, deactivate_account, describe_history
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -229,9 +230,8 @@ class AuthViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get', 'post'], permission_classes=[IsAuthenticated, IsAdmin])
     def users(self, request):
-        managed_roles = [Role.CUSTOMER, Role.INVESTIGATOR, Role.EMPLOYEE]
         if request.method == 'GET':
-            users = User.objects.filter(role__in=managed_roles).order_by('-date_joined')
+            users = User.objects.filter(role__in=MANAGED_ROLES).order_by('-date_joined')
             return Response({
                 'success': True,
                 'data': {'users': UserSerializer(users, many=True).data},
@@ -251,6 +251,62 @@ class AuthViewSet(viewsets.GenericViewSet):
             'success': True,
             'data': {'user': UserSerializer(user).data},
         }, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=False, methods=['delete'], permission_classes=[IsAuthenticated, IsAdmin],
+        url_path=r'users/(?P<user_id>\d+)', url_name='delete-user',
+    )
+    def delete_user(self, request, user_id=None):
+        """Remove a managed account (customer, investigator or insurance employee).
+
+        Accounts with no business history are deleted outright. If a hard delete
+        would cascade into, or strip attribution from, policies, claims,
+        assessments, investigations, notes or other records, the account is
+        deactivated instead so that history stays intact.
+        """
+        target = User.objects.filter(pk=user_id).first()
+        if target is None:
+            return Response({'success': False, 'error': {'message': 'Account not found.'}}, status=status.HTTP_404_NOT_FOUND)
+        if target.pk == request.user.pk:
+            return Response(
+                {'success': False, 'error': {'message': "You can't delete your own account."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if target.role not in MANAGED_ROLES or target.is_superuser:
+            return Response(
+                {'success': False, 'error': {'message': 'Administrator accounts cannot be deleted here.'}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        name = target.get_full_name() or target.email
+        history = account_history_records(target)
+        if not history:
+            target.delete()
+            logger.info('Admin %s deleted account %s', request.user.email, target.email)
+            return Response({
+                'success': True,
+                'message': f'{name} was deleted.',
+                'data': {'action': 'deleted', 'user_id': int(user_id)},
+            })
+
+        summary = describe_history(history)
+        if not target.is_active:
+            return Response({
+                'success': False,
+                'error': {'message': f'{name} is already deactivated. The account is kept because it is linked to {summary}.'},
+                'data': {'action': 'none', 'related_records': history},
+            }, status=status.HTTP_409_CONFLICT)
+
+        deactivate_account(target)
+        logger.info('Admin %s deactivated account %s (history: %s)', request.user.email, target.email, summary)
+        return Response({
+            'success': True,
+            'message': (
+                f'{name} was deactivated instead of deleted because the account is linked to {summary}. '
+                'They can no longer sign in, and their history is kept.'
+            ),
+            'data': {'action': 'deactivated', 'user': UserSerializer(target).data, 'related_records': history},
+        })
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='support-contacts')
     def support_contacts(self, request):

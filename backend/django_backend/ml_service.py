@@ -15,9 +15,10 @@ _MODEL_FILES = {
     "total_loss": "total_loss.joblib",
     "fraud_oracle_fraud": "fraud_oracle_fraud.joblib",
 }
-# The insurance_claims training data is in US dollars; the app stores rupees.
-# Amounts are divided by this rate before scoring and predicted costs multiplied back.
-CURRENCY_PER_DATASET_UNIT = float(os.environ.get("ML_CURRENCY_PER_DATASET_UNIT", "83"))
+# Rupees per unit of the training data's currency. The models are trained on the Indian dataset
+# (data/india/, rupees), so the default is 1. Set 83 only if models trained on the original
+# US-dollar insurance_claims.csv are restored (backup in ml/models_us_backup).
+CURRENCY_PER_DATASET_UNIT = float(os.environ.get("ML_CURRENCY_PER_DATASET_UNIT", "1"))
 _models = {name: None for name in _MODEL_FILES}
 _model_mtimes = {}
 _model_load_errors = {}
