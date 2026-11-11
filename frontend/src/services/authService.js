@@ -23,6 +23,14 @@ export const authService = {
 
   async logout() {
     const refreshToken = localStorage.getItem('refresh_token')
+
+    // Clear the local session before calling the API. If the refresh token is
+    // expired, the API interceptor must not try to refresh it and redirect to
+    // the sign-in page while the user is signing out.
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+
     if (refreshToken) {
       try {
         await api.post('/auth/logout/', { refresh: refreshToken })
@@ -30,9 +38,6 @@ export const authService = {
         // ignore logout errors when backend is not connected
       }
     }
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('user')
   },
 
   async forgotPassword(email) {

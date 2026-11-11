@@ -214,7 +214,7 @@ export function Navbar() {
   const handleLogout = async () => {
     await logout()
     setShowUserMenu(false)
-    navigate('/', { replace: true })
+    window.location.replace('/')
   }
 
   const markAllNotificationsRead = async () => {
