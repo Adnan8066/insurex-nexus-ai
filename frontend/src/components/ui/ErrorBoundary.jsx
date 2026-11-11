@@ -72,7 +72,7 @@ class ErrorBoundary extends Component {
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
-                Retry Connection
+                Retry
               </Button>
               {retryCount > 0 && (
                 <span className="text-sm text-gray-500">Attempt #{retryCount}</span>

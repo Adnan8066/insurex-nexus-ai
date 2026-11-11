@@ -167,7 +167,7 @@ export function AIOperations() {
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" onClick={loadData} disabled={loading}>
             <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh Data
+            Refresh
           </Button>
         </div>
       </div>

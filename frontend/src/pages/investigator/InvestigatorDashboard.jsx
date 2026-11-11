@@ -459,7 +459,7 @@ export function InvestigatorDashboard() {
                 <span className="text-xs text-gray-400">Notes are timestamped and permanently audited.</span>
                 <Button variant="primary" size="sm" type="submit" disabled={addingNote}>
                   <Send className="w-3.5 h-3.5 mr-1.5" />
-                  {addingNote ? 'Saving...' : 'Save Note'}
+                  {addingNote ? 'Saving…' : 'Save note'}
                 </Button>
               </div>
             </form>

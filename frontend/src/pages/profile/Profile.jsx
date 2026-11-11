@@ -167,7 +167,7 @@ export function Profile() {
 
               <Button type="submit" variant="primary" loading={savingProfile} disabled={savingProfile}>
                 <Save className="w-4 h-4 mr-2" />
-                Save Profile
+                Save profile
               </Button>
             </form>
           </CardContent>
@@ -217,7 +217,7 @@ export function Profile() {
 
               <Button type="submit" variant="secondary" loading={savingPassword} disabled={savingPassword}>
                 <Lock className="w-4 h-4 mr-2" />
-                Change Password
+                Change password
               </Button>
             </form>
           </CardContent>

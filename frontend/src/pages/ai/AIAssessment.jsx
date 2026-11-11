@@ -192,7 +192,7 @@ export function AIAssessment() {
 
           <Button variant="primary" onClick={triggerReAnalysis} disabled={analyzing || !selectedClaimId}>
             <RefreshCw className={clsx('w-4 h-4 mr-2', analyzing && 'animate-spin')} />
-            {analyzing ? 'Running Inference...' : 'Re-run Inference'}
+            {analyzing ? 'Running inference…' : 'Re-run inference'}
           </Button>
         </div>
       </div>
@@ -215,7 +215,7 @@ export function AIAssessment() {
             <div className="mt-3">
               <Button variant="primary" size="sm" onClick={triggerReAnalysis} disabled={analyzing}>
                 <Play className="w-3.5 h-3.5 mr-1" />
-                Run AI Assessment
+                Run AI assessment
               </Button>
             </div>
           </div>
@@ -339,7 +339,7 @@ export function AIAssessment() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button asChild variant="secondary"><Link to="/fraud">Fraud Alerts</Link></Button>
+                <Button asChild variant="secondary"><Link to="/fraud">Fraud alerts</Link></Button>
               </div>
             </div>
           </div>

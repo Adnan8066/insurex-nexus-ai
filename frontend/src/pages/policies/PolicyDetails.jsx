@@ -287,7 +287,7 @@ export function PolicyDetails() {
         <div className="page-header">
           <Link to="/policies" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-4">
             <ArrowLeft className="w-4 h-4" />
-            Back to Policies
+            Back to policies
           </Link>
         </div>
         <Card>
@@ -299,7 +299,7 @@ export function PolicyDetails() {
               : error || 'Please try again in a moment.'}
             action={(
               <Button variant="outline" asChild>
-                <Link to="/policies">Back to Policies</Link>
+                <Link to="/policies">Back to policies</Link>
               </Button>
             )}
           />
@@ -322,7 +322,7 @@ export function PolicyDetails() {
         <div>
           <Link to="/policies" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-2">
             <ArrowLeft className="w-4 h-4" />
-            Back to Policies
+            Back to policies
           </Link>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="page-title">{policy.policyNumber || ''}</h1>
@@ -567,7 +567,7 @@ export function PolicyDetails() {
                     icon={<FileText className="w-12 h-12" />}
                     title="No documents yet"
                     description="Policy documents will appear here once your insurer adds them. You can download the certificate any time."
-                    action={<Button variant="outline" size="sm" onClick={downloadCertificate}><Download className="w-4 h-4 mr-2" />Download Certificate</Button>}
+                    action={<Button variant="outline" size="sm" onClick={downloadCertificate}><Download className="w-4 h-4 mr-2" />Download certificate</Button>}
                   />
                 )}
               </CardContent>
@@ -611,12 +611,12 @@ export function PolicyDetails() {
                 {canEditPolicy && <Button variant="outline" className="w-full justify-start gap-3" asChild>
                   <Link to={`/policies/${policy.id}/edit`}>
                     <Edit className="w-4 h-4" />
-                    Edit Policy
+                    Edit policy
                   </Link>
                 </Button>}
                 <Button variant="outline" className="w-full justify-start gap-3" onClick={downloadCertificate}>
                   <Download className="w-4 h-4" />
-                  Download Certificate
+                  Download certificate
                 </Button>
                 <Button variant="outline" className="w-full justify-start gap-3" onClick={() => setScheduleOpen(true)}>
                   <Calendar className="w-4 h-4" />
@@ -625,7 +625,7 @@ export function PolicyDetails() {
                 {canFileClaim && <Button variant="outline" className="w-full justify-start gap-3" asChild>
                   <Link to={`/claims/new?policy=${policy.id}`}>
                     <Shield className="w-4 h-4" />
-                    File a Claim
+                    File a claim
                   </Link>
                 </Button>}
                 {isCustomer && (

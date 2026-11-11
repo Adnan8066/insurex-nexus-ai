@@ -382,7 +382,7 @@ export function EmployeeDashboard() {
 
           <Button variant="primary" size="sm" onClick={handleExport} loading={exporting} disabled={exporting}>
             <Download className="w-4 h-4 mr-2" />
-            Export Report
+            Export report
           </Button>
         </div>
       </div>
@@ -464,7 +464,7 @@ export function EmployeeDashboard() {
                 subtitle="Latest claims submitted"
                 action={
                   <Button variant="ghost" size="sm" asChild>
-                    <Link to="/claims">View All <ArrowRight className="w-4 h-4 ml-1" aria-hidden="true" /></Link>
+                    <Link to="/claims">View all <ArrowRight className="w-4 h-4 ml-1" aria-hidden="true" /></Link>
                   </Button>
                 }
               />

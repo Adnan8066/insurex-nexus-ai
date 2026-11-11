@@ -261,7 +261,7 @@ export function PolicyForm() {
       <div className="page-header">
         <div>
           <Link to="/policies" className="mb-2 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700">
-            <ArrowLeft className="h-4 w-4" /> Back to Policies
+            <ArrowLeft className="h-4 w-4" /> Back to policies
           </Link>
           <h1 className="page-title">{isEdit ? 'Edit Policy' : 'Create Policy'}</h1>
           <p className="page-subtitle">The policy, customer, assigned agent, and covered vehicle are saved as linked records.</p>
@@ -378,7 +378,7 @@ export function PolicyForm() {
         <div className="flex justify-end gap-3">
           <Button asChild variant="ghost"><Link to="/policies">Cancel</Link></Button>
           <Button type="submit" disabled={loading || (canAssignCustomer && !formData.customer) || (isAutoPolicy && vehicleOptions.length === 0)}>
-            <Save className="mr-2 h-4 w-4" /> {loading ? 'Saving…' : isEdit ? 'Update Policy' : quote ? 'Issue Active Policy' : 'Calculate Quote'}
+            <Save className="mr-2 h-4 w-4" /> {loading ? 'Saving…' : isEdit ? 'Update policy' : quote ? 'Issue active policy' : 'Calculate quote'}
           </Button>
         </div>
       </form>

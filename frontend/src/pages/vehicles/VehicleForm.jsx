@@ -254,13 +254,13 @@ export function VehicleForm() {
   if (notFound) {
     return (
       <div className="page max-w-3xl">
-        <Link to="/vehicles" className="mb-4 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" />Back to Vehicles</Link>
+        <Link to="/vehicles" className="mb-4 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" />Back to vehicles</Link>
         <Card>
           <EmptyState
             icon={<Car className="w-12 h-12" />}
             title="Vehicle not found"
             description="This vehicle does not exist or you do not have access to it."
-            action={<Button asChild variant="outline"><Link to="/vehicles">Back to Vehicles</Link></Button>}
+            action={<Button asChild variant="outline"><Link to="/vehicles">Back to vehicles</Link></Button>}
           />
         </Card>
       </div>
@@ -275,7 +275,7 @@ export function VehicleForm() {
     <div className="page max-w-3xl">
       <div className="page-header">
         <div>
-          <Link to={isEdit ? `/vehicles/${id}` : '/vehicles'} className="mb-2 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" />{isEdit ? 'Back to Vehicle' : 'Back to Vehicles'}</Link>
+          <Link to={isEdit ? `/vehicles/${id}` : '/vehicles'} className="mb-2 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" />{isEdit ? 'Back to vehicle' : 'Back to vehicles'}</Link>
           <h1 className="page-title">{isEdit ? 'Edit Vehicle' : 'Add Vehicle'}</h1>
           <p className="page-subtitle">A policy is optional and can be added later.</p>
         </div>
@@ -331,7 +331,7 @@ export function VehicleForm() {
 
         <div className="flex justify-end gap-3">
           <Button asChild variant="ghost"><Link to={isEdit ? `/vehicles/${id}` : '/vehicles'}>Cancel</Link></Button>
-          <Button type="submit" disabled={loading || (canAssignCustomer && !formData.customer)}><Save className="mr-2 h-4 w-4" />{loading ? 'Saving…' : 'Save Vehicle'}</Button>
+          <Button type="submit" disabled={loading || (canAssignCustomer && !formData.customer)}><Save className="mr-2 h-4 w-4" />{loading ? 'Saving…' : 'Save vehicle'}</Button>
         </div>
       </form>
     </div>

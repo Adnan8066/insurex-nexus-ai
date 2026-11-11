@@ -362,7 +362,7 @@ export function ClaimDetails() {
           icon={<Briefcase className="w-12 h-12" />}
           title="Claim Not Found"
           description={`No claim with identifier "${id}" exists in the records.`}
-          action={<Button asChild><Link to="/claims">Browse Claims</Link></Button>}
+          action={<Button asChild><Link to="/claims">Browse claims</Link></Button>}
         />
       </div>
     )
@@ -402,8 +402,8 @@ export function ClaimDetails() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline"><Link to={`/claims/${claim.id}/tracking`}><Activity className="w-4 h-4 mr-2" />Track Claim</Link></Button>
-          {canViewAI && <Button asChild variant="primary"><Link to={`/ai-assessment?claim=${claim.id}`}><Brain className="w-4 h-4 mr-2" />Claim Assessment</Link></Button>}
+          <Button asChild variant="outline"><Link to={`/claims/${claim.id}/tracking`}><Activity className="w-4 h-4 mr-2" />Track claim</Link></Button>
+          {canViewAI && <Button asChild variant="primary"><Link to={`/ai-assessment?claim=${claim.id}`}><Brain className="w-4 h-4 mr-2" />Claim assessment</Link></Button>}
           {canDeleteClaim(user?.role, claim.status) && (
             <Button variant="ghost" onClick={() => setDeleteOpen(true)} className="text-red-600 hover:text-red-700" aria-label="Delete claim" title="Delete claim">
               <Trash2 className="w-4 h-4" aria-hidden="true" />
@@ -422,7 +422,7 @@ export function ClaimDetails() {
             options={claimStatusOptions}
           />
           <Button variant="primary" onClick={saveStatus} loading={savingStatus} disabled={savingStatus || statusDraft === claim.status}>
-            Update Status
+            Update status
           </Button>
         </div>
       )}
@@ -448,7 +448,7 @@ export function ClaimDetails() {
             />
           </div>
           <Button variant="primary" onClick={saveOutcome} loading={savingOutcome} disabled={savingOutcome || !outcomeDraft.outcome}>
-            Save Outcome
+            Save outcome
           </Button>
           {claim.fraudOutcome && (
             <p className="text-sm text-gray-600">
@@ -675,7 +675,7 @@ export function ClaimDetails() {
                 title="AI Assessment Summary"
                 subtitle="Machine Learning preliminary insights"
                 action={
-                  <Button asChild variant="outline" size="sm"><Link to={`/ai-assessment?claim=${claim.id}`}>Full AI Center</Link></Button>
+                  <Button asChild variant="outline" size="sm"><Link to={`/ai-assessment?claim=${claim.id}`}>Full AI center</Link></Button>
                 }
               />
               <CardContent className="p-6">
@@ -884,7 +884,7 @@ export function ClaimDetails() {
               </div>
 
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <Button asChild variant="outline" className="w-full"><Link to={`/claims/${claim.id}/tracking`}>View Live Tracking Details</Link></Button>
+                <Button asChild variant="outline" className="w-full"><Link to={`/claims/${claim.id}/tracking`}>View live tracking</Link></Button>
               </div>
             </CardContent>
           </Card>

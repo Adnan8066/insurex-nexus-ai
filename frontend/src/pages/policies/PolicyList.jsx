@@ -188,7 +188,7 @@ export function PolicyList() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild><Link to="/policies/plans">View and compare plans</Link></Button>
-          {canCreatePolicy && <Button asChild><Link to="/policies/new"><Plus className="w-4 h-4 mr-2" />New Policy</Link></Button>}
+          {canCreatePolicy && <Button asChild><Link to="/policies/new"><Plus className="w-4 h-4 mr-2" />New policy</Link></Button>}
         </div>
       </div>
 
@@ -309,7 +309,7 @@ export function PolicyList() {
                 icon={<FileText className="w-12 h-12" />}
                 title="No policies found"
                 description={search || typeFilter || statusFilter ? 'Try adjusting your search or filters' : 'No policies have been created yet'}
-                action={canCreatePolicy && <Button asChild variant="primary"><Link to="/policies/new">Create Policy</Link></Button>}
+                action={canCreatePolicy && <Button asChild variant="primary"><Link to="/policies/new">Create policy</Link></Button>}
               />
             )}
           </div>

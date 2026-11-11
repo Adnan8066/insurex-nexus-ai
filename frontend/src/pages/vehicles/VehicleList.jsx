@@ -197,7 +197,7 @@ export function VehicleList() {
           <h1 className="page-title">Vehicles</h1>
           <p className="page-subtitle">Manage insured vehicles and their details</p>
         </div>
-        {canManageVehicles && <Button asChild><Link to="/vehicles/new"><Plus className="w-4 h-4 mr-2" />Add Vehicle</Link></Button>}
+        {canManageVehicles && <Button asChild><Link to="/vehicles/new"><Plus className="w-4 h-4 mr-2" />Add vehicle</Link></Button>}
       </div>
 
       {error && (
@@ -357,7 +357,7 @@ export function VehicleList() {
                 icon={<Car className="w-12 h-12" />}
                 title="No vehicles found"
                 description={search || statusFilter ? 'Try adjusting your search or filters' : 'No vehicles have been added yet'}
-                action={canManageVehicles ? <Button asChild variant="primary"><Link to="/vehicles/new">Add Vehicle</Link></Button> : undefined}
+                action={canManageVehicles ? <Button asChild variant="primary"><Link to="/vehicles/new">Add vehicle</Link></Button> : undefined}
               />
             )}
           </div>

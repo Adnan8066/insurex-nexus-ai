@@ -140,7 +140,7 @@ export function Settings() {
               <label className="flex items-center justify-between rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
                 SMS urgent notifications only<input type="checkbox" checked={Boolean(preferences.sms_urgent_only)} onChange={(event) => updatePreference('sms_urgent_only', event.target.checked)} className="w-4 h-4 text-primary rounded" />
               </label>
-              <Button type="submit" variant="primary" loading={saving} disabled={saving}><Save className="w-4 h-4 mr-2" />Save Preferences</Button>
+              <Button type="submit" variant="primary" loading={saving} disabled={saving}><Save className="w-4 h-4 mr-2" />Save preferences</Button>
             </>}
           </CardContent>
         </Card>

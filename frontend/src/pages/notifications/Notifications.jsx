@@ -108,7 +108,7 @@ export function Notifications() {
         </div>
         <Button variant="secondary" onClick={markAllRead} disabled={savingId === 'all' || !notifications.some((item) => !item.is_read)}>
           <CheckCircle2 className="w-4 h-4 mr-2" />
-          Mark All as Read
+          Mark all as read
         </Button>
       </div>
 

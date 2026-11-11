@@ -9,7 +9,6 @@ import {
   ArrowRight,
   RefreshCw,
   Download,
-  WifiOff,
   FilePlus2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -28,6 +27,7 @@ import ErrorBoundary, {
 import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/toastHooks'
 import { PENDING_CLAIM_STATUSES, POLICY_TYPES, labelFor } from '../../constants/domain'
+import { Alert } from '../../components/ui/Alert'
 
 // Customers see internal review stages as "Under review".
 const CUSTOMER_STATUS = { ai_assessment: 'under_review', investigation: 'under_review' }
@@ -242,11 +242,9 @@ export function CustomerDashboard() {
   return (
     <div className="page space-y-6">
       {connectionError && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
-          <WifiOff className="w-4 h-4 shrink-0" />
-          <span>We couldn&apos;t reach our servers, so this information may be out of date.</span>
-          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => fetchData()}>Try again</Button>
-        </div>
+        <Alert onRetry={() => fetchData()}>
+          We couldn&apos;t reach our servers, so this information may be out of date.
+        </Alert>
       )}
 
       {/* Main actions first: filing a claim is the most common task. */}
@@ -312,7 +310,7 @@ export function CustomerDashboard() {
                   <ul className="divide-y divide-gray-200">
                     {recentClaims.map((claim) => (
                       <li key={claim.id}>
-                        <Link to={`/claims/${claim.id}/tracking`} className="block p-4 transition-colors hover:bg-gray-50">
+                        <Link to={`/claims/${claim.id}/tracking`} className="block px-6 py-4 transition-colors hover:bg-gray-50">
                           <div className="flex items-start justify-between gap-4">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
@@ -357,7 +355,7 @@ export function CustomerDashboard() {
                 subtitle="Active policies"
                 action={policies.length > 0 && (
                   <Button variant="ghost" size="sm" asChild>
-                    <Link to="/policies">View all</Link>
+                    <Link to="/policies">View all <ArrowRight className="w-4 h-4 ml-1" /></Link>
                   </Button>
                 )}
               />
@@ -366,7 +364,7 @@ export function CustomerDashboard() {
                   <ul className="divide-y divide-gray-200">
                     {activePolicies.map((policy) => (
                       <li key={policy.id}>
-                        <Link to={`/policies/${policy.id}`} className="block p-4 transition-colors hover:bg-gray-50">
+                        <Link to={`/policies/${policy.id}`} className="block px-6 py-4 transition-colors hover:bg-gray-50">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-gray-900">{labelFor(POLICY_TYPES, policy.type)}</span>
                             <StatusBadge status={policy.status} />

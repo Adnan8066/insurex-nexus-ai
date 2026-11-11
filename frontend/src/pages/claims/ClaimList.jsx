@@ -222,7 +222,7 @@ export function ClaimList() {
           <p className="page-subtitle">{canViewAI ? 'Review and track every claim from submission to settlement' : 'See and track the claims you have made'}</p>
         </div>
         <div className="flex gap-2">
-          {canSubmitClaim && <Button asChild variant="primary"><Link to="/claims/new"><Plus className="w-4 h-4 mr-2" />Submit Claim</Link></Button>}
+          {canSubmitClaim && <Button asChild variant="primary"><Link to="/claims/new"><Plus className="w-4 h-4 mr-2" />File a claim</Link></Button>}
         </div>
       </div>
 
@@ -426,7 +426,7 @@ export function ClaimList() {
                 icon={<Briefcase className="w-12 h-12" />}
                 title="No claims match your criteria"
                 description={search || typeFilter || statusFilter ? 'Try clearing your search or filters.' : 'No claims have been submitted yet.'}
-                action={canSubmitClaim ? <Button asChild><Link to="/claims/new">Submit a New Claim</Link></Button> : undefined}
+                action={canSubmitClaim ? <Button asChild><Link to="/claims/new">File a claim</Link></Button> : undefined}
               />
             )}
           </div>
