@@ -5,6 +5,8 @@ import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { API_BASE_URL, formatApiError } from '../../services/api'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 const preferenceGroups = [
   {
@@ -88,7 +90,7 @@ export function Settings() {
         <Button variant="outline" onClick={load} disabled={loading}>Refresh</Button>
       </div>
 
-      {error && <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm">{error}</div>}
+      {error && <Alert>{error}</Alert>}
       {saved && <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm font-medium flex items-center gap-2"><CheckCircle2 className="w-5 h-5" />Preferences saved to your account.</div>}
 
       {isStaff && <Card>
@@ -126,7 +128,7 @@ export function Settings() {
         <Card>
           <CardHeader title="Notification preferences" subtitle="Choose which updates you want to receive." />
           <CardContent className="p-6 space-y-6">
-            {loading || !preferences ? <p className="text-sm text-gray-500">Loading preferences…</p> : <>
+            {loading || !preferences ? <LoadingState label="Loading preferences…" className="py-6" /> : <>
               {preferenceGroups.map((group) => <section key={group.title}>
                 <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Bell className="w-4 h-4 text-primary" />{group.title}</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -138,7 +140,7 @@ export function Settings() {
               <label className="flex items-center justify-between rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
                 SMS urgent notifications only<input type="checkbox" checked={Boolean(preferences.sms_urgent_only)} onChange={(event) => updatePreference('sms_urgent_only', event.target.checked)} className="w-4 h-4 text-primary rounded" />
               </label>
-              <Button type="submit" variant="primary" loading={saving} disabled={saving}><Save className="w-4 h-4 mr-2" />Save Preferences</Button>
+              <Button type="submit" variant="primary" loading={saving} disabled={saving}><Save className="w-4 h-4 mr-2" />Save preferences</Button>
             </>}
           </CardContent>
         </Card>

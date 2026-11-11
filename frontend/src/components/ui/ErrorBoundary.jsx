@@ -1,8 +1,6 @@
-import { useState, useEffect, Component } from 'react'
+import { Component } from 'react'
 import { RefreshCw, AlertTriangle, AlertCircle, WifiOff } from 'lucide-react'
-import { clsx } from 'clsx'
 import { Button } from '../ui/Button'
-import { Card, CardContent } from '../ui/Card'
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -38,7 +36,7 @@ class ErrorBoundary extends Component {
 
   render() {
     const { hasError, error, errorInfo, retryCount } = this.state
-    const { fallback, children, onError } = this.props
+    const { fallback, children } = this.props
 
     if (hasError) {
       if (fallback) {
@@ -74,7 +72,7 @@ class ErrorBoundary extends Component {
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
-                Retry Connection
+                Retry
               </Button>
               {retryCount > 0 && (
                 <span className="text-sm text-gray-500">Attempt #{retryCount}</span>

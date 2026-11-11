@@ -10,6 +10,8 @@ import { policyService, vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
 import { formatApiError } from '../../services/api'
 import { VEHICLE_STATUSES } from '../../constants/domain'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 // 17 characters; letters and digits except I, O and Q (same rule as the backend).
 const VIN_PATTERN = /^[A-HJ-NPR-Z0-9]{17}$/
@@ -252,13 +254,13 @@ export function VehicleForm() {
   if (notFound) {
     return (
       <div className="page max-w-3xl">
-        <Link to="/vehicles" className="mb-4 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" />Back to Vehicles</Link>
+        <Link to="/vehicles" className="mb-4 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" />Back to vehicles</Link>
         <Card>
           <EmptyState
             icon={<Car className="w-12 h-12" />}
             title="Vehicle not found"
             description="This vehicle does not exist or you do not have access to it."
-            action={<Button asChild variant="outline"><Link to="/vehicles">Back to Vehicles</Link></Button>}
+            action={<Button asChild variant="outline"><Link to="/vehicles">Back to vehicles</Link></Button>}
           />
         </Card>
       </div>
@@ -266,19 +268,19 @@ export function VehicleForm() {
   }
 
   if (loadingVehicle) {
-    return <div className="page max-w-3xl p-8 text-center text-gray-500" role="status">Loading vehicle…</div>
+    return <div className="page max-w-3xl"><LoadingState label="Loading vehicle…" /></div>
   }
 
   return (
     <div className="page max-w-3xl">
       <div className="page-header">
         <div>
-          <Link to={isEdit ? `/vehicles/${id}` : '/vehicles'} className="mb-2 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" />{isEdit ? 'Back to Vehicle' : 'Back to Vehicles'}</Link>
+          <Link to={isEdit ? `/vehicles/${id}` : '/vehicles'} className="mb-2 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" />{isEdit ? 'Back to vehicle' : 'Back to vehicles'}</Link>
           <h1 className="page-title">{isEdit ? 'Edit Vehicle' : 'Add Vehicle'}</h1>
           <p className="page-subtitle">A policy is optional and can be added later.</p>
         </div>
       </div>
-      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</div>}
+      {error && <Alert className="mb-4">{error}</Alert>}
 
       <form onSubmit={handleSubmit} className="space-y-6" noValidate>
         <section className="card">
@@ -329,7 +331,7 @@ export function VehicleForm() {
 
         <div className="flex justify-end gap-3">
           <Button asChild variant="ghost"><Link to={isEdit ? `/vehicles/${id}` : '/vehicles'}>Cancel</Link></Button>
-          <Button type="submit" disabled={loading || (canAssignCustomer && !formData.customer)}><Save className="mr-2 h-4 w-4" />{loading ? 'Saving…' : 'Save Vehicle'}</Button>
+          <Button type="submit" disabled={loading || (canAssignCustomer && !formData.customer)}><Save className="mr-2 h-4 w-4" />{loading ? 'Saving…' : 'Save vehicle'}</Button>
         </div>
       </form>
     </div>

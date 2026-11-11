@@ -14,7 +14,7 @@ from drf_spectacular.utils import extend_schema
 
 from apps.claims.models import Claim
 from .models import ClaimAssessment, AgentOutput, DecisionFlow, AssessmentType, AssessmentStatus
-from .serializers import AgentOutputSerializer, ClaimAssessmentSerializer, DecisionFlowSerializer
+from .serializers import ClaimAssessmentSerializer, DecisionFlowSerializer
 from ml_service import (
     detect_fraud_ml,
     predict_repair_cost_ml,

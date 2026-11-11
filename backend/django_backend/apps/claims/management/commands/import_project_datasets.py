@@ -51,10 +51,6 @@ def month_date(month, year, week=3):
     return date(int(year), month_number, min(28, max(1, 1 + (int(week) - 1) * 7)))
 
 
-def valid_choice(value, choices, fallback):
-    return value if value in choices else fallback
-
-
 class Command(BaseCommand):
     help = "Import the bundled insurance and Fraud Oracle datasets into claims, policies, vehicles, and customers."
 

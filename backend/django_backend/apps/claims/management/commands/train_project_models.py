@@ -262,7 +262,7 @@ def evaluate_oracle(oracle, oracle_x, oracle_y, models_dir):
         (axes[1, 1], f"Tuned model @ {selected_threshold:.2f}", test_probabilities, selected_threshold),
     ):
         matrix = confusion_matrix(y_test, probabilities >= threshold, labels=[0, 1])
-        image = axis.imshow(matrix, cmap="Blues")
+        axis.imshow(matrix, cmap="Blues")
         axis.set(title=title, xlabel="Predicted label", ylabel="Actual label", xticks=[0, 1], yticks=[0, 1], xticklabels=["Not fraud", "Fraud"], yticklabels=["Not fraud", "Fraud"])
         for (row, column), value in np.ndenumerate(matrix):
             axis.text(column, row, str(value), ha="center", va="center", color="black")

@@ -59,6 +59,15 @@ pipeline {
             }
         }
 
+        stage('RL Routing Tests') {
+            steps {
+                dir('backend') {
+                    // Reuses the backend venv (gymnasium, stable-baselines3, torch, pytest).
+                    bat 'django_backend\\.venv\\Scripts\\python.exe -m pytest rl\\tests -q -p no:cacheprovider'
+                }
+            }
+        }
+
         stage('Check Training Datasets') {
             steps {
                 dir('backend') {
@@ -71,8 +80,13 @@ pipeline {
                             echo Missing training dataset: backend\\data\\india\\india_fraud_oracle.csv
                             exit /b 1
                         )
+                        if not exist "data\\india\\india_vehicle_fraud.csv" (
+                            echo Missing training dataset: backend\\data\\india\\india_vehicle_fraud.csv
+                            exit /b 1
+                        )
                         dir "data\\india\\india_insurance_claims.csv"
                         dir "data\\india\\india_fraud_oracle.csv"
+                        dir "data\\india\\india_vehicle_fraud.csv"
                     '''
                 }
             }
@@ -82,11 +96,12 @@ pipeline {
             steps {
                 dir('backend\\django_backend') {
                     bat '.venv\\Scripts\\python.exe manage.py train_project_models'
+                    bat '.venv\\Scripts\\python.exe manage.py train_vehicle_fraud_model --dataset ..\\data\\india\\india_vehicle_fraud.csv'
                 }
             }
             post {
                 success {
-                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/training_report.json,backend/ml/models/fraud_oracle_evaluation.png', fingerprint: true
+                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/training_report.json,backend/ml/models/vehicle_fraud_report.json,backend/ml/models/fraud_oracle_evaluation.png', fingerprint: true
                 }
             }
         }

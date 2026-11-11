@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Download, AlertCircle, RefreshCw } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useLocation } from 'react-router-dom'
 import { analyticsService, claimService } from '../../services'
@@ -7,6 +7,9 @@ import { Button } from '../../components/ui/Button'
 import { ChartCard, ComboChart } from '../../components/charts/ChartComponents'
 import { formatCurrency, formatCurrencyCompact } from '../../utils/helpers'
 import { formatApiError } from '../../services/api'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
+import { CHART_COLORS } from '../../components/charts/chartColors'
 
 const PENDING_STATUSES = ['submitted', 'under_review', 'ai_assessment', 'investigation']
 
@@ -76,7 +79,6 @@ export function AdminDashboard() {
       setSummary(summaryRes)
       setTrend(Array.isArray(trendRes) ? trendRes : [])
     } catch (err) {
-      console.error('Failed to load analytics:', err)
       setError(formatApiError(err, 'Failed to load dashboard analytics.'))
     } finally {
       setLoading(false)
@@ -135,7 +137,7 @@ export function AdminDashboard() {
         type: 'bar',
         label: 'Claims Submitted',
         data: trend.map((d) => d.count),
-        backgroundColor: '#1e3a5f',
+        backgroundColor: CHART_COLORS.navy,
         borderRadius: 4,
         maxBarThickness: 36,
         yAxisID: 'y',
@@ -145,8 +147,8 @@ export function AdminDashboard() {
         type: 'line',
         label: 'Claim Amount (INR)',
         data: trend.map((d) => Math.round(Number(d.total_amount) || 0)),
-        borderColor: '#10b981',
-        backgroundColor: '#10b981',
+        borderColor: CHART_COLORS.green,
+        backgroundColor: CHART_COLORS.green,
         pointRadius: 3,
         pointHoverRadius: 6,
         tension: 0.3,
@@ -157,13 +159,13 @@ export function AdminDashboard() {
   }
   const claimsOverTimeOptions = {
     scales: {
-      y: { beginAtZero: true, title: { display: true, text: 'Claims', color: '#64748b' }, ticks: { precision: 0, color: '#94a3b8' }, grid: { color: '#e2e8f0' } },
+      y: { beginAtZero: true, title: { display: true, text: 'Claims', color: CHART_COLORS.axisTitle }, ticks: { precision: 0, color: CHART_COLORS.slate }, grid: { color: CHART_COLORS.grid } },
       y1: {
         beginAtZero: true,
         position: 'right',
         grid: { drawOnChartArea: false },
-        title: { display: true, text: 'Amount (INR)', color: '#64748b' },
-        ticks: { color: '#94a3b8', callback: (value) => formatCurrencyCompact(value) },
+        title: { display: true, text: 'Amount (INR)', color: CHART_COLORS.axisTitle },
+        ticks: { color: CHART_COLORS.slate, callback: (value) => formatCurrencyCompact(value) },
       },
     },
     plugins: {
@@ -230,22 +232,13 @@ export function AdminDashboard() {
 
           <Button variant="outline" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
-            Export Report
+            Export report
           </Button>
         </div>
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            {error}
-          </span>
-          <Button variant="outline" size="sm" onClick={loadData}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1" />
-            Retry
-          </Button>
-        </div>
+        <Alert onRetry={loadData}>{error}</Alert>
       )}
 
       {isAdminDashboard && assignment && (
@@ -287,7 +280,7 @@ export function AdminDashboard() {
       )}
 
       {loading && !summary && (
-        <div className="p-8 text-center text-sm text-gray-400">Loading analytics...</div>
+        <LoadingState label="Loading analytics…" />
       )}
 
       {/* KPI tiles: labels wrap instead of truncating */}

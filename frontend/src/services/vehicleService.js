@@ -26,11 +26,6 @@ export const vehicleService = {
     return response.data
   },
 
-  async getVehicleHistory(vehicleId) {
-    const response = await api.get(`/vehicles/${vehicleId}/history/`)
-    return response.data
-  },
-
   async getVehicleClaims(vehicleId) {
     const response = await api.get(`/vehicles/${vehicleId}/claims/`)
     return response.data

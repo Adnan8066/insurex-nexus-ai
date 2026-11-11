@@ -5,8 +5,6 @@ import {
   Search,
   Plus,
   Shield,
-  Calendar,
-  DollarSign,
   Car,
   Home,
   Building2,
@@ -16,16 +14,16 @@ import { clsx } from 'clsx'
 import { formatCurrency, formatDate } from '../../utils/helpers'
 import { policyService } from '../../services'
 import { useAuth } from '../../context/useAuth'
-import { Card, CardHeader, CardContent } from '../../components/ui/Card'
-import { Badge, StatusBadge } from '../../components/ui/Badge'
+import { Card, CardContent } from '../../components/ui/Card'
+import { StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../components/tables/DataTable'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { formatApiError } from '../../services/api'
 import { POLICY_STATUSES, POLICY_TYPES } from '../../constants/domain'
+import { Alert } from '../../components/ui/Alert'
 
 const policyTypes = [{ value: '', label: 'All Types' }, ...POLICY_TYPES]
 
@@ -190,14 +188,12 @@ export function PolicyList() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild><Link to="/policies/plans">View and compare plans</Link></Button>
-          {canCreatePolicy && <Button asChild><Link to="/policies/new"><Plus className="w-4 h-4 mr-2" />New Policy</Link></Button>}
+          {canCreatePolicy && <Button asChild><Link to="/policies/new"><Plus className="w-4 h-4 mr-2" />New policy</Link></Button>}
         </div>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {error}
-        </div>
+        <Alert className="mb-4">{error}</Alert>
       )}
 
       <Card>
@@ -264,7 +260,7 @@ export function PolicyList() {
                     {paginatedPolicies.map((policy) => (
                       <TableRow key={policy.id}>
                         <TableCell>
-                          <Link to={`/policies/${policy.id}`} className="font-mono font-medium text-primary hover:underline">
+                          <Link to={`/policies/${policy.id}`} className="whitespace-nowrap font-mono font-medium text-primary hover:underline">
                             {policy.policyNumber}
                           </Link>
                         </TableCell>
@@ -313,7 +309,7 @@ export function PolicyList() {
                 icon={<FileText className="w-12 h-12" />}
                 title="No policies found"
                 description={search || typeFilter || statusFilter ? 'Try adjusting your search or filters' : 'No policies have been created yet'}
-                action={canCreatePolicy && <Button asChild variant="primary"><Link to="/policies/new">Create Policy</Link></Button>}
+                action={canCreatePolicy && <Button asChild variant="primary"><Link to="/policies/new">Create policy</Link></Button>}
               />
             )}
           </div>

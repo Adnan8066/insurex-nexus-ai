@@ -144,9 +144,6 @@ CONSTRUCTIVE_TOTAL_LOSS_SHARE = 0.75  # repair above 75% of IDV is settled as a 
 INSURANCE_SEVERITY = {"minor": "Trivial Damage", "moderate": "Minor Damage", "major": "Major Damage",
                       "total_loss": "Total Loss"}
 
-FRAUD_SCHEMES = ["inflated_bill", "staged_accident", "pre_existing_damage", "fake_theft",
-                 "recycled_photos", "arson_or_flood_dump"]
-
 
 def depreciation(months):
     for limit, rate in IRDAI_DEPRECIATION:

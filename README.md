@@ -44,7 +44,7 @@ An AI-assisted motor insurance platform covering the policy-to-claim lifecycle: 
 │   ├── DATASETS.md               Dataset import and model training
 │   └── DEPLOYMENT.md             Render + Vercel deployment
 ├── render.yaml                   Render Blueprint for the API
-└── Jenkinsfile                   CI: frontend lint/build, backend check/schema/tests
+└── Jenkinsfile                   CI: frontend lint/build, backend tests, RL tests, model training
 ```
 
 ### Backend apps

@@ -7,6 +7,8 @@ import { Badge } from '../../components/ui/Badge'
 import { Input, Select } from '../../components/forms/FormFields'
 import { formatApiError } from '../../services/api'
 import { useAuth } from '../../context/useAuth'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 const initialForm = {
   first_name: '',
@@ -119,7 +121,7 @@ export function UserManagement() {
         </div>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</div>}
+      {error && <Alert>{error}</Alert>}
       {success && <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800" role="status">{success}</div>}
 
       <Card>
@@ -168,7 +170,7 @@ export function UserManagement() {
               </button>
             ))}
           </div>
-          {loading ? <p className="py-8 text-center text-sm text-gray-500">Loading accounts…</p> : users.length === 0 ? (
+          {loading ? <LoadingState label="Loading accounts…" /> : users.length === 0 ? (
             <p className="py-8 text-center text-sm text-gray-500">No managed accounts yet. Create one above.</p>
           ) : visibleUsers.length === 0 ? (
             <p className="py-8 text-center text-sm text-gray-500">No accounts match this filter.</p>

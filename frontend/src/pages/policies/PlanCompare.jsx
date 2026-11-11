@@ -7,6 +7,7 @@ import { formatCurrency } from '../../utils/helpers'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { Alert } from '../../components/ui/Alert'
 
 const MAX_COMPARE = 3
 
@@ -72,7 +73,7 @@ export function PlanCompare() {
       </div>
 
       {notice && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{notice}</p>}
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</div>}
+      {error && <Alert>{error}</Alert>}
 
       {loading ? <LoadingSpinner /> : (
         <>

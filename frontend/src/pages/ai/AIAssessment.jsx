@@ -8,7 +8,6 @@ import {
   Sparkles,
   Info,
   RefreshCw,
-  AlertCircle,
   Play,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -20,6 +19,9 @@ import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { ChartCard, BarChart, DoughnutChart } from '../../components/charts/ChartComponents'
 import { formatCurrency, formatDate } from '../../utils/helpers'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
+import { CHART_COLORS } from '../../components/charts/chartColors'
 
 const PRIORITY_LABELS = {
   low: 'Low',
@@ -46,7 +48,6 @@ const normalizeFactors = (factors) => {
   })
 }
 
-const getErrorMessage = formatApiError
 
 const RISK_BADGE = {
   high: { variant: 'danger', label: 'High Risk', bar: 'bg-red-500' },
@@ -85,8 +86,7 @@ export function AIAssessment() {
         setSelectedClaimId(String(claimItems[0].id))
       }
     } catch (err) {
-      console.error('Failed to load AI assessment data:', err)
-      setError(getErrorMessage(err, 'Failed to load assessments. Please try again.'))
+      setError(formatApiError(err, 'Failed to load assessments. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -118,8 +118,7 @@ export function AIAssessment() {
       const assessmentsRes = await assessmentService.getAssessments()
       setAssessments(Array.isArray(assessmentsRes) ? assessmentsRes : assessmentsRes.results || [])
     } catch (err) {
-      console.error('Failed to run AI assessment:', err)
-      setError(getErrorMessage(err, 'Failed to run AI assessment.'))
+      setError(formatApiError(err, 'Failed to run AI assessment.'))
     } finally {
       setAnalyzing(false)
     }
@@ -142,7 +141,7 @@ export function AIAssessment() {
     datasets: [
       {
         data: [parts, labor, paint, other],
-        backgroundColor: ['#1e3a5f', '#007bff', '#00c896', '#94a3b8'],
+        backgroundColor: [CHART_COLORS.navy, CHART_COLORS.blue, CHART_COLORS.green, CHART_COLORS.slate],
         borderWidth: 0,
       },
     ],
@@ -154,7 +153,7 @@ export function AIAssessment() {
       {
         label: 'Amount (INR)',
         data: [claimAmount, predictedRepairCost],
-        backgroundColor: ['#94a3b8', '#1e3a5f'],
+        backgroundColor: [CHART_COLORS.slate, CHART_COLORS.navy],
         borderRadius: 6,
       },
     ],
@@ -193,20 +192,17 @@ export function AIAssessment() {
 
           <Button variant="primary" onClick={triggerReAnalysis} disabled={analyzing || !selectedClaimId}>
             <RefreshCw className={clsx('w-4 h-4 mr-2', analyzing && 'animate-spin')} />
-            {analyzing ? 'Running Inference...' : 'Re-run Inference'}
+            {analyzing ? 'Running inference…' : 'Re-run inference'}
           </Button>
         </div>
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          {error}
-        </div>
+        <Alert>{error}</Alert>
       )}
 
       {loading && (
-        <div className="p-8 text-center text-sm text-gray-400">Loading AI assessments...</div>
+        <LoadingState label="Loading AI assessments…" />
       )}
 
       {!loading && !assessment && selectedClaimId && (
@@ -219,7 +215,7 @@ export function AIAssessment() {
             <div className="mt-3">
               <Button variant="primary" size="sm" onClick={triggerReAnalysis} disabled={analyzing}>
                 <Play className="w-3.5 h-3.5 mr-1" />
-                Run AI Assessment
+                Run AI assessment
               </Button>
             </div>
           </div>
@@ -343,7 +339,7 @@ export function AIAssessment() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button asChild variant="secondary"><Link to="/fraud">Fraud Alerts</Link></Button>
+                <Button asChild variant="secondary"><Link to="/fraud">Fraud alerts</Link></Button>
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Settlement, SettlementTimeline, SettlementPayment, SettlementStatus, PaymentStatus, PaymentMethod
+from .models import Settlement, SettlementTimeline, SettlementPayment, PaymentMethod
 from apps.claims.models import ClaimStatus
 
 class SettlementTimelineSerializer(serializers.ModelSerializer):

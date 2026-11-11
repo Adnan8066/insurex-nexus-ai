@@ -16,7 +16,7 @@ from django.conf import settings
 from decimal import Decimal
 
 from .models import (Policy, PolicyApplication, PolicyEndorsement, PolicyCoverage,
-                     PolicyDocument, PremiumHistory, PolicyStatus)
+                     PremiumHistory, PolicyStatus)
 from apps.accounts.models import Role
 from apps.vehicles.models import Vehicle
 from .serializers import (

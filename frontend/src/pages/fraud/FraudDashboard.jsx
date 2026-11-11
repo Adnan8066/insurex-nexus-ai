@@ -2,15 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
-  Shield,
   Search,
   UserCheck,
   CheckCircle2,
   Clock,
   Eye,
   TrendingUp,
-  AlertCircle,
-  RefreshCw,
   Send,
   XCircle,
 } from 'lucide-react'
@@ -24,7 +21,9 @@ import { Button } from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
 import { Modal } from '../../components/ui/Modal'
-import { formatDate, formatRelativeTime } from '../../utils/helpers'
+import { formatRelativeTime } from '../../utils/helpers'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 const STATUS_LABELS = {
   new: 'New',
@@ -64,7 +63,6 @@ export function FraudDashboard() {
       const data = await investigationService.getFraudAlerts()
       setAlerts(Array.isArray(data) ? data : data.results || [])
     } catch (err) {
-      console.error('Failed to load fraud alerts:', err)
       setError(formatApiError(err, 'Failed to load fraud alerts. Please try again.'))
       setAlerts([])
     } finally {
@@ -94,7 +92,6 @@ export function FraudDashboard() {
       setActionNotes('')
       await loadAlerts()
     } catch (err) {
-      console.error('Fraud alert action failed:', err)
       setError(formatApiError(err, 'Action failed. Please try again.'))
     } finally {
       setProcessingAction(false)
@@ -131,26 +128,17 @@ export function FraudDashboard() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline"><Link to="/investigators"><UserCheck className="w-4 h-4 mr-2" />View Investigations</Link></Button>
-          <Button asChild variant="primary"><Link to="/ai-assessment">Claim Assessment</Link></Button>
+          <Button asChild variant="outline"><Link to="/investigators"><UserCheck className="w-4 h-4 mr-2" />View investigations</Link></Button>
+          <Button asChild variant="primary"><Link to="/ai-assessment">Claim assessment</Link></Button>
         </div>
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            {error}
-          </span>
-          <Button variant="outline" size="sm" onClick={loadAlerts}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1" />
-            Retry
-          </Button>
-        </div>
+        <Alert onRetry={loadAlerts}>{error}</Alert>
       )}
 
       {loading && alerts.length === 0 && (
-        <div className="p-8 text-center text-sm text-gray-400">Loading fraud alerts...</div>
+        <LoadingState label="Loading fraud alerts…" />
       )}
 
       {/* KPI Cards */}
@@ -262,7 +250,7 @@ export function FraudDashboard() {
                       <TableCell>
                         <Link
                           to={`/claims/${alert.claim}`}
-                          className="font-mono font-bold text-primary hover:underline"
+                          className="whitespace-nowrap font-mono font-bold text-primary hover:underline"
                         >
                           {alert.claim_number}
                         </Link>

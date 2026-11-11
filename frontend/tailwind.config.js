@@ -13,14 +13,6 @@ export default {
           light: '#3b82f6',
           dark: '#1d4ed8',
         },
-        secondary: {
-          DEFAULT: '#007bff',
-          light: '#3399ff',
-        },
-        accent: {
-          DEFAULT: '#00c896',
-          light: '#33d6a8',
-        },
       },
     },
   },

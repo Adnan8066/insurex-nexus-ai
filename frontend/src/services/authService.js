@@ -34,7 +34,7 @@ export const authService = {
     if (refreshToken) {
       try {
         await api.post('/auth/logout/', { refresh: refreshToken })
-      } catch (e) {
+      } catch {
         // ignore logout errors when backend is not connected
       }
     }

@@ -32,7 +32,8 @@ def photo_bytes(seed, camera_date, software=None, size=(800, 600), base=None):
         pixels = np.clip(base.astype(int) + rng.integers(-3, 4, base.shape), 0, 255).astype(np.uint8)
     image = Image.fromarray(pixels).resize(size, Image.Resampling.BICUBIC)
     exif = Image.Exif()
-    exif.get_ifd(0x8769)[0x9003] = camera_date.strftime('%Y:%m:%d 10:00:00')
+    # Set the Exif sub-IFD as a whole: writing through get_ifd() is dropped on save in Pillow 11.0.
+    exif[0x8769] = {0x9003: camera_date.strftime('%Y:%m:%d 10:00:00')}
     if software:
         exif[0x0131] = software
     buffer = io.BytesIO()

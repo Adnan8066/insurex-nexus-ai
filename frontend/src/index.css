@@ -272,10 +272,7 @@ html.dark footer .text-slate-500 { color: #cbd5e1; }
   --color-primary-light: #3b82f6;
   --color-primary-dark: #1d4ed8;
   --color-surface-navy: #0b132b;
-  --color-secondary: #007bff;
-  --color-secondary-light: #3399ff;
   --color-accent: #00c896;
-  --color-accent-light: #33d6a8;
   --color-warning: #f59e0b;
   --color-warning-light: #fbbf24;
   --color-danger: #ef4444;
@@ -616,52 +613,61 @@ ol {
   color: var(--color-danger);
 }
 
-.card {
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow var(--transition-normal);
-}
+/* In the components layer so per-page Tailwind utilities (e.g. p-0) can override card padding. */
+@layer components {
+  .card {
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition-normal);
+  }
 
-.card[role='button'] { cursor: pointer; }
+  .card[role='button'] { cursor: pointer; }
 
-.card[role='button']:focus-visible {
-  outline: 3px solid #2563eb;
-  outline-offset: 3px;
-}
+  /* Header and content sections bring their own padding; avoid doubling it. */
+  .card:has(> .card-header),
+  .card:has(> .card-content) {
+    padding: 0;
+  }
 
-.card:hover {
-  box-shadow: var(--shadow-md);
-}
+  .card[role='button']:focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 3px;
+  }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--color-border-light);
-}
+  .card:hover {
+    box-shadow: var(--shadow-md);
+  }
 
-.card-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border-light);
+  }
 
-.card-content {
-  padding: var(--spacing-lg);
-}
+  .card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
 
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-top: 1px solid var(--color-border-light);
-  background-color: var(--color-bg-tertiary);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  .card-content {
+    padding: var(--spacing-lg);
+  }
+
+  .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-top: 1px solid var(--color-border-light);
+    background-color: var(--color-bg-tertiary);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  }
 }
 
 .badge {
@@ -741,6 +747,8 @@ ol {
   color: inherit;
   font: inherit;
   text-align: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
 }
 
 .table tbody tr {

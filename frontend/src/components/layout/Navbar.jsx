@@ -276,7 +276,7 @@ export function Navbar() {
               <div className="absolute right-0 z-50 mt-3 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                   <h2 className="font-bold text-slate-900">Notifications</h2>
-                  {unreadCount > 0 && <button className="text-xs font-semibold text-blue-700 hover:underline" onClick={markAllNotificationsRead}>Mark all read</button>}
+                  {unreadCount > 0 && <button className="text-xs font-semibold text-blue-700 hover:underline" onClick={markAllNotificationsRead}>Mark all as read</button>}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                   {notificationError && <p className="px-4 py-3 text-sm text-rose-600">{notificationError}</p>}

@@ -8,6 +8,7 @@ import { callbackService } from '../services'
 import { policyTiers } from '../data/policyTiers'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { formatApiError } from '../services/api'
+import { Alert } from '../components/ui/Alert'
 
 const benefits = [
   {
@@ -289,7 +290,7 @@ export function LandingPage() {
                     <input type="checkbox" required checked={form.consent} onChange={(event) => setForm({ ...form, consent: event.target.checked })} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600" />
                     <span>I agree that an InsureX agent may contact me about motor insurance.</span>
                   </label>
-                  {submitError && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</p>}
+                  {submitError && <Alert>{submitError}</Alert>}
                   <button type="submit" disabled={submitting} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3.5 font-bold text-white transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70">
                     {submitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{submitting ? 'Sending request…' : 'Request a callback'}
                   </button>

@@ -4,8 +4,6 @@ import {
   Briefcase,
   Search,
   Plus,
-  Calendar,
-  Car,
   Clock,
   Eye,
   ShieldCheck,
@@ -19,13 +17,14 @@ import { formatApiError } from '../../services/api'
 import { canDeleteClaim } from '../../utils/claimPermissions'
 import { CLAIM_STATUSES, PENDING_CLAIM_STATUSES, INCIDENT_TYPES, labelFor } from '../../constants/domain'
 import { useAuth } from '../../context/useAuth'
-import { Card, CardHeader, CardContent } from '../../components/ui/Card'
+import { Card, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../components/tables/DataTable'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
+import { Alert } from '../../components/ui/Alert'
 
 const incidentTypes = [
   { value: '', label: 'All incident types' },
@@ -223,14 +222,12 @@ export function ClaimList() {
           <p className="page-subtitle">{canViewAI ? 'Review and track every claim from submission to settlement' : 'See and track the claims you have made'}</p>
         </div>
         <div className="flex gap-2">
-          {canSubmitClaim && <Button asChild variant="primary"><Link to="/claims/new"><Plus className="w-4 h-4 mr-2" />Submit Claim</Link></Button>}
+          {canSubmitClaim && <Button asChild variant="primary"><Link to="/claims/new"><Plus className="w-4 h-4 mr-2" />File a claim</Link></Button>}
         </div>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {error}
-        </div>
+        <Alert className="mb-4">{error}</Alert>
       )}
 
       {/* Summary KPI Cards */}
@@ -336,7 +333,7 @@ export function ClaimList() {
                     {paginatedClaims.map((claim) => (
                       <TableRow key={claim.id} hover>
                         <TableCell>
-                          <Link to={`/claims/${claim.id}`} className="font-mono font-semibold text-primary hover:underline">
+                          <Link to={`/claims/${claim.id}`} className="whitespace-nowrap font-mono font-semibold text-primary hover:underline">
                             {claim.claimNumber}
                           </Link>
                           <div className="text-[11px] text-gray-500 font-mono mt-0.5">{claim.policyNumber}</div>
@@ -429,7 +426,7 @@ export function ClaimList() {
                 icon={<Briefcase className="w-12 h-12" />}
                 title="No claims match your criteria"
                 description={search || typeFilter || statusFilter ? 'Try clearing your search or filters.' : 'No claims have been submitted yet.'}
-                action={canSubmitClaim ? <Button asChild><Link to="/claims/new">Submit a New Claim</Link></Button> : undefined}
+                action={canSubmitClaim ? <Button asChild><Link to="/claims/new">File a claim</Link></Button> : undefined}
               />
             )}
           </div>

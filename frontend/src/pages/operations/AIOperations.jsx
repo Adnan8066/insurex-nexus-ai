@@ -3,15 +3,10 @@ import { Link } from 'react-router-dom'
 import {
   Cpu,
   Activity,
-  Sparkles,
   UserCheck,
   Clock,
   TrendingUp,
-  AlertCircle,
-  CheckCircle2,
-  BarChart3,
   RefreshCw,
-  Info,
 } from 'lucide-react'
 import {
   assessmentService,
@@ -23,7 +18,9 @@ import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { ChartCard, BarChart } from '../../components/charts/ChartComponents'
-import { formatCurrency } from '../../utils/helpers'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
+import { CHART_COLORS } from '../../components/charts/chartColors'
 
 export function AIOperations() {
   const [models, setModels] = useState([])
@@ -76,7 +73,6 @@ export function AIOperations() {
       setClaims(unwrap(results[3]))
       setFraudAlerts(unwrap(results[4]))
     } catch (err) {
-      console.error('Failed to load AI operations data:', err)
       setError(formatApiError(err, 'Failed to load AI operations data.'))
     } finally {
       setLoading(false)
@@ -142,13 +138,13 @@ export function AIOperations() {
       {
         label: 'Accuracy',
         data: models.map((m) => m.accuracy == null ? null : Math.round(Number(m.accuracy) * 100)),
-        backgroundColor: '#1e3a5f',
+        backgroundColor: CHART_COLORS.navy,
         borderRadius: 4,
       },
       {
         label: 'F1 Score',
         data: models.map((m) => m.f1_score == null ? null : Math.round(Number(m.f1_score) * 100)),
-        backgroundColor: '#00c896',
+        backgroundColor: CHART_COLORS.green,
         borderRadius: 4,
       },
     ],
@@ -171,20 +167,17 @@ export function AIOperations() {
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" onClick={loadData} disabled={loading}>
             <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh Data
+            Refresh
           </Button>
         </div>
       </div>
 
       {error && (
-        <div className="bg-gradient-to-r from-red-50 to-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3.5 shadow-sm">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-red-900">{error}</div>
-        </div>
+        <Alert>{error}</Alert>
       )}
 
       {loading && (
-        <div className="p-8 text-center text-sm text-gray-400">Loading AI operations...</div>
+        <LoadingState label="Loading AI operations…" />
       )}
 
       {/* Model Registry Summary */}

@@ -6,7 +6,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from apps.accounts.models import Role
 
-from .models import Investigation, InvestigationEvidence, InvestigationNote, FraudAlert, InvestigationStatus
+from .models import Investigation, FraudAlert, InvestigationStatus
 from .serializers import (
     InvestigationSerializer, InvestigationCreateSerializer, InvestigationUpdateSerializer,
     InvestigationEvidenceSerializer, InvestigationNoteSerializer,

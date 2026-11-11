@@ -6,7 +6,6 @@ import math
 import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
-from xml.parsers.expat import model
 
 import numpy as np
 from stable_baselines3 import PPO
@@ -17,7 +16,6 @@ from .environment import (
     MIN_AGENTS,
     MAX_SKILL_TIER,
     MAX_WORKLOAD,
-    QUEUE_WAIT_UNIT,
     SERVICE_CAPACITY_PER_STEP,
     estimate_claim_workload,
     estimate_wait_time,

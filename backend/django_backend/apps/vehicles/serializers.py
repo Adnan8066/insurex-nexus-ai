@@ -6,7 +6,6 @@ from common.uploads import IMAGE_EXTENSIONS, validate_upload
 from django.contrib.auth import get_user_model
 from apps.accounts.models import Role
 from .models import Vehicle, VehicleDocument, VehicleHistory
-from apps.policies.models import Policy
 
 User = get_user_model()
 

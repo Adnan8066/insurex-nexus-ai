@@ -14,6 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { useToast } from '../../components/ui/toastHooks'
 import { useAuth } from '../../context/useAuth'
 import { formatCurrency, formatDate } from '../../utils/helpers'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 const STATUS_TABS = [
   { value: 'quoted', label: 'Waiting for review' },
@@ -124,12 +126,12 @@ export function PolicyRequests() {
         ))}
       </div>
 
-      {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
+      {error && <Alert>{error}</Alert>}
 
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <p className="p-8 text-center text-sm text-gray-500">Loading requests…</p>
+            <LoadingState label="Loading requests…" />
           ) : applications.length === 0 ? (
             <EmptyState title="No requests here" description={statusFilter === 'quoted' ? 'New customer requests will appear here.' : 'Nothing to show for this status yet.'} />
           ) : (

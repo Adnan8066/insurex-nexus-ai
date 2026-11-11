@@ -394,7 +394,7 @@ def routing_recommendation(request):
             },
             salt='claim-routing-review',
         )
-    except ImportError as exc:
+    except ImportError:
         return Response(
             {"detail": "RL inference dependencies are not installed."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,

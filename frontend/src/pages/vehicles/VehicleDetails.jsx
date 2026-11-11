@@ -178,7 +178,7 @@ export function VehicleDetails() {
         <div className="page-header">
           <Link to="/vehicles" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-4">
             <ArrowLeft className="w-4 h-4" />
-            Back to Vehicles
+            Back to vehicles
           </Link>
         </div>
         <Card>
@@ -186,7 +186,7 @@ export function VehicleDetails() {
             icon={<Car className="w-12 h-12" />}
             title={notFound ? 'Vehicle not found' : 'Could not load this vehicle'}
             description={notFound ? 'This vehicle does not exist or you do not have access to it.' : (error || 'Please try again in a moment.')}
-            action={<Button asChild variant="outline"><Link to="/vehicles">Back to Vehicles</Link></Button>}
+            action={<Button asChild variant="outline"><Link to="/vehicles">Back to vehicles</Link></Button>}
           />
         </Card>
       </div>
@@ -211,7 +211,7 @@ export function VehicleDetails() {
         <div>
           <Link to="/vehicles" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-2">
             <ArrowLeft className="w-4 h-4" />
-            Back to Vehicles
+            Back to vehicles
           </Link>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="page-title">{vehicle.year || ''} {vehicle.make || ''} {vehicle.model || ''}</h1>
@@ -487,13 +487,13 @@ export function VehicleDetails() {
                 <Button variant="outline" className="w-full justify-start gap-3" asChild>
                   <Link to={`/vehicles/${vehicle.id}/edit`}>
                     <Edit className="w-4 h-4" />
-                    Edit Vehicle
+                    Edit vehicle
                   </Link>
                 </Button>
                 <Button variant="outline" className="w-full justify-start gap-3" asChild>
                   <Link to={`/claims/new?vehicle=${vehicle.id}`}>
                     <FileText className="w-4 h-4" />
-                    File Claim
+                    File a claim
                   </Link>
                 </Button>
               </div>
