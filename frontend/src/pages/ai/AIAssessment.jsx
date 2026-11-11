@@ -46,7 +46,6 @@ const normalizeFactors = (factors) => {
   })
 }
 
-const getErrorMessage = formatApiError
 
 const RISK_BADGE = {
   high: { variant: 'danger', label: 'High Risk', bar: 'bg-red-500' },
@@ -85,8 +84,7 @@ export function AIAssessment() {
         setSelectedClaimId(String(claimItems[0].id))
       }
     } catch (err) {
-      console.error('Failed to load AI assessment data:', err)
-      setError(getErrorMessage(err, 'Failed to load assessments. Please try again.'))
+      setError(formatApiError(err, 'Failed to load assessments. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -118,8 +116,7 @@ export function AIAssessment() {
       const assessmentsRes = await assessmentService.getAssessments()
       setAssessments(Array.isArray(assessmentsRes) ? assessmentsRes : assessmentsRes.results || [])
     } catch (err) {
-      console.error('Failed to run AI assessment:', err)
-      setError(getErrorMessage(err, 'Failed to run AI assessment.'))
+      setError(formatApiError(err, 'Failed to run AI assessment.'))
     } finally {
       setAnalyzing(false)
     }

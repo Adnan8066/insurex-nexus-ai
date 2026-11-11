@@ -73,7 +73,6 @@ export function AdminDashboard() {
       setSummary(summaryRes)
       setTrend(Array.isArray(trendRes) ? trendRes : [])
     } catch (err) {
-      console.error('Failed to load analytics:', err)
       setError(formatApiError(err, 'Failed to load dashboard analytics.'))
     } finally {
       setLoading(false)

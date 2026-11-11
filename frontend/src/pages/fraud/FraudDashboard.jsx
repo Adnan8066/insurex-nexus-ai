@@ -64,7 +64,6 @@ export function FraudDashboard() {
       const data = await investigationService.getFraudAlerts()
       setAlerts(Array.isArray(data) ? data : data.results || [])
     } catch (err) {
-      console.error('Failed to load fraud alerts:', err)
       setError(formatApiError(err, 'Failed to load fraud alerts. Please try again.'))
       setAlerts([])
     } finally {
@@ -94,7 +93,6 @@ export function FraudDashboard() {
       setActionNotes('')
       await loadAlerts()
     } catch (err) {
-      console.error('Fraud alert action failed:', err)
       setError(formatApiError(err, 'Action failed. Please try again.'))
     } finally {
       setProcessingAction(false)

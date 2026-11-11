@@ -75,7 +75,6 @@ export function InvestigatorDashboard() {
       const data = await investigationService.getInvestigations()
       setInvestigations(Array.isArray(data) ? data : data.results || [])
     } catch (err) {
-      console.error('Failed to load investigations:', err)
       setError(formatApiError(err, 'Failed to load investigations. Please try again.'))
       setInvestigations([])
     } finally {
@@ -108,7 +107,6 @@ export function InvestigatorDashboard() {
       )
       setActiveInvestigation(updated)
     } catch (err) {
-      console.error('Failed to add investigation note:', err)
       setError(formatApiError(err, 'Failed to save note.'))
     } finally {
       setAddingNote(false)

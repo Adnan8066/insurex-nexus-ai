@@ -76,7 +76,6 @@ export function AIOperations() {
       setClaims(unwrap(results[3]))
       setFraudAlerts(unwrap(results[4]))
     } catch (err) {
-      console.error('Failed to load AI operations data:', err)
       setError(formatApiError(err, 'Failed to load AI operations data.'))
     } finally {
       setLoading(false)

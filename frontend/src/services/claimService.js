@@ -16,11 +16,6 @@ export const claimService = {
     return response.data
   },
 
-  async updateClaim(id, data) {
-    const response = await api.patch(`/claims/${id}/`, data)
-    return response.data
-  },
-
   async deleteClaim(id) {
     const response = await api.delete(`/claims/${id}/`)
     return response.data
@@ -33,16 +28,6 @@ export const claimService = {
 
   async uploadClaimDocument(claimId, formData) {
     const response = await api.post(`/claims/${claimId}/documents/`, formData)
-    return response.data
-  },
-
-  async getClaimTimeline(claimId) {
-    const response = await api.get(`/claims/${claimId}/timeline/`)
-    return response.data
-  },
-
-  async submitClaimAssessment(claimId, data) {
-    const response = await api.post(`/claims/${claimId}/assessment/`, data)
     return response.data
   },
 
@@ -69,7 +54,6 @@ export const claimService = {
     })
     return response.data
   },
-
 }
 
 export default claimService
