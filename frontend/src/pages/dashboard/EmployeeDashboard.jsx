@@ -8,15 +8,14 @@ import {
   Shield,
   ArrowRight,
   Brain,
-  BarChart3,
   RefreshCw,
   Download,
   Calendar,
   WifiOff,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { format, parseISO } from 'date-fns'
-import { formatCurrency, formatCurrencyCompact, formatRelativeTime } from '../../utils/helpers'
+import { format } from 'date-fns'
+import { formatCurrency, formatRelativeTime } from '../../utils/helpers'
 import { policyService, claimService, analyticsService } from '../../services'
 import { formatApiError } from '../../services/api'
 import {
@@ -30,10 +29,9 @@ import {
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { ChartCard, ComboChart, DoughnutChart } from '../../components/charts/ChartComponents'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
-import ErrorBoundary, { ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
+import ErrorBoundary, { DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
 import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/toastHooks'
 
@@ -45,13 +43,9 @@ const TIMEFRAME_OPTIONS = [
   { value: 'year', label: 'Last Year' },
 ]
 
-// Short ranges are shown per day; longer ones per month (same as the Analytics page).
-const TREND_GRANULARITY = { week: 'day', month: 'day', quarter: 'month', ytd: 'month', year: 'month' }
-
 // Matches the backend total-loss threshold used by the dashboard summary.
 const TOTAL_LOSS_THRESHOLD = 50
 
-const STATUS_COLORS = ['#3b82f6', '#f59e0b', '#1e3a5f', '#d97706', '#10b981', '#ef4444', '#6366f1', '#94a3b8']
 const RISK_VARIANT = { high: 'danger', medium: 'warning', low: 'success' }
 const PRIORITY_VARIANT = { critical: 'danger', high: 'danger', medium: 'warning', low: 'success' }
 
@@ -95,24 +89,19 @@ export function EmployeeDashboard() {
   const [policies, setPolicies] = useState([])
   const [summary, setSummary] = useState(null)
   const [fraudBands, setFraudBands] = useState(null)
-  const [trend, setTrend] = useState([])
   const [refreshing, setRefreshing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [connectionError, setConnectionError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(new Date())
-
-  const granularity = TREND_GRANULARITY[timeframe] || 'day'
 
   const fetchData = useCallback(async () => {
     setRefreshing(true)
     setConnectionError(null)
     try {
-      const [clmRes, polRes, summaryRes, fraudRes, trendRes] = await Promise.all([
+      const [clmRes, polRes, summaryRes, fraudRes] = await Promise.all([
         claimService.getClaims(),
         policyService.getPolicies(),
         analyticsService.getDashboardSummary(timeframe),
         analyticsService.getFraudRiskDistribution(timeframe),
-        analyticsService.getClaimsTrendForTimeframe(timeframe, granularity),
       ])
       const clms = Array.isArray(clmRes) ? clmRes : (clmRes?.results || [])
       const pols = Array.isArray(polRes) ? polRes : (polRes?.results || [])
@@ -120,8 +109,6 @@ export function EmployeeDashboard() {
       setPolicies(pols.map(mapPolicy))
       setSummary(summaryRes || null)
       setFraudBands(fraudRes?.by_level || null)
-      setTrend(Array.isArray(trendRes) ? trendRes : [])
-      setLastUpdated(new Date())
     } catch (err) {
       const message = formatApiError(err, 'Unable to load dashboard data.')
       setConnectionError(message)
@@ -132,7 +119,7 @@ export function EmployeeDashboard() {
       setRefreshing(false)
       setLoading(false)
     }
-  }, [timeframe, granularity, toast])
+  }, [timeframe, toast])
 
   useEffect(() => {
     fetchData()
@@ -158,77 +145,6 @@ export function EmployeeDashboard() {
   const highRiskCount = summary?.fraud?.high_risk_claims ?? fraudBands?.high ?? 0
   const totalLossCount = summaryClaims.total_loss_cases ?? 0
   const activePolicyCount = summary?.policies?.active ?? policies.filter((p) => p.status === 'active').length
-
-  const claimStatusData = useMemo(() => ({
-    labels: CLAIM_STATUSES.map((s) => s.label),
-    datasets: [
-      {
-        data: CLAIM_STATUSES.map((s) => byStatus[s.value] || 0),
-        backgroundColor: STATUS_COLORS,
-        borderWidth: 0,
-      },
-    ],
-  }), [byStatus])
-
-  const fraudRiskData = useMemo(() => ({
-    labels: ['Low', 'Medium', 'High'],
-    datasets: [
-      {
-        data: [fraudBands?.low || 0, fraudBands?.medium || 0, fraudBands?.high || 0],
-        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
-        borderWidth: 0,
-      },
-    ],
-  }), [fraudBands])
-
-  const hasTrendData = trend.some((d) => d.count > 0)
-  const claimsOverTimeData = {
-    labels: trend.map((d) => format(parseISO(String(d.date)), granularity === 'month' ? 'MMM yyyy' : 'd MMM')),
-    datasets: [
-      {
-        type: 'bar',
-        label: 'Claims submitted',
-        data: trend.map((d) => d.count),
-        backgroundColor: '#1e3a5f',
-        borderRadius: 4,
-        maxBarThickness: 36,
-        yAxisID: 'y',
-        order: 2,
-      },
-      {
-        type: 'line',
-        label: 'Claim amount',
-        data: trend.map((d) => Math.round(Number(d.total_amount) || 0)),
-        borderColor: '#10b981',
-        backgroundColor: '#10b981',
-        pointRadius: 3,
-        tension: 0.3,
-        yAxisID: 'y1',
-        order: 1,
-      },
-    ],
-  }
-  const claimsOverTimeOptions = {
-    scales: {
-      y: { beginAtZero: true, title: { display: true, text: 'Claims' }, ticks: { precision: 0 } },
-      y1: {
-        beginAtZero: true,
-        position: 'right',
-        grid: { drawOnChartArea: false },
-        title: { display: true, text: 'Amount' },
-        ticks: { callback: (value) => formatCurrencyCompact(value) },
-      },
-    },
-    plugins: {
-      tooltip: {
-        callbacks: {
-          label: (ctx) => (ctx.dataset.yAxisID === 'y1'
-            ? `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`
-            : `${ctx.dataset.label}: ${ctx.raw}`),
-        },
-      },
-    },
-  }
 
   const recentClaims = [...claims].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).slice(0, 5)
   const fraudAlerts = claims
@@ -338,7 +254,6 @@ export function EmployeeDashboard() {
     { label: 'Review Claims', href: '/claims', icon: Briefcase, color: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
     { label: 'Fraud Alerts', href: '/fraud', icon: AlertTriangle, color: 'bg-red-50 text-red-600 hover:bg-red-100' },
     { label: 'Claim Assessment', href: '/ai-assessment', icon: Brain, color: 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' },
-    { label: 'Analytics', href: '/analytics', icon: BarChart3, color: 'bg-green-50 text-green-600 hover:bg-green-100' },
   ]
 
   if (loading) {
@@ -407,49 +322,6 @@ export function EmployeeDashboard() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <ErrorBoundary fallback={({ resetError, retryCount }) => (
-          <ChartErrorFallback title="Claims Over Time" resetError={resetError} retryCount={retryCount} />
-        )}>
-          <ChartCard
-            title="Claims Over Time"
-            subtitle={`${granularity === 'month' ? 'Monthly' : 'Daily'} claims and claim amount · ${timeframeLabel}`}
-            action={
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Clock className="w-4 h-4" aria-hidden="true" />
-                <span>Updated {formatRelativeTime(lastUpdated)}</span>
-              </div>
-            }
-          >
-            {hasTrendData ? (
-              <ComboChart data={claimsOverTimeData} options={claimsOverTimeOptions} height={300} />
-            ) : (
-              <div className="flex items-center justify-center text-center text-sm text-gray-400" style={{ height: 300 }}>
-                No claims were submitted in this period.
-              </div>
-            )}
-          </ChartCard>
-        </ErrorBoundary>
-
-        <div className="grid grid-cols-1 gap-6">
-          <ErrorBoundary fallback={({ resetError, retryCount }) => (
-            <ChartErrorFallback title="Claim Status" resetError={resetError} retryCount={retryCount} />
-          )}>
-            <ChartCard title="Claim Status" subtitle={`Claims by stage · ${timeframeLabel}`}>
-              <DoughnutChart data={claimStatusData} height={250} />
-            </ChartCard>
-          </ErrorBoundary>
-
-          <ErrorBoundary fallback={({ resetError, retryCount }) => (
-            <ChartErrorFallback title="Fraud Risk" resetError={resetError} retryCount={retryCount} />
-          )}>
-            <ChartCard title="Fraud Risk" subtitle={`Claims by fraud risk level · ${timeframeLabel}`}>
-              <DoughnutChart data={fraudRiskData} height={250} />
-            </ChartCard>
-          </ErrorBoundary>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

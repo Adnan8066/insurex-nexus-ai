@@ -148,14 +148,13 @@ class ClaimViewSet(viewsets.ModelViewSet):
             run_claim_assessment(claim)
         except Exception:
             logger.exception('Automatic AI assessment failed for claim %s', claim.claim_number)
-        # Only the qualified RL model assigns claims; otherwise the claim waits
-        # and admins are notified.
+        # RL stays advisory; claims wait for an explicit staff assignment.
         try:
             from apps.assessments.rl_views import auto_assign_new_claim
             auto_assign_new_claim(claim)
         except Exception:
             # A routing/model outage must never roll back a customer's claim.
-            logger.exception('Automatic routing failed for claim %s', claim.claim_number)
+            logger.exception('Claim assignment notification failed for claim %s', claim.claim_number)
     
     @action(detail=True, methods=['get', 'post'], url_path='documents')
     def documents(self, request, pk=None):

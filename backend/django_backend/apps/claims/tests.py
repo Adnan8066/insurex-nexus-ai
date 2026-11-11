@@ -369,27 +369,27 @@ class ClaimAutoAssignmentTests(ClaimTestBase):
         self.assertEqual(response.status_code, 201, response.content)
         return Claim.objects.get(claim_number=response.json()['claim_number'])
 
-    def test_new_claim_is_routed_by_rl_model_and_notifies_employee(self):
+    def test_new_claim_waits_for_human_assignment_even_when_rl_gate_passes(self):
         from apps.notifications.models import Notification
         newest = get_user_model().objects.create_user(username='idle', email='idle@example.com', password='x', role='employee')
         gate, engine = self.route_with(self.FakeEngine())
-        with gate, engine:
+        with patch.dict('os.environ', {'CLAIM_ROUTING_AUTO_ASSIGN_ENABLED': 'false'}), gate, engine:
             claim = self.post_claim()
-        self.assertEqual(claim.assigned_adjuster, newest)
-        entry = claim.timeline.get(title='Automatically Assigned to Adjuster')
-        self.assertIn('RL model', entry.description)
-        self.assertTrue(Notification.objects.filter(recipient=newest, title='New claim assigned to you').exists())
+        self.assertIsNone(claim.assigned_adjuster)
+        alert = Notification.objects.get(recipient=self.admin, title='Claim waiting for employee assignment')
+        self.assertIn('human review', alert.message)
+        self.assertFalse(Notification.objects.filter(recipient=newest, title='New claim assigned to you').exists())
 
-    def test_claim_waits_and_admins_are_told_why_without_a_qualified_model(self):
+    def test_claim_intake_notifies_admins_for_human_assignment(self):
         from apps.notifications.models import Notification
         gate, engine = self.route_with(self.FakeEngine(), gate_passed=False)
         with gate, engine:
             claim = self.post_claim()
         self.assertIsNone(claim.assigned_adjuster)
-        alert = Notification.objects.get(recipient=self.admin, title='Claim waiting: not assigned automatically')
-        self.assertIn('evaluation gate', alert.message)
+        alert = Notification.objects.get(recipient=self.admin, title='Claim waiting for employee assignment')
+        self.assertIn('human review', alert.message)
 
-    def test_claim_waits_when_no_available_employee_has_the_required_skill(self):
+    def test_claim_intake_does_not_use_rl_even_if_no_suitable_employee_exists(self):
         from apps.assessments.models import RoutingAgentProfile
         from apps.notifications.models import Notification
         RoutingAgentProfile.objects.create(user=self.employee, skill_tier=1)
@@ -397,21 +397,21 @@ class ClaimAutoAssignmentTests(ClaimTestBase):
         with gate, engine:
             claim = self.post_claim(incident_severity='total_loss')
         self.assertIsNone(claim.assigned_adjuster)
-        alert = Notification.objects.get(recipient=self.admin, title='Claim waiting: not assigned automatically')
-        self.assertIn('skill tier 5', alert.message)
+        alert = Notification.objects.get(recipient=self.admin, title='Claim waiting for employee assignment')
+        self.assertIn('human review', alert.message)
 
-    def test_rosters_larger_than_the_model_compete_in_groups(self):
+    def test_claim_intake_does_not_score_or_assign_employees_automatically(self):
         User = get_user_model()
-        hires = [User.objects.create_user(username=f'h{i}', email=f'h{i}@example.com', password='x', role='employee')
+        [User.objects.create_user(username=f'h{i}', email=f'h{i}@example.com', password='x', role='employee')
                  for i in range(11)]
         fake = self.FakeEngine()
         gate, engine = self.route_with(fake)
         with gate, engine:
             claim = self.post_claim()
-        self.assertEqual(claim.assigned_adjuster, hires[-1])
-        self.assertEqual(fake.group_sizes, [10, 2, 2])
+        self.assertIsNone(claim.assigned_adjuster)
+        self.assertEqual(fake.group_sizes, [])
 
-    def test_waiting_claim_is_routed_when_work_is_handed_over_again(self):
+    def test_waiting_claim_stays_unassigned_when_work_is_retried(self):
         from apps.assessments.assignment import assign_waiting_work
         gate, engine = self.route_with(self.FakeEngine(), gate_passed=False)
         with gate, engine:
@@ -419,6 +419,6 @@ class ClaimAutoAssignmentTests(ClaimTestBase):
         self.assertIsNone(claim.assigned_adjuster)
         gate, engine = self.route_with(self.FakeEngine())
         with gate, engine:
-            self.assertEqual(assign_waiting_work(), (0, 1))
+            self.assertEqual(assign_waiting_work(), (0, 0))
         claim.refresh_from_db()
-        self.assertEqual(claim.assigned_adjuster, self.employee)
+        self.assertIsNone(claim.assigned_adjuster)

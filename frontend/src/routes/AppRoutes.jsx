@@ -29,6 +29,8 @@ const FraudDashboard = lazy(() => import('../pages/fraud/FraudDashboard').then((
 const InvestigatorDashboard = lazy(() => import('../pages/investigator/InvestigatorDashboard').then((module) => ({ default: module.InvestigatorDashboard })))
 const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })))
 const UserManagement = lazy(() => import('../pages/admin/UserManagement').then((module) => ({ default: module.UserManagement })))
+const Employees = lazy(() => import('../pages/admin/Employees').then((module) => ({ default: module.Employees })))
+const EmployeeProfile = lazy(() => import('../pages/employees/EmployeeProfile').then((module) => ({ default: module.EmployeeProfile })))
 const AIOperations = lazy(() => import('../pages/operations/AIOperations').then((module) => ({ default: module.AIOperations })))
 const Notifications = lazy(() => import('../pages/notifications/Notifications').then((module) => ({ default: module.Notifications })))
 const Support = lazy(() => import('../pages/support/Support').then((module) => ({ default: module.Support })))
@@ -91,8 +93,11 @@ export default function AppRoutes() {
         <Route path="routing-advisory" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><RoutingAdvisory /></ProtectedRoute>} />
         <Route path="fraud" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><FraudDashboard /></ProtectedRoute>} />
         <Route path="investigators" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><InvestigatorDashboard /></ProtectedRoute>} />
-        <Route path="analytics" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AdminDashboard /></ProtectedRoute>} />
+        <Route path="analytics" element={<ProtectedRoute roles={['investigator']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="admin/users" element={<ProtectedRoute roles={['admin']}><UserManagement /></ProtectedRoute>} />
+        <Route path="employees" element={<ProtectedRoute roles={['admin']}><Employees /></ProtectedRoute>} />
+        <Route path="employees/:id" element={<ProtectedRoute roles={['admin']}><EmployeeProfile /></ProtectedRoute>} />
+        <Route path="my-profile" element={<ProtectedRoute roles={['employee']}><EmployeeProfile /></ProtectedRoute>} />
         <Route path="operations" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIOperations /></ProtectedRoute>} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="support" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><Support /></ProtectedRoute>} />

@@ -1,14 +1,9 @@
-"""Automatic hand-off of new work to employees.
-
-Claims are routed only by the qualified RL model (``rl_views.auto_assign_new_claim``);
-when it cannot assign one, the claim waits and admins are notified. Policy
-requests go to the employee with the fewest open requests. Admins are not part
-of the rotation; they are notified when work cannot be handed over, so nothing
-waits unseen.
-"""
+"""Employee availability and hand-off of customer policy requests."""
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.db.models import Count, F, Q
+from django.core.exceptions import ObjectDoesNotExist
+from django.utils import timezone
 
 from apps.accounts.models import Role
 from apps.notifications.services import create_in_app_notification
@@ -17,13 +12,38 @@ OPEN_CLAIM_STATUSES = ['submitted', 'under_review', 'ai_assessment']
 
 
 def available_employees():
-    """Active employees who can take work; demo routing profiles and staff marked unavailable are skipped."""
-    return (
+    """Return active employees within capacity and, when configured, on shift."""
+    employees = (
         get_user_model().objects.filter(role=Role.EMPLOYEE, is_active=True)
+        .select_related('routing_profile')
+        .annotate(active_assigned_claim_count=Count(
+            'assigned_claims', filter=Q(assigned_claims__status__in=OPEN_CLAIM_STATUSES + ['investigation'])
+        ))
         .exclude(routing_profile__is_demo=True)
         .exclude(routing_profile__is_available=False)
+        .exclude(routing_profile__availability_status__in=['busy', 'on_leave', 'off_duty', 'temporarily_unavailable'])
+        .filter(
+            Q(routing_profile__isnull=True, active_assigned_claim_count__lt=10)
+            | Q(active_assigned_claim_count__lt=F('routing_profile__max_claim_capacity'))
+        )
         .order_by('id')
     )
+    now = timezone.localtime()
+    weekday = now.strftime('%a').lower()
+    eligible = []
+    for employee in employees:
+        try:
+            profile = employee.routing_profile
+        except ObjectDoesNotExist:
+            profile = None
+        if profile is not None:
+            if profile.working_days and weekday not in profile.working_days:
+                continue
+            if profile.shift_start_time and profile.shift_end_time:
+                if not profile.shift_start_time <= now.time() <= profile.shift_end_time:
+                    continue
+        eligible.append(employee)
+    return eligible
 
 
 def _display_name(user):
@@ -78,28 +98,14 @@ def assign_policy_request(application):
 
 
 def assign_waiting_work():
-    """Hand unassigned customer policy requests and open claims to available employees.
-
-    Called when an employee joins (and by ``manage.py assign_waiting_claims``),
-    so work that arrived while nobody could take it does not stay unassigned.
-    Claims are retried through the RL model; admins were already notified when
-    each claim first waited, so retries stay quiet.
-    """
+    """Hand unassigned customer policy requests to eligible employees."""
     from django.db.models import F
-    from .rl_views import auto_assign_new_claim
-    from apps.claims.models import Claim
     from apps.policies.models import PolicyApplication
 
-    if not available_employees().exists():
+    if not available_employees():
         return 0, 0
     waiting_requests = PolicyApplication.objects.filter(
         status=PolicyApplication.Status.QUOTED, assigned_to__isnull=True, created_by_id=F('customer_id'),
     ).order_by('created_at')
     requests_assigned = sum(1 for application in waiting_requests if assign_policy_request(application))
-    waiting_claims = Claim.objects.filter(
-        assigned_adjuster__isnull=True, status__in=OPEN_CLAIM_STATUSES,
-    ).order_by('submitted_at')
-    claims_assigned = sum(
-        1 for claim in waiting_claims if auto_assign_new_claim(claim, notify_admins=False)
-    )
-    return requests_assigned, claims_assigned
+    return requests_assigned, 0

@@ -24,7 +24,7 @@ const moduleGroups = [
     links: [
       { label: 'Claim Assessment', to: '/ai-assessment', roles: reviewRoles },
       { label: 'Fraud Alerts', to: '/fraud', roles: reviewRoles },
-      { label: 'Analytics', to: '/analytics', roles: reviewRoles },
+      { label: 'Analytics', to: '/analytics', roles: ['investigator', 'admin'] },
     ],
     secondBadge: 'CLAIM SUPPORT',
     secondLinks: [
@@ -61,7 +61,7 @@ export function Footer() {
       <div className="mx-auto max-w-[1600px] px-4 pb-8 pt-12 sm:px-6 lg:px-8 lg:pt-16">
         <div className="footer-module-grid gap-10 lg:gap-12" style={{ '--footer-group-count': columns.length }}>
           <section className="flex flex-col items-start gap-6">
-            <div className="rounded-3xl bg-white p-7 text-slate-950 shadow-2xl shadow-black/20 sm:max-w-sm">
+            <div className="rounded-3xl bg-white p-7 text-slate-950 shadow-2xl shadow-black/20 dark:bg-slate-800 dark:text-slate-50 sm:max-w-sm">
               <p className="text-2xl font-extrabold leading-tight tracking-tight">{isCustomer ? 'Questions about a claim?' : 'Built around your claims workflow.'}</p>
               <p className="mt-3 text-sm leading-6 text-slate-600">{isCustomer ? 'Our support team can help with policies, claims and documents.' : 'Manage coverage, vehicle details, assessment, and investigation in one workspace.'}</p>
               <Link to="/support" className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">

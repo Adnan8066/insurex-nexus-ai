@@ -222,6 +222,13 @@ class ModelPerformance(models.Model):
 class RoutingAgentProfile(models.Model):
     """Admin-maintained routing capability and availability for a staff user."""
 
+    class Availability(models.TextChoices):
+        AVAILABLE = 'available', _('Available')
+        BUSY = 'busy', _('Busy')
+        ON_LEAVE = 'on_leave', _('On Leave')
+        OFF_DUTY = 'off_duty', _('Off Duty')
+        TEMPORARILY_UNAVAILABLE = 'temporarily_unavailable', _('Temporarily Unavailable')
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -234,6 +241,17 @@ class RoutingAgentProfile(models.Model):
     )
     is_available = models.BooleanField(_('available for routing advice'), default=True)
     is_demo = models.BooleanField(_('demo profile'), default=False)
+    designation = models.CharField(_('designation'), max_length=120, blank=True)
+    years_of_experience = models.PositiveSmallIntegerField(_('years of experience'), default=0)
+    max_claim_capacity = models.PositiveSmallIntegerField(_('maximum active claims'), default=10)
+    availability_status = models.CharField(
+        _('availability status'), max_length=32, choices=Availability.choices,
+        default=Availability.AVAILABLE,
+    )
+    working_days = models.JSONField(_('working days'), default=list, blank=True)
+    shift_start_time = models.TimeField(_('shift start time'), null=True, blank=True)
+    shift_end_time = models.TimeField(_('shift end time'), null=True, blank=True)
+    leave_status = models.CharField(_('leave status'), max_length=120, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -244,6 +262,28 @@ class RoutingAgentProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.email} (tier {self.skill_tier})"
+
+
+class EmployeeSkill(models.Model):
+    class Level(models.TextChoices):
+        BEGINNER = 'beginner', _('Beginner')
+        INTERMEDIATE = 'intermediate', _('Intermediate')
+        ADVANCED = 'advanced', _('Advanced')
+        EXPERT = 'expert', _('Expert')
+
+    profile = models.ForeignKey(RoutingAgentProfile, on_delete=models.CASCADE, related_name='skills')
+    name = models.CharField(_('skill or specialization'), max_length=100)
+    level = models.CharField(_('expertise level'), max_length=20, choices=Level.choices)
+
+    class Meta:
+        db_table = 'employee_skills'
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(fields=['profile', 'name'], name='unique_employee_profile_skill'),
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.get_level_display()})'
 
 
 class RoutingRecommendationReview(models.Model):
