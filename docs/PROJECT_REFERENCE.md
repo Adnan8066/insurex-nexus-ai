@@ -399,7 +399,7 @@ Strongest fraud associations in Fraud Oracle (Cramér's V): PolicyType 0.168, Ba
 
 ### Training pipeline (`python manage.py train_project_models`)
 
-The current artifacts come from this command, trained from `backend/data/`.
+The current artifacts come from this command, which by default trains on the synthetic Indian rupee datasets `backend/data/india/india_insurance_claims.csv` and `india_fraud_oracle.csv` (same column layouts as the US files above). The US-dollar files can still be passed with `--insurance-file` / `--fraud-file`, but those models need `ML_CURRENCY_PER_DATASET_UNIT=83`.
 
 **Preprocessing** (inside each saved pipeline): numeric → median impute + StandardScaler; categorical → most-frequent impute + OneHotEncoder(ignore unknown).
 

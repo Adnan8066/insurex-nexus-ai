@@ -14,13 +14,13 @@ python manage.py migrate
 python manage.py import_project_datasets
 ```
 
-Train the app's models from the same datasets with:
+Train the app's models with:
 
 ```powershell
 python manage.py train_project_models
 ```
 
-This trains fraud detection, repair-cost, and total-loss models from `insurance_claims.csv`, and a separate fraud model from the full `fraud_oracle.csv`. Fraud Oracle has no repair-cost or total-loss target, so it is used for fraud classification only. The Fraud Oracle model uses LightGBM with `scale_pos_weight=3`, sigmoid probability calibration, and a threshold selected on a validation split to maximize precision while meeting at least 75% recall in the 0.05–0.50 threshold range. A separate stratified 20% test split is used once for reported metrics; the final model is then refit on all rows. The report includes the previous-model comparison, confusion matrices, threshold sweep, dataset/target audit, and feature-timing caveat. Curves and confusion matrices are saved to `backend/ml/models/fraud_oracle_evaluation.png`. The selected high-recall threshold increases false alerts; fraud scores are review priorities, never proof of fraud.
+By default this trains on the synthetic Indian datasets in `backend/data/india/` (amounts in rupees, matching `ML_CURRENCY_PER_DATASET_UNIT=1`): fraud detection, repair-cost, and total-loss models from `india_insurance_claims.csv`, and a separate fraud model from `india_fraud_oracle.csv`. To train on the original US-dollar files instead, pass `--insurance-file ../data/insurance_claims.csv --fraud-file ../data/fraud_oracle.csv` and set `ML_CURRENCY_PER_DATASET_UNIT=83`. Fraud Oracle has no repair-cost or total-loss target, so it is used for fraud classification only. The Fraud Oracle model uses LightGBM with `scale_pos_weight=3`, sigmoid probability calibration, and a threshold selected on a validation split to maximize precision while meeting at least 75% recall in the 0.05–0.50 threshold range. A separate stratified 20% test split is used once for reported metrics; the final model is then refit on all rows. The report includes the previous-model comparison, confusion matrices, threshold sweep, dataset/target audit, and feature-timing caveat. Curves and confusion matrices are saved to `backend/ml/models/fraud_oracle_evaluation.png`. The selected high-recall threshold increases false alerts; fraud scores are review priorities, never proof of fraud.
 
 The importer can be rerun safely; it updates the records it previously imported. To validate the CSV headers and row counts without changing the database, run:
 

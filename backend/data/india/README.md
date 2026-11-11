@@ -23,19 +23,18 @@ python generate_india_claims.py --rows 20000 --seed 7
 | `india_fraud_oracle.csv` | `fraud_oracle.csv` | `fraud_oracle_fraud` |
 | `india_vehicle_fraud.csv` | `apps/assessments/vehicle_fraud.py` features + `fraud_outcome` | `vehicle_fraud` |
 
-Training commands (from `backend/django_backend`):
+Training commands (from `backend/django_backend`). `train_project_models` uses these Indian files by default:
 
 ```bash
-python manage.py train_project_models --insurance-file ../data/india/india_insurance_claims.csv --fraud-file ../data/india/india_fraud_oracle.csv
+python manage.py train_project_models
 ```
 
 ```bash
 python manage.py train_vehicle_fraud_model --dataset ../data/india/india_vehicle_fraud.csv
 ```
 
-**Amounts are in rupees.** The app currently divides rupee amounts by 83 before scoring because
-the old models learned dollars. After training on this data, set `ML_CURRENCY_PER_DATASET_UNIT=1`
-or the models will see amounts 83× too small.
+**Amounts are in rupees.** `ML_CURRENCY_PER_DATASET_UNIT` defaults to `1`, which matches models
+trained on this data. Set it to `83` only if you restore models trained on the US-dollar files.
 
 ## What is simulated
 
