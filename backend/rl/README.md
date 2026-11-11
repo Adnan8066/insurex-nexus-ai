@@ -142,24 +142,14 @@ be exercised, and the status page still warns when the candidate is unqualified.
 The gate compares PPO with the least-workload heuristic on held-out mean reward,
 wait, imbalance, and mismatch metrics.
 
-## Automatic claim assignment
+## Human approved claim assignment
 
-The RL model is the only automatic claim router; there is no formula
-fallback. New claim intake calls `auto_assign_new_claim` after the claim is
-saved. It assigns only when `CLAIM_ROUTING_AUTO_ASSIGN_ENABLED` is true (the
-default) and the deployed model's adjacent `.evaluation.json` passes the
-evaluation gate. Candidates are all active, available, non-demo employees
-whose skill tier meets the claim's required tier; employees without a routing
-profile count as tier 3. Teams larger than ten are compared in groups of ten
-and the group winners compete until one remains.
-
-When the claim cannot be routed (routing off, gate not passed, model load
-failure, nobody available, or nobody skilled enough) it stays unassigned and
-admins get a notification naming the reason. Waiting claims are retried when
-an employee is created, or on demand with
-`python manage.py assign_waiting_claims` (for example after deploying a newly
-qualified model). Successful assignments are recorded in the claim timeline.
-
+New claims remain unassigned until a staff member assigns them. RL
+recommendations are advisory and do not change a claim or assignment; claim
+intake notifies administrators that a human assignment is needed. Employee
+assignment eligibility excludes inactive, unavailable, off-shift, and
+at-capacity employees. Employees without a routing profile use the documented
+defaults (skill tier 3 and capacity 10).
 ## Checks
 
 From the `backend` directory:

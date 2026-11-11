@@ -1086,3 +1086,82 @@ p { text-align: left; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* A consistent navy slate palette for every surface when dark mode is active. */
+html.dark {
+  --color-bg-primary: #0b1220;
+  --color-bg-secondary: #111c2e;
+  --color-bg-tertiary: #172438;
+  --color-bg-hover: #22334c;
+  --color-text-primary: #f1f5fb;
+  --color-text-secondary: #c3d0e1;
+  --color-text-muted: #91a2ba;
+  --color-border-light: #293a52;
+  --color-border-medium: #3b506b;
+  --color-border-dark: #526a87;
+  background: var(--color-bg-primary);
+}
+
+html.dark body,
+html.dark #root,
+html.dark main[role='main'] { background-color: var(--color-bg-primary); }
+
+html.dark header[role='banner'] {
+  color: var(--color-text-primary);
+  background-color: rgb(15 25 42 / 96%);
+  border-color: var(--color-border-light);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+html.dark header[role='banner'] .border-slate-100,
+html.dark header[role='banner'] .border-slate-200\/80,
+html.dark header[role='banner'] .border-slate-200 { border-color: var(--color-border-light); }
+
+html.dark .module-nav-track {
+  background: #111c2e;
+  border-color: #293a52;
+}
+
+html.dark .module-nav-link { background-color: #172438; color: #c3d0e1; }
+html.dark .module-nav-link:hover { background-color: #22334c; color: #f8fafc; }
+html.dark .module-nav-link.is-active { background: transparent; color: #fff; }
+
+html.dark [class~='bg-slate-50'],
+html.dark [class~='bg-slate-100'] { background-color: #111c2e; }
+html.dark [class~='bg-slate-200'] { background-color: #22334c; }
+html.dark [class~='bg-slate-800'] { background-color: #172438; }
+html.dark [class~='bg-slate-900'],
+html.dark [class~='bg-slate-950'] { background-color: #0b1220; }
+
+html.dark [class~='text-slate-950'],
+html.dark [class~='text-slate-900'],
+html.dark [class~='text-slate-800'],
+html.dark [class~='text-slate-700'] { color: #f1f5fb; }
+html.dark [class~='text-slate-600'],
+html.dark [class~='text-slate-500'] { color: #c3d0e1; }
+html.dark [class~='text-slate-400'] { color: #91a2ba; }
+
+html.dark [class~='border-slate-100'],
+html.dark [class~='border-slate-200'],
+html.dark [class~='border-slate-300'],
+html.dark [class~='divide-slate-100'] > :not([hidden]) ~ :not([hidden]),
+html.dark [class~='divide-slate-200'] > :not([hidden]) ~ :not([hidden]) { border-color: #293a52; }
+
+html.dark [class~='hover:bg-slate-50']:hover,
+html.dark [class~='hover:bg-slate-100']:hover,
+html.dark [class~='hover:bg-white/80']:hover { background-color: #22334c; }
+
+html.dark input,
+html.dark textarea,
+html.dark select {
+  border-color: #3b506b;
+  background-color: #111c2e;
+  color: #f1f5fb;
+  color-scheme: dark;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder { color: #91a2ba; }
+html.dark table thead { background-color: #172438; }
+html.dark table tbody tr:hover { background-color: rgb(34 51 76 / 45%); }
+html.dark hr { border-color: #293a52; }

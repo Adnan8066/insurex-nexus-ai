@@ -59,12 +59,14 @@ const navItems = [
       { label: 'Claim assessment', to: '/ai-assessment', hint: 'Repair cost, fraud and total-loss estimates', roles: STAFF_ROLES },
     ],
   },
-  { label: 'Analytics', to: '/analytics', Icon: BarChart3, roles: ['employee', 'investigator'] },
+  { label: 'Analytics', to: '/analytics', Icon: BarChart3, roles: ['investigator'] },
   { label: 'Help & Support', to: '/support', Icon: Headphones, roles: ['customer'] },
 ]
 
 // Housekeeping pages live in the user menu rather than the main navigation.
 const accountItems = [
+  { label: 'Employee Profile', to: '/my-profile', Icon: User, roles: ['employee'] },
+  { label: 'Employee Workforce', to: '/employees', Icon: Users, roles: ['admin'] },
   { label: 'User management', to: '/admin/users', Icon: Users, roles: ['admin'] },
   { label: 'Model health', to: '/operations', Icon: Cpu, roles: STAFF_ROLES },
 ]
