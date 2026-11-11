@@ -11,7 +11,7 @@ from django.utils import timezone
 from apps.accounts.models import Role
 
 from django.shortcuts import get_object_or_404
-from .models import Claim, ClaimDocument, ClaimStatusHistory, ClaimTimeline, ClaimNote, ClaimStatus
+from .models import Claim, ClaimDocument, ClaimStatusHistory, ClaimTimeline, ClaimNote, ClaimStatus, ClaimAssignmentConfig, ClaimAssignmentEvent
 from .serializers import (
     ClaimSerializer, ClaimCreateSerializer, ClaimUpdateSerializer,
     ClaimStatusUpdateSerializer, ClaimDocumentSerializer,
@@ -55,8 +55,10 @@ class ClaimViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role in [Role.ADMIN, Role.EMPLOYEE]:
+        if user.role == Role.ADMIN:
             return self.queryset
+        if user.role == Role.EMPLOYEE:
+            return self.queryset.filter(assigned_adjuster=user)
         if user.role == Role.INVESTIGATOR:
             return self.queryset.filter(assigned_investigator=user)
         if user.role == Role.CUSTOMER:
@@ -70,8 +72,11 @@ class ClaimViewSet(viewsets.ModelViewSet):
             # Customers (own claims, enforced by get_queryset), employees and admins.
             # Investigators work claims through the investigations API.
             return [IsAuthenticated(), CanIssuePolicy()]
-        elif self.action in ['update_status', 'assign_adjuster', 'assign_investigator']:
+        elif self.action in ['update_status', 'assign_investigator']:
             return [IsAuthenticated(), IsEmployee()]
+        elif self.action in ['assign_adjuster', 'unassign_adjuster', 'assignment_dashboard', 'retry_pending_assignments']:
+            from common.permissions import IsAdmin
+            return [IsAuthenticated(), IsAdmin()]
         elif self.action in ['submit_assessment', 'set_fraud_outcome']:
             return [IsAuthenticated(), IsStaffMember()]
         return [IsAuthenticated()]
@@ -148,13 +153,12 @@ class ClaimViewSet(viewsets.ModelViewSet):
             run_claim_assessment(claim)
         except Exception:
             logger.exception('Automatic AI assessment failed for claim %s', claim.claim_number)
-        # RL stays advisory; claims wait for an explicit staff assignment.
         try:
-            from apps.assessments.rl_views import auto_assign_new_claim
-            auto_assign_new_claim(claim)
+            from .assignment import auto_assign_claim
+            auto_assign_claim(claim.pk)
         except Exception:
-            # A routing/model outage must never roll back a customer's claim.
-            logger.exception('Claim assignment notification failed for claim %s', claim.claim_number)
+            logger.exception('Automatic claim assignment failed for claim %s', claim.claim_number)
+        serializer.instance.refresh_from_db()
     
     @action(detail=True, methods=['get', 'post'], url_path='documents')
     def documents(self, request, pk=None):
@@ -237,6 +241,9 @@ class ClaimViewSet(viewsets.ModelViewSet):
                     is_system=False
                 )
 
+            from .assignment import retry_pending_assignments_safely
+            transaction.on_commit(retry_pending_assignments_safely)
+
             if claim.customer_id != request.user.id:
                 from apps.notifications.services import create_in_app_notification
                 create_in_app_notification(
@@ -251,32 +258,67 @@ class ClaimViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], url_path='assign-adjuster')
     def assign_adjuster(self, request, pk=None):
-        claim = self.get_object()
         adjuster_id = request.data.get('adjuster_id')
         if not adjuster_id:
             return Response({'error': 'adjuster_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         adjuster_id = parse_int(adjuster_id, 'adjuster_id')
-        
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
+        reason = str(request.data.get('reason', '')).strip()
+        if not reason:
+            return Response({'error': 'A reason is required for an administrative assignment override.'}, status=status.HTTP_400_BAD_REQUEST)
+        from .assignment import override_assignment
         try:
-            adjuster = User.objects.get(id=adjuster_id, role__in=['employee', 'admin'])
-        except User.DoesNotExist:
-            return Response({'error': 'Invalid adjuster'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        claim.assigned_adjuster = adjuster
-        claim.save(update_fields=['assigned_adjuster'])
-        
-        ClaimTimeline.objects.create(
-            claim=claim,
-            status=claim.status,
-            title='Adjuster Assigned',
-            description=f'Claim assigned to {adjuster.get_full_name() or adjuster.email}',
-            user=request.user
-        )
-        
+            claim = override_assignment(self.get_object().pk, adjuster_id, request.user, reason)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         serializer = self.get_serializer(claim)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='unassign-adjuster')
+    def unassign_adjuster(self, request, pk=None):
+        reason = str(request.data.get('reason', '')).strip()
+        if not reason:
+            return Response({'error': 'A reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        from .assignment import unassign_claim
+        claim = unassign_claim(self.get_object().pk, request.user, reason)
+        return Response(self.get_serializer(claim).data)
+
+    @action(detail=False, methods=['get', 'patch'], url_path='assignment-dashboard')
+    def assignment_dashboard(self, request):
+        from django.db.models import Count
+        config, _ = ClaimAssignmentConfig.objects.get_or_create(pk=1)
+        if request.method == 'PATCH':
+            for key in ('enabled', 'prefer_qualified_ppo'):
+                if key in request.data and not isinstance(request.data[key], bool):
+                    return Response({key: 'Expected true or false.'}, status=status.HTTP_400_BAD_REQUEST)
+            if 'enabled' in request.data:
+                config.enabled = request.data['enabled']
+            if 'prefer_qualified_ppo' in request.data:
+                config.prefer_qualified_ppo = request.data['prefer_qualified_ppo']
+            config.save()
+        from .assignment import _ppo_gate
+        qualified, model_version = _ppo_gate()
+        event_qs = ClaimAssignmentEvent.objects.select_related('claim', 'employee', 'actor')
+        events = [{'id': e.pk, 'claim_id': e.claim_id, 'claim_number': e.claim.claim_number, 'employee_id': e.employee_id,
+                   'employee_name': e.employee.get_full_name() if e.employee else None, 'actor_name': e.actor.get_full_name() if e.actor else None,
+                   'event_type': e.event_type, 'strategy': e.strategy, 'model_version': e.model_version,
+                   'reason': e.reason, 'created_at': e.created_at, 'eligibility_snapshot': e.eligibility_snapshot}
+                  for e in event_qs[:30]]
+        employees = Claim.objects.filter(assigned_adjuster__isnull=False).values(
+            'assigned_adjuster_id', 'assigned_adjuster__first_name', 'assigned_adjuster__last_name').annotate(
+                total_assignments=Count('id'), workload=Count('id', filter=Q(status__in=['submitted', 'under_review', 'ai_assessment', 'investigation']))
+            ).order_by('-workload')
+        return Response({'enabled': config.enabled, 'prefer_qualified_ppo': config.prefer_qualified_ppo,
+            'ppo_qualified': qualified, 'ppo_model_version': model_version or None,
+            'automatically_assigned': ClaimAssignmentEvent.objects.filter(event_type__in=['assigned', 'reassigned'], strategy__in=['ppo', 'expertise_least_workload']).count(),
+            'pending_unassigned': Claim.objects.filter(assigned_adjuster__isnull=True, assignment_status='pending', status__in=['submitted', 'under_review', 'ai_assessment', 'investigation']).count(),
+            'failed_attempts': ClaimAssignmentEvent.objects.filter(event_type__in=['failed', 'pending']).count(),
+            'strategy_distribution': list(ClaimAssignmentEvent.objects.filter(event_type__in=['assigned', 'reassigned']).values('strategy').annotate(count=Count('id'))),
+            'employees': list(employees), 'history': events})
+
+    @action(detail=False, methods=['post'], url_path='retry-pending-assignments')
+    def retry_pending_assignments(self, request):
+        from .assignment import retry_pending_assignments
+        return Response(retry_pending_assignments())
     
     @action(detail=True, methods=['post'], url_path='assign-investigator')
     def assign_investigator(self, request, pk=None):

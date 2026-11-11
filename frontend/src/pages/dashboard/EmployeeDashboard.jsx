@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Shield,
   ArrowRight,
-  Brain,
   RefreshCw,
   Download,
   Calendar,
@@ -59,6 +58,7 @@ const mapClaim = (c) => ({
   priority: String(c.priority || c.ai_assessment?.claim_priority || '').toLowerCase(),
   submittedAt: c.submitted_at,
   assignedAdjuster: c.assigned_adjuster_name,
+  assignmentUpdatedAt: c.assignment_updated_at,
   fraudRiskScore: Number(c.fraud_risk_score) || 0,
   riskLevel: fraudRiskLevel(c.fraud_risk_score),
   totalLossProbability: Number(c.total_loss_probability ?? c.ai_assessment?.total_loss_probability) || 0,
@@ -250,12 +250,6 @@ export function EmployeeDashboard() {
     },
   ]
 
-  const quickActions = [
-    { label: 'Review Claims', href: '/claims', icon: Briefcase, color: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
-    { label: 'Fraud Alerts', href: '/fraud', icon: AlertTriangle, color: 'bg-red-50 text-red-600 hover:bg-red-100' },
-    { label: 'Claim Assessment', href: '/ai-assessment', icon: Brain, color: 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' },
-  ]
-
   if (loading) {
     return <DashboardSkeleton />
   }
@@ -351,6 +345,7 @@ export function EmployeeDashboard() {
                         <TableHead>Status</TableHead>
                         <TableHead>Priority</TableHead>
                         <TableHead>Assigned</TableHead>
+                        <TableHead>Assigned At</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -369,6 +364,7 @@ export function EmployeeDashboard() {
                             ) : '—'}
                           </TableCell>
                           <TableCell className="text-sm text-gray-600">{claim.assignedAdjuster || 'Unassigned'}</TableCell>
+                          <TableCell className="text-sm text-gray-600">{claim.assignmentUpdatedAt ? format(new Date(claim.assignmentUpdatedAt), 'dd MMM yyyy, h:mm a') : '—'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -432,18 +428,6 @@ export function EmployeeDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {quickActions.map((action) => (
-          <Link key={action.label} to={action.href} className="card group">
-            <CardContent className="p-6 flex flex-col items-center text-center">
-              <div className={clsx('w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-colors', action.color)}>
-                <action.icon className="w-7 h-7" aria-hidden="true" />
-              </div>
-              <h3 className="font-semibold text-gray-900 group-hover:text-primary transition-colors">{action.label}</h3>
-            </CardContent>
-          </Link>
-        ))}
-      </div>
     </div>
   )
 }

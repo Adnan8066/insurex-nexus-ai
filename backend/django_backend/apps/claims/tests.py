@@ -73,6 +73,17 @@ class ClaimTestBase(APITestCase):
 
 
 class ClaimWorkflowTests(ClaimTestBase):
+    def test_employee_can_only_list_and_open_claims_assigned_to_them(self):
+        assigned = self.make_claim(assigned_adjuster=self.employee)
+        other = self.make_claim()
+        client = self.as_user(self.employee)
+        response = client.get('/api/v1/claims/')
+        self.assertEqual(response.status_code, 200)
+        results = response.json().get('results', response.json())
+        self.assertEqual([item['id'] for item in results], [assigned.pk])
+        self.assertEqual(client.get(f'/api/v1/claims/{assigned.pk}/').status_code, 200)
+        self.assertEqual(client.get(f'/api/v1/claims/{other.pk}/').status_code, 404)
+
     def test_customer_cannot_change_status_via_status_action(self):
         claim = self.make_claim()
         for new_status in ('approved', 'closed'):
@@ -169,7 +180,7 @@ class ClaimInputValidationTests(ClaimTestBase):
 
     def test_malformed_ids_return_400_not_500(self):
         claim = self.make_claim()
-        client = self.as_user(self.employee)
+        client = self.as_user(self.admin)
         self.assertEqual(client.post(f'/api/v1/claims/{claim.pk}/assign-adjuster/', {'adjuster_id': 'abc'}, format='json').status_code, 400)
         self.assertEqual(client.post(f'/api/v1/claims/{claim.pk}/assign-investigator/', {'investigator_id': 'abc'}, format='json').status_code, 400)
         self.assertEqual(client.post('/api/v1/ai/detect-fraud/', {'claim_id': 'abc'}, format='json').status_code, 400)
@@ -369,7 +380,7 @@ class ClaimAutoAssignmentTests(ClaimTestBase):
         self.assertEqual(response.status_code, 201, response.content)
         return Claim.objects.get(claim_number=response.json()['claim_number'])
 
-    def test_new_claim_waits_for_human_assignment_even_when_rl_gate_passes(self):
+    def test_new_claim_without_eligible_employee_stays_pending_even_when_rl_gate_passes(self):
         from apps.notifications.models import Notification
         newest = get_user_model().objects.create_user(username='idle', email='idle@example.com', password='x', role='employee')
         gate, engine = self.route_with(self.FakeEngine())
@@ -377,17 +388,17 @@ class ClaimAutoAssignmentTests(ClaimTestBase):
             claim = self.post_claim()
         self.assertIsNone(claim.assigned_adjuster)
         alert = Notification.objects.get(recipient=self.admin, title='Claim waiting for employee assignment')
-        self.assertIn('human review', alert.message)
+        self.assertIn('No active employee', alert.message)
         self.assertFalse(Notification.objects.filter(recipient=newest, title='New claim assigned to you').exists())
 
-    def test_claim_intake_notifies_admins_for_human_assignment(self):
+    def test_claim_intake_notifies_admins_when_no_employee_is_eligible(self):
         from apps.notifications.models import Notification
         gate, engine = self.route_with(self.FakeEngine(), gate_passed=False)
         with gate, engine:
             claim = self.post_claim()
         self.assertIsNone(claim.assigned_adjuster)
         alert = Notification.objects.get(recipient=self.admin, title='Claim waiting for employee assignment')
-        self.assertIn('human review', alert.message)
+        self.assertIn('No active employee', alert.message)
 
     def test_claim_intake_does_not_use_rl_even_if_no_suitable_employee_exists(self):
         from apps.assessments.models import RoutingAgentProfile
@@ -398,9 +409,9 @@ class ClaimAutoAssignmentTests(ClaimTestBase):
             claim = self.post_claim(incident_severity='total_loss')
         self.assertIsNone(claim.assigned_adjuster)
         alert = Notification.objects.get(recipient=self.admin, title='Claim waiting for employee assignment')
-        self.assertIn('human review', alert.message)
+        self.assertIn('No active employee', alert.message)
 
-    def test_claim_intake_does_not_score_or_assign_employees_automatically(self):
+    def test_claim_intake_keeps_unqualified_employees_out_of_assignment(self):
         User = get_user_model()
         [User.objects.create_user(username=f'h{i}', email=f'h{i}@example.com', password='x', role='employee')
                  for i in range(11)]
@@ -412,13 +423,13 @@ class ClaimAutoAssignmentTests(ClaimTestBase):
         self.assertEqual(fake.group_sizes, [])
 
     def test_waiting_claim_stays_unassigned_when_work_is_retried(self):
-        from apps.assessments.assignment import assign_waiting_work
+        from apps.claims.assignment import retry_pending_assignments
         gate, engine = self.route_with(self.FakeEngine(), gate_passed=False)
         with gate, engine:
             claim = self.post_claim()
         self.assertIsNone(claim.assigned_adjuster)
         gate, engine = self.route_with(self.FakeEngine())
         with gate, engine:
-            self.assertEqual(assign_waiting_work(), (0, 0))
+            self.assertEqual(retry_pending_assignments(), {'attempted': 1, 'assigned': 0})
         claim.refresh_from_db()
         self.assertIsNone(claim.assigned_adjuster)

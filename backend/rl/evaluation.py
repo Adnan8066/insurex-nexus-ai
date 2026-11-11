@@ -55,6 +55,7 @@ def _least_workload_action(
         for i in range(env.n_agents)
         if env.available[i]
         and env.skill_tiers[i] >= env.required_skill_tier
+        and env.agent_experience[i] >= env._get_info()["required_experience_years"]
     ]
     candidates = eligible or [
         i for i in range(env.n_agents) if env.available[i]
@@ -115,6 +116,7 @@ def _reward_aware_action(
         workload_std = float(np.std(next_workloads))
         mismatch = (
             env.required_skill_tier > int(env.skill_tiers[agent])
+            or env.agent_experience[agent] < env._get_info()["required_experience_years"]
         )
 
         normalized_wait = wait / (

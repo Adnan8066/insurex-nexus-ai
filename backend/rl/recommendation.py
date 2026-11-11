@@ -29,6 +29,12 @@ def required_skill_tier(severity_score: float) -> int:
     return min(MAX_SKILL_TIER, max(1, int(math.ceil(severity_score * MAX_SKILL_TIER))))
 
 
+def required_experience_years(claim: Mapping[str, float]) -> int:
+    """Synthetic experience threshold for claim complexity, capped at ten years."""
+    difficulty = max(claim['complexity_score'], claim['processing_difficulty'])
+    return min(10, int(math.ceil(difficulty * 10)))
+
+
 class RecommendationInputError(ValueError):
     """Raised when claim or agent data cannot be safely scored."""
 
@@ -166,7 +172,14 @@ class ClaimRecommendationEngine:
             "after natural service progress and this simulated assignment."
         )
         if not recommended_option["skill_match"]:
-            summary += " Skill tier does not match claim severity; human authorization review is required."
+            if not recommended_option['skill_tier_match']:
+                summary += " Skill tier does not match claim severity."
+            if not recommended_option['experience_match']:
+                summary += (
+                    f" Experience is below the synthetic {recommended_option['required_experience_years']}-year "
+                    "reference for this claim."
+                )
+            summary += " Human review is required."
 
         return {
             "advisory_only": True,
@@ -186,7 +199,7 @@ class ClaimRecommendationEngine:
             "ranked_options": options,
             "deterministic_model_action_index": deterministic_action,
             "model_version": self.model_version,
-            "observation_version": "claim-routing-v1",
+            "observation_version": "claim-routing-v2-experience-fit",
         }
 
     @staticmethod
@@ -251,6 +264,30 @@ class ClaimRecommendationEngine:
             available = raw.get("available", True)
             if not isinstance(available, bool):
                 raise RecommendationInputError(f"Agent {identifier} available must be a boolean.")
+            try:
+                experience = float(raw.get('years_of_experience', 0))
+            except (TypeError, ValueError) as exc:
+                raise RecommendationInputError(
+                    f"Agent {identifier} years_of_experience must be an integer from 0 to 60."
+                ) from exc
+            if not math.isfinite(experience) or not experience.is_integer() or not 0 <= experience <= 60:
+                raise RecommendationInputError(
+                    f"Agent {identifier} years_of_experience must be an integer from 0 to 60."
+                )
+            capacity = raw.get('max_claim_capacity')
+            if capacity is not None:
+                try:
+                    capacity_value = float(capacity)
+                except (TypeError, ValueError) as exc:
+                    raise RecommendationInputError(f"Agent {identifier} max_claim_capacity must be positive.") from exc
+                if not math.isfinite(capacity_value) or not capacity_value.is_integer() or capacity_value < 1:
+                    raise RecommendationInputError(f"Agent {identifier} max_claim_capacity must be positive.")
+                capacity = int(capacity_value)
+            shift_status = raw.get('current_shift_status', 'not_configured')
+            if shift_status not in {'on_shift', 'off_shift', 'not_configured'}:
+                raise RecommendationInputError(f"Agent {identifier} current_shift_status is invalid.")
+            available = available and shift_status != 'off_shift'
+            available = available and (capacity is None or queue_length < capacity)
             agents.append(
                 {
                     "index": index,
@@ -258,6 +295,9 @@ class ClaimRecommendationEngine:
                     "queue_length": queue_length,
                     "workload": workload,
                     "skill_tier": int(tier_raw),
+                    "years_of_experience": int(experience),
+                    "max_claim_capacity": capacity,
+                    "current_shift_status": shift_status,
                     "available": available,
                 }
             )
@@ -274,12 +314,15 @@ class ClaimRecommendationEngine:
             claim["processing_difficulty"],
         ]
         required_tier = required_skill_tier(claim["severity_score"])
+        required_experience = required_experience_years(claim)
         for agent in agents:
             offset = 3 + int(agent["index"]) * 4
+            skill_match = int(agent['skill_tier']) >= required_tier
+            experience_match = int(agent['years_of_experience']) >= required_experience
             observation[offset : offset + 4] = [
                 min(float(agent["queue_length"]) / MAX_QUEUE_LENGTH, 1.0),
                 min(float(agent["workload"]) / MAX_WORKLOAD, 1.0),
-                float(int(agent["skill_tier"]) >= required_tier),
+                float(skill_match and experience_match),
                 float(agent["available"]),
             ]
         for index in range(len(agents), MAX_AGENTS):
@@ -310,7 +353,10 @@ class ClaimRecommendationEngine:
         rank: int,
     ) -> dict[str, Any]:
         required_tier = required_skill_tier(claim["severity_score"])
-        skill_match = int(agent["skill_tier"]) >= required_tier
+        required_experience = required_experience_years(claim)
+        skill_tier_match = int(agent["skill_tier"]) >= required_tier
+        experience_match = int(agent['years_of_experience']) >= required_experience
+        skill_match = skill_tier_match and experience_match
         decayed_workload = max(
             0.0, float(agent["workload"]) - SERVICE_CAPACITY_PER_STEP
         )
@@ -331,6 +377,12 @@ class ClaimRecommendationEngine:
             "skill_tier": int(agent["skill_tier"]),
             "required_skill_tier": required_tier,
             "skill_match": skill_match,
+            "skill_tier_match": skill_tier_match,
+            "years_of_experience": int(agent['years_of_experience']),
+            "required_experience_years": required_experience,
+            "experience_match": experience_match,
+            "max_claim_capacity": agent['max_claim_capacity'],
+            "current_shift_status": agent['current_shift_status'],
             "estimated_workload_before": round(float(agent["workload"]), 2),
             "estimated_workload_after_assignment": round(post_assignment_workload, 2),
         }

@@ -83,6 +83,8 @@ class Claim(models.Model):
         blank=True,
         related_name='assigned_claims'
     )
+    assignment_status = models.CharField(_('assignment status'), max_length=20, default='pending')
+    assignment_updated_at = models.DateTimeField(_('assignment updated at'), null=True, blank=True)
     assigned_investigator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -123,6 +125,33 @@ class Claim(models.Model):
     
     def __str__(self):
         return f"{self.claim_number} - {self.customer.get_full_name() or self.customer.email}"
+
+
+class ClaimAssignmentConfig(models.Model):
+    enabled = models.BooleanField(default=True)
+    prefer_qualified_ppo = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'claim_assignment_config'
+
+
+class ClaimAssignmentEvent(models.Model):
+    EVENT_CHOICES = [('assigned', 'Assigned'), ('reassigned', 'Reassigned'), ('unassigned', 'Unassigned'), ('pending', 'Pending'), ('failed', 'Failed')]
+    STRATEGY_CHOICES = [('ppo', 'Qualified PPO'), ('expertise_least_workload', 'Expertise-aware least workload'), ('manual', 'Manual override')]
+    claim = models.ForeignKey(Claim, on_delete=models.CASCADE, related_name='assignment_events')
+    employee = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='claim_assignment_events')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='claim_assignment_actions')
+    event_type = models.CharField(max_length=20, choices=EVENT_CHOICES)
+    strategy = models.CharField(max_length=40, choices=STRATEGY_CHOICES, default='expertise_least_workload')
+    model_version = models.CharField(max_length=100, blank=True)
+    reason = models.TextField(blank=True)
+    eligibility_snapshot = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'claim_assignment_events'
+        ordering = ['-created_at']
 
 class ClaimDocument(models.Model):
     DOCUMENT_TYPES = [

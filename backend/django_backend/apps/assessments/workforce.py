@@ -49,6 +49,7 @@ class EmployeeProfileUpdateSerializer(serializers.ModelSerializer):
         model = RoutingAgentProfile
         fields = [
             'first_name', 'last_name', 'department', 'is_active', 'designation',
+            'primary_specialization', 'secondary_specialization',
             'years_of_experience', 'max_claim_capacity', 'skill_tier',
             'availability_status', 'working_days', 'shift_start_time', 'shift_end_time',
             'leave_status', 'is_demo', 'skills',
@@ -110,6 +111,7 @@ class EmployeeProfileUpdateSerializer(serializers.ModelSerializer):
             EmployeeSkill.objects.bulk_create([
                 EmployeeSkill(profile=instance, **skill) for skill in skills
             ])
+        transaction.on_commit(lambda: __import__('apps.claims.assignment', fromlist=['retry_pending_assignments_safely']).retry_pending_assignments_safely())
         return instance
 
 
@@ -152,6 +154,8 @@ def _employee_data(user):
         'email': user.email,
         'department': user.department,
         'designation': profile.designation,
+        'primary_specialization': profile.primary_specialization,
+        'secondary_specialization': profile.secondary_specialization,
         'role': user.role,
         'years_of_experience': profile.years_of_experience,
         'employment_status': 'active' if user.is_active else 'inactive',
@@ -228,6 +232,7 @@ class EmployeeProfileView(APIView):
                     EmployeeSkill(profile=profile, name=skill['name'].strip(), level=skill['level'])
                     for skill in skills
                 ])
+                transaction.on_commit(lambda: __import__('apps.claims.assignment', fromlist=['retry_pending_assignments_safely']).retry_pending_assignments_safely())
             return Response(_employee_data(user))
         serializer = EmployeeProfileUpdateSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)

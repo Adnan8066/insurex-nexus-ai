@@ -10,9 +10,9 @@ const initialClaim = {
 }
 
 const initialAgents = [
-  { id: 'agent-1', queue_length: 2, workload: 12, skill_tier: 4, available: true },
-  { id: 'agent-2', queue_length: 1, workload: 8, skill_tier: 3, available: true },
-  { id: 'agent-3', queue_length: 4, workload: 18, skill_tier: 5, available: true },
+  { id: 'agent-1', queue_length: 2, workload: 12, skill_tier: 4, years_of_experience: 4, max_claim_capacity: 10, current_shift_status: 'on_shift', available: true },
+  { id: 'agent-2', queue_length: 1, workload: 8, skill_tier: 3, years_of_experience: 2, max_claim_capacity: 10, current_shift_status: 'on_shift', available: true },
+  { id: 'agent-3', queue_length: 4, workload: 18, skill_tier: 5, years_of_experience: 10, max_claim_capacity: 10, current_shift_status: 'on_shift', available: true },
 ]
 
 const claimFields = [
@@ -142,7 +142,7 @@ export function RoutingAdvisory() {
           </span>
         </div>
         <h1 className="page-title">Suggest Adjuster</h1>
-        <p className="page-subtitle">See which agent is best placed to handle a claim, based on skills and current workload.</p>
+        <p className="page-subtitle">Compare eligible staff using live workload, experience, skill fit, and shift availability.</p>
       </header>
 
       <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
@@ -206,10 +206,10 @@ export function RoutingAdvisory() {
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {liveAgents.map((agent) => <label key={agent.id} className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={selectedLiveAgentIds.includes(agent.id)} onChange={(event) => setSelectedLiveAgentIds((current) => event.target.checked ? [...current, agent.id] : current.filter((id) => id !== agent.id))} />
-                {agent.name}{agent.is_demo && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">Demo</span>} · queue {agent.queue_length} · tier {agent.skill_tier}{agent.available ? '' : ' · unavailable'}
+                {agent.name}{agent.is_demo && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">Demo</span>} · {agent.years_of_experience} yrs · queue {agent.queue_length}/{agent.max_claim_capacity} · {String(agent.current_shift_status || 'not_configured').replaceAll('_', ' ')}{agent.shift_start_time && agent.shift_end_time ? ` (${agent.shift_start_time}–${agent.shift_end_time})` : ''}{agent.available ? '' : ' · unavailable'}
               </label>)}
             </div>
-            <button className="btn btn-secondary mt-3" type="button" onClick={useLiveRoster} disabled={selectedLiveAgentIds.length < 3 || selectedLiveAgentIds.length > 5}>
+            <button className="btn btn-secondary mt-3" type="button" onClick={useLiveRoster} disabled={selectedLiveAgentIds.length < 1 || selectedLiveAgentIds.length > 10}>
               <Users className="h-4 w-4" /><span>Use selected staff ({selectedLiveAgentIds.length})</span>
             </button>
           </div>}
@@ -226,6 +226,9 @@ export function RoutingAdvisory() {
                   </label>
                   <label className="text-sm font-medium text-gray-700">Skill tier (1–5)
                     <input className="input-field mt-1" type="number" min="1" max="5" step="1" required value={agent.skill_tier} onChange={(event) => updateAgent(index, 'skill_tier', event.target.value)} />
+                  </label>
+                  <label className="text-sm font-medium text-gray-700">Years of experience
+                    <input className="input-field mt-1" type="number" min="0" max="60" step="1" required value={agent.years_of_experience ?? 0} onChange={(event) => updateAgent(index, 'years_of_experience', event.target.value)} />
                   </label>
                   <label className="flex items-center gap-2 self-end pb-3 text-sm font-medium text-gray-700">
                     <input type="checkbox" checked={agent.available} onChange={(event) => updateAgent(index, 'available', event.target.checked)} /> Available
@@ -258,11 +261,11 @@ export function RoutingAdvisory() {
           {result.ranked_options?.length > 0 && (
             <div className="mt-5 overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
-                <thead><tr className="text-xs uppercase text-gray-500"><th className="px-3 py-2">Rank</th><th className="px-3 py-2">Agent</th><th className="px-3 py-2">Relative match</th><th className="px-3 py-2">Wait</th><th className="px-3 py-2">Skill</th><th className="px-3 py-2">Workload after</th></tr></thead>
+                <thead><tr className="text-xs uppercase text-gray-500"><th className="px-3 py-2">Rank</th><th className="px-3 py-2">Agent</th><th className="px-3 py-2">Relative match</th><th className="px-3 py-2">Wait</th><th className="px-3 py-2">Skill tier</th><th className="px-3 py-2">Experience</th><th className="px-3 py-2">Workload after</th></tr></thead>
                 <tbody className="divide-y divide-gray-200">
                   {result.ranked_options.map((option) => (
                     <tr key={option.agent_id} className="text-gray-700">
-                      <td className="px-3 py-3">{option.rank}</td><td className="px-3 py-3 font-semibold">{agentDisplayName(option.agent_id)}</td><td className="px-3 py-3">{option.match_percentage}%</td><td className="px-3 py-3">{option.predicted_wait_time}</td><td className="px-3 py-3">{option.skill_match ? 'Match' : 'Review tier'}</td><td className="px-3 py-3">{option.estimated_workload_after_assignment}</td>
+                      <td className="px-3 py-3">{option.rank}</td><td className="px-3 py-3 font-semibold">{agentDisplayName(option.agent_id)}</td><td className="px-3 py-3">{option.match_percentage}%</td><td className="px-3 py-3">{option.predicted_wait_time}</td><td className="px-3 py-3">{option.skill_tier_match ? `Tier ${option.skill_tier}` : 'Tier mismatch'}</td><td className="px-3 py-3">{option.years_of_experience} / {option.required_experience_years} yrs {option.experience_match ? '✓' : '· review'}</td><td className="px-3 py-3">{option.estimated_workload_after_assignment}</td>
                     </tr>
                   ))}
                 </tbody>

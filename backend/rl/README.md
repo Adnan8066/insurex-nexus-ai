@@ -22,7 +22,7 @@ only a minimal backend environment, install those two packages separately.
 Run it from the `backend` directory:
 
 ```powershell
-python -m rl.training --timesteps 50000 --evaluation-steps 100 --evaluation-seeds 10 --seed 123 --dataset-path rl/data/synthetic_claim_routing_transitions.csv
+python -m rl.training --timesteps 50000 --evaluation-steps 100 --evaluation-seeds 10 --seed 123 --dataset-path rl/data/synthetic_claim_routing_expert_transitions.csv
 ```
 
 Training first warm-starts the PPO actor by behavior-cloning the action choices
@@ -37,6 +37,18 @@ from the least-workload expert policy:
 ```powershell
 python -m rl.generate_dataset --episodes 200 --steps 100 --seed 2026 --policy least_workload
 ```
+
+For experience-aware routing, generate the version-2 expert data used by the
+trainer:
+
+```powershell
+python -m rl.generate_dataset --episodes 200 --steps 100 --seed 2026 --policy least_workload --output rl/data/synthetic_claim_routing_expert_transitions.csv
+```
+
+Training rejects datasets without the v2 profile-feature marker. It evaluates
+both the behavior-cloned checkpoint and the PPO fine-tuned checkpoint on the
+same held-out seeds, then saves the stronger candidate. Fine-tuning is not
+assumed to improve the warm-start.
 
 This dataset is synthetic; its behavior labels encode a heuristic, not human
 or adjuster decisions. The simulator's wait reward weight is 10 to better
@@ -93,6 +105,15 @@ workload impact, alternatives with normalized relative policy-preference
 percentages, and explicit human-review/advisory flags. Percentages are not
 calibrated probabilities of successful claim handling.
 
+Live roster inputs include open-claim workload, capacity eligibility,
+availability, and shift eligibility from each employee profile. Years of
+experience are compared with a synthetic reference of
+`ceil(max(complexity_score, processing_difficulty) * 10)` years and combined
+with the skill-tier match in the policy's existing skill-fit observation. This
+experience reference is an experimental assumption, not a staffing standard or
+a threshold learned from real claim outcomes. Recommendation results expose
+the reference and whether each candidate meets it for human review.
+
 ## Agent and claim data
 
 Apply Django migrations, then in Django Admin create one `Routing agent profile`
@@ -142,14 +163,16 @@ be exercised, and the status page still warns when the candidate is unqualified.
 The gate compares PPO with the least-workload heuristic on held-out mean reward,
 wait, imbalance, and mismatch metrics.
 
-## Human approved claim assignment
+## Automatic employee assignment
 
-New claims remain unassigned until a staff member assigns them. RL
-recommendations are advisory and do not change a claim or assignment; claim
-intake notifies administrators that a human assignment is needed. Employee
-assignment eligibility excludes inactive, unavailable, off-shift, and
-at-capacity employees. Employees without a routing profile use the documented
-defaults (skill tier 3 and capacity 10).
+New claims are automatically assigned only to active employees who are
+available, on shift, under capacity, and have a matching claim specialization
+or skill. Automatic routing uses the expertise-aware workload baseline unless
+the exact installed PPO artifact has a current passing version-2 evaluation
+report and the administrator has enabled qualified PPO preference. Claim
+decisions remain outside this routing feature. Administrators can disable
+automatic assignment, retry pending claims, and override assignments with an
+audited reason.
 ## Checks
 
 From the `backend` directory:

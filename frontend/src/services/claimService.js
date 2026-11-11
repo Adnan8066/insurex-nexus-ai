@@ -63,10 +63,26 @@ export const claimService = {
     return response.data
   },
 
-  async assignAdjuster(claimId, adjusterId) {
+  async assignAdjuster(claimId, adjusterId, reason) {
     const response = await api.post(`/claims/${claimId}/assign-adjuster/`, {
       adjuster_id: adjusterId,
+      reason,
     })
+    return response.data
+  },
+
+  async getAssignmentDashboard() {
+    const response = await api.get('/claims/assignment-dashboard/')
+    return response.data
+  },
+
+  async updateAssignmentSettings(settings) {
+    const response = await api.patch('/claims/assignment-dashboard/', settings)
+    return response.data
+  },
+
+  async retryPendingAssignments() {
+    const response = await api.post('/claims/retry-pending-assignments/')
     return response.data
   },
 

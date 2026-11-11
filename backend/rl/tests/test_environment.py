@@ -25,6 +25,7 @@ def test_simulator_decays_workload_and_penalizes_skill_mismatch():
     high_skill_env.queue_lengths[:] = 2
     high_skill_env.workloads[:] = 20
     high_skill_env.skill_tiers[:] = 5
+    high_skill_env.agent_experience[:] = 10
     high_skill_env.required_skill_tier = 5
     high_skill_env.claim_complexity = 0.5
     high_skill_env.processing_difficulty = 0.5
@@ -36,6 +37,20 @@ def test_simulator_decays_workload_and_penalizes_skill_mismatch():
     assert (low_skill_env.workloads <= before + 6.0).all()
     assert low_skill_env.queue_lengths[0] == 2
     assert (low_skill_env.queue_lengths[1:] == 1).all()
+
+
+def test_experience_mismatch_is_included_in_expert_fit():
+    env = ClaimRoutingEnv(max_episode_steps=2)
+    env.reset(seed=19)
+    env.available[:] = 1
+    env.skill_tiers[:] = 5
+    env.agent_experience[:] = 0
+    env.required_skill_tier = 1
+    env.claim_complexity = 0.9
+    env.processing_difficulty = 0.9
+    assert env._get_observation()[5] == 0
+    env.agent_experience[:] = 10
+    assert env._get_observation()[5] == 1
 
 
 def test_baselines_run_for_one_hundred_simulated_arrivals():

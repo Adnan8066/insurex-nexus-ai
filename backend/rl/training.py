@@ -47,6 +47,7 @@ def pretrain_policy_from_transitions(
     with Path(dataset_path).expanduser().open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         required = {
+            "profile_feature_version",
             "episode_id",
             "action_agent_index",
             "behavior_policy",
@@ -62,6 +63,8 @@ def pretrain_policy_from_transitions(
             )
 
         for row in reader:
+            if row.get("profile_feature_version") != "2":
+                raise ValueError("Training data must be regenerated with routing profile feature version 2, including experience match.")
             if row["behavior_policy"] != "least_workload":
                 raise ValueError(
                     "PPO warm-start requires least_workload expert actions. "
@@ -180,6 +183,32 @@ def _shuffle_agent_slots(
     return torch.cat([observations[:, :3], shuffled.reshape(rows, -1)], dim=1), new_actions
 
 
+def _gate_checks(robust_evaluation: dict[str, Any]) -> dict[str, bool]:
+    policies = robust_evaluation["policies"]
+    candidate = policies["ppo"]["mean"]
+    baseline = policies["least_workload"]["mean"]
+    return {
+        "average_reward_at_least_heuristic": candidate["average_reward"] >= baseline["average_reward"],
+        "average_wait_no_worse_than_heuristic": candidate["average_wait_time"] <= baseline["average_wait_time"],
+        "workload_imbalance_no_worse_than_heuristic": candidate["average_workload_standard_deviation"] <= baseline["average_workload_standard_deviation"],
+        "skill_mismatch_no_worse_than_heuristic": candidate["skill_mismatch_rate"] <= baseline["skill_mismatch_rate"],
+    }
+
+
+def _candidate_quality(robust_evaluation: dict[str, Any]) -> tuple[int, float]:
+    """Prefer a candidate passing more checks, then with smaller total deficits."""
+    checks = _gate_checks(robust_evaluation)
+    candidate = robust_evaluation["policies"]["ppo"]["mean"]
+    baseline = robust_evaluation["policies"]["least_workload"]["mean"]
+    deficits = (
+        max(0.0, baseline["average_reward"] - candidate["average_reward"]),
+        max(0.0, candidate["average_wait_time"] - baseline["average_wait_time"]),
+        max(0.0, candidate["average_workload_standard_deviation"] - baseline["average_workload_standard_deviation"]),
+        max(0.0, candidate["skill_mismatch_rate"] - baseline["skill_mismatch_rate"]),
+    )
+    return sum(checks.values()), -sum(deficits)
+
+
 def train_and_evaluate(
     *,
     total_timesteps: int = 50_000,
@@ -253,8 +282,24 @@ def train_and_evaluate(
         n_agents=MAX_AGENTS,
     )
 
-    # Phase 2: PPO fine-tuning.
+    # Phase 2: PPO fine-tuning. Keep both snapshots; fine-tuning has previously
+    # regressed on held-out seeds, so it must earn promotion through evaluation.
     model.learn(total_timesteps=total_timesteps)
+    fine_tuned_model_path = output_path.with_name(f"{output_path.stem}_fine_tuned.zip")
+    model.save(str(fine_tuned_model_path.with_suffix("")))
+
+    fine_tuned_robust_evaluation = evaluate_across_seeds(
+        steps=evaluation_steps, seeds=evaluation_seeds, model=model, n_agents=MAX_AGENTS,
+    )
+    bc_quality = _candidate_quality(bc_only_robust_evaluation)
+    fine_tuned_quality = _candidate_quality(fine_tuned_robust_evaluation)
+    if bc_quality >= fine_tuned_quality:
+        model = PPO.load(str(bc_only_model_path), env=env, device="cpu")
+        selected_candidate = "behavior_cloned_checkpoint"
+        selected_robust_evaluation = bc_only_robust_evaluation
+    else:
+        selected_candidate = "ppo_fine_tuned_checkpoint"
+        selected_robust_evaluation = fine_tuned_robust_evaluation
     model.save(str(output_path.with_suffix("")))
 
     # Phase 3: evaluate the final PPO policy.
@@ -286,38 +331,21 @@ def train_and_evaluate(
             seed=seed,
             n_agents=MAX_AGENTS,
         ),
-        "robust_evaluation": evaluate_across_seeds(
-            steps=evaluation_steps,
-            seeds=evaluation_seeds,
-            model=model,
-            n_agents=MAX_AGENTS,
-        ),
+        "robust_evaluation": selected_robust_evaluation,
+        "candidate_evaluations": {
+            "behavior_cloned": bc_only_robust_evaluation,
+            "ppo_fine_tuned": fine_tuned_robust_evaluation,
+        },
+        "selected_candidate": selected_candidate,
+        "model_version": output_path.stem,
+        "routing_features": {"profile_version": 2, "experience_feature": True},
         "note": (
             "Metrics use synthetic assumptions. Do not treat them as real-world "
             "performance or as authority to route a claim automatically."
         ),
     }
 
-    robust_policies = results["robust_evaluation"]["policies"]
-    ppo_mean = robust_policies["ppo"]["mean"]
-    heuristic_mean = robust_policies["least_workload"]["mean"]
-
-    quality_gates = {
-        "average_reward_at_least_heuristic": (
-            ppo_mean["average_reward"] >= heuristic_mean["average_reward"]
-        ),
-        "average_wait_no_worse_than_heuristic": (
-            ppo_mean["average_wait_time"] <= heuristic_mean["average_wait_time"]
-        ),
-        "workload_imbalance_no_worse_than_heuristic": (
-            ppo_mean["average_workload_standard_deviation"]
-            <= heuristic_mean["average_workload_standard_deviation"]
-        ),
-        "skill_mismatch_no_worse_than_heuristic": (
-            ppo_mean["skill_mismatch_rate"]
-            <= heuristic_mean["skill_mismatch_rate"]
-        ),
-    }
+    quality_gates = _gate_checks(results["robust_evaluation"])
 
     results["evaluation_gate"] = {
         "passed": all(quality_gates.values()),

@@ -242,6 +242,8 @@ class RoutingAgentProfile(models.Model):
     is_available = models.BooleanField(_('available for routing advice'), default=True)
     is_demo = models.BooleanField(_('demo profile'), default=False)
     designation = models.CharField(_('designation'), max_length=120, blank=True)
+    primary_specialization = models.CharField(_('primary specialization'), max_length=100, blank=True)
+    secondary_specialization = models.CharField(_('secondary specialization'), max_length=100, blank=True)
     years_of_experience = models.PositiveSmallIntegerField(_('years of experience'), default=0)
     max_claim_capacity = models.PositiveSmallIntegerField(_('maximum active claims'), default=10)
     availability_status = models.CharField(

@@ -39,7 +39,8 @@ export function EmployeeProfile() {
       setProfile(result)
       setForm({
         first_name: result.first_name || '', last_name: result.last_name || '', department: result.department || '', is_active: result.is_active,
-        designation: result.designation || '', years_of_experience: result.years_of_experience ?? 0,
+        designation: result.designation || '', primary_specialization: result.primary_specialization || '',
+        secondary_specialization: result.secondary_specialization || '', years_of_experience: result.years_of_experience ?? 0,
         max_claim_capacity: result.max_claim_capacity ?? 10, skill_tier: result.skill_tier ?? 3,
         availability_status: result.availability_status || 'available', working_days: result.working_days || [],
         shift_start_time: result.shift_start_time?.slice(0, 5) || '', shift_end_time: result.shift_end_time?.slice(0, 5) || '',
@@ -97,6 +98,8 @@ export function EmployeeProfile() {
         <Input label="Last name" value={form.last_name} onChange={(e) => update('last_name', e.target.value)} />
         <Input label="Department" value={form.department} onChange={(e) => update('department', e.target.value)} />
         <Input label="Designation" value={form.designation} onChange={(e) => update('designation', e.target.value)} />
+        <Input label="Primary specialization" placeholder="e.g. collision" value={form.primary_specialization} onChange={(e) => update('primary_specialization', e.target.value)} />
+        <Input label="Secondary specialization" placeholder="e.g. glass" value={form.secondary_specialization} onChange={(e) => update('secondary_specialization', e.target.value)} />
         <Input label="Years of experience" type="number" min="0" max="60" value={form.years_of_experience} onChange={(e) => update('years_of_experience', Number(e.target.value))} />
         <Input label="Maximum active claims" type="number" min="1" value={form.max_claim_capacity} onChange={(e) => update('max_claim_capacity', Number(e.target.value))} />
         <label className="input-group"><span className="input-label">Availability</span><select className="input-field" value={form.availability_status} onChange={(e) => update('availability_status', e.target.value)}>{AVAILABILITY.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select></label>

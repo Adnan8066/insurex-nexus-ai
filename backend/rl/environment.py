@@ -28,6 +28,11 @@ DIFFICULTY_WORKLOAD = 5.0
 UNAVAILABLE_PROBABILITY = 0.15
 
 
+def required_experience_years(complexity: float, processing_difficulty: float) -> int:
+    """Synthetic experience reference shared with the live routing feature."""
+    return min(10, int(np.ceil(max(complexity, processing_difficulty) * 10)))
+
+
 @dataclass(frozen=True)
 class RewardWeights:
     """Reward coefficients used by the synthetic scheduling objective."""
@@ -100,6 +105,7 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
         self.queue_lengths = np.zeros(MAX_AGENTS, dtype=np.float32)
         self.workloads = np.zeros(MAX_AGENTS, dtype=np.float32)
         self.skill_tiers = np.ones(MAX_AGENTS, dtype=np.int8)
+        self.agent_experience = np.zeros(MAX_AGENTS, dtype=np.int8)
         self.available = np.zeros(MAX_AGENTS, dtype=np.float32)
         self.available[:n_agents] = 1.0
         self.claim_complexity = 0.5
@@ -124,10 +130,12 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
         self.queue_lengths = np.zeros(MAX_AGENTS, dtype=np.float32)
         self.workloads = np.zeros(MAX_AGENTS, dtype=np.float32)
         self.skill_tiers = np.ones(MAX_AGENTS, dtype=np.int8)
+        self.agent_experience = np.zeros(MAX_AGENTS, dtype=np.int8)
         self.available = np.zeros(MAX_AGENTS, dtype=np.float32)
         self.queue_lengths[:n] = self.np_random.integers(0, 7, size=n)
         self.workloads[:n] = self.np_random.uniform(0, 24, size=n)
         self.skill_tiers[:n] = self.np_random.integers(1, MAX_SKILL_TIER + 1, size=n)
+        self.agent_experience[:n] = self.np_random.integers(0, 16, size=n)
         self.available[:n] = 1.0
         if self.randomize_fleet:
             self.available[:n] = self.np_random.random(n) >= UNAVAILABLE_PROBABILITY
@@ -163,7 +171,12 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
         wait_time = estimate_wait_time(
             float(self.queue_lengths[selected]), float(self.workloads[selected])
         )
-        mismatch = self.required_skill_tier > int(self.skill_tiers[selected])
+        mismatch = bool(
+            self.required_skill_tier > int(self.skill_tiers[selected])
+            or self.agent_experience[selected] < required_experience_years(
+                self.claim_complexity, self.processing_difficulty
+            )
+        )
         claim_workload = estimate_claim_workload(
             self.claim_complexity, self.processing_difficulty
         )
@@ -228,7 +241,12 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
             observation[offset : offset + 4] = [
                 min(float(self.queue_lengths[index]) / MAX_QUEUE_LENGTH, 1.0),
                 min(float(self.workloads[index]) / MAX_WORKLOAD, 1.0),
-                float(self.skill_tiers[index] >= self.required_skill_tier),
+                float(
+                    self.skill_tiers[index] >= self.required_skill_tier
+                    and self.agent_experience[index] >= required_experience_years(
+                        self.claim_complexity, self.processing_difficulty
+                    )
+                ),
                 float(self.available[index]),
             ]
         # Padded agents stay all-zero (availability 0) so callers can exclude them.
@@ -240,6 +258,8 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
             "step": self.steps,
             "required_skill_tier": self.required_skill_tier,
             "agent_skill_tiers": self.skill_tiers[:n].astype(int).tolist(),
+            "agent_experience_years": self.agent_experience[:n].astype(int).tolist(),
+            "required_experience_years": required_experience_years(self.claim_complexity, self.processing_difficulty),
             "agent_queue_lengths": self.queue_lengths[:n].astype(float).tolist(),
             "agent_workloads": self.workloads[:n].astype(float).tolist(),
             "agent_available": self.available[:n].astype(bool).tolist(),
