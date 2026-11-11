@@ -11,11 +11,11 @@ from django.utils import timezone
 from apps.accounts.models import Role
 
 from django.shortcuts import get_object_or_404
-from .models import Claim, ClaimDocument, ClaimStatusHistory, ClaimTimeline, ClaimNote, ClaimStatus
+from .models import Claim, ClaimStatusHistory, ClaimTimeline, ClaimStatus
 from .serializers import (
     ClaimSerializer, ClaimCreateSerializer, ClaimUpdateSerializer,
     ClaimStatusUpdateSerializer, ClaimDocumentSerializer,
-    ClaimStatusHistorySerializer, ClaimTimelineSerializer, ClaimNoteSerializer
+    ClaimTimelineSerializer, ClaimNoteSerializer
 )
 from common.permissions import IsEmployee, CanIssuePolicy, IsStaffMember
 from common.params import parse_int

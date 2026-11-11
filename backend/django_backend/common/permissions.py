@@ -1,10 +1,5 @@
 from rest_framework import permissions
 
-class IsOwnerOrReadOnly(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        return obj.user == request.user
 
 class IsOwnerOrAdmin(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
@@ -20,60 +15,23 @@ class IsOwnerOrAdmin(permissions.BasePermission):
                 return customer.user == request.user
         return False
 
+
 class IsStaffMember(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.is_staff_member
 
-class IsCustomer(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role == 'customer'
 
 class IsEmployee(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role in ['employee', 'admin']
+
 
 class CanIssuePolicy(permissions.BasePermission):
     """Customers can issue records for themselves; employees/admins can act for a customer."""
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role in ['customer', 'employee', 'admin']
 
-class IsInvestigator(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role in ['investigator', 'admin']
 
 class IsAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role == 'admin'
-
-class CanAccessClaim(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        user = request.user
-        if user.role == 'admin':
-            return True
-        if user.role == 'customer':
-            return obj.customer_id == user.id
-        if user.role in ['employee', 'investigator']:
-            return True
-        return False
-
-class CanAccessPolicy(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        user = request.user
-        if user.role == 'admin':
-            return True
-        if user.role == 'customer':
-            return obj.customer_id == user.id
-        if user.role in ['employee', 'investigator']:
-            return True
-        return False
-
-class CanAccessVehicle(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        user = request.user
-        if user.role == 'admin':
-            return True
-        if user.role == 'customer':
-            return obj.customer_id == user.id
-        if user.role in ['employee', 'investigator']:
-            return True
-        return False

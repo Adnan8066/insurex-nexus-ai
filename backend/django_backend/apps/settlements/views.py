@@ -78,7 +78,7 @@ class SettlementViewSet(viewsets.ModelViewSet):
         create_in_app_notification(
             settlement.customer, 'settlement', 'Settlement prepared',
             f'A settlement record for claim {settlement.claim.claim_number} is ready for review.',
-            link=f'/settlements', related_object_type='settlement', related_object_id=settlement.id,
+            link='/settlements', related_object_type='settlement', related_object_id=settlement.id,
         )
     
     @action(detail=True, methods=['post'], url_path='approve')

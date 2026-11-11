@@ -13,7 +13,7 @@ from datetime import timedelta
 import secrets
 import logging
 
-from .models import User, UserProfile, Role
+from .models import Role
 from .serializers import (
     UserSerializer, UserRegistrationSerializer, UserLoginSerializer, AdminUserCreateSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer,
@@ -207,7 +207,7 @@ class AuthViewSet(viewsets.GenericViewSet):
                 'success': True,
                 'data': {'access': str(access_token)}
             })
-        except Exception as e:
+        except Exception:
             return Response({
                 'success': False,
                 'error': {'code': 401, 'message': 'Invalid refresh token'}

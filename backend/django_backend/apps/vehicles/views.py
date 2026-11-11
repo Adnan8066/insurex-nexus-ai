@@ -6,8 +6,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from apps.accounts.models import Role
 from apps.policies.models import Policy
 
-from rest_framework.exceptions import PermissionDenied
-from .models import Vehicle, VehicleDocument, VehicleHistory, VehicleStatus
+from .models import Vehicle, VehicleStatus
 from common.params import Conflict, parse_int
 from .serializers import (
     VehicleSerializer, VehicleCreateSerializer, VehicleUpdateSerializer,

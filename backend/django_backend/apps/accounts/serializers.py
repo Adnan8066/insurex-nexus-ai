@@ -4,7 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 from drf_spectacular.utils import extend_schema_field
 from django.db import transaction
 from django.utils.text import slugify
-from .models import User, UserProfile, Role
+from .models import UserProfile, Role
 
 User = get_user_model()
 

@@ -8,7 +8,6 @@ waits unseen.
 """
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
 
 from apps.accounts.models import Role
 from apps.notifications.services import create_in_app_notification

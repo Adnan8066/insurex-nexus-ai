@@ -3,10 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Q
 from apps.accounts.models import Role
 
-from .models import CallbackRequest, Customer, CustomerDocument
+from .models import CallbackRequest, Customer
 from .serializers import (
     CustomerSerializer, CustomerCreateSerializer,
     CustomerUpdateSerializer, CustomerDocumentSerializer, CallbackRequestSerializer

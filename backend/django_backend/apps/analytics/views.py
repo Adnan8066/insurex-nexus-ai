@@ -9,7 +9,6 @@ from django.db.models import Count, Sum, Avg, Q
 from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
 from datetime import date, timedelta
-import json
 
 from .models import DashboardMetric, AnalyticsSnapshot, Report, ReportExecution
 from .serializers import (
@@ -206,7 +205,7 @@ def _period_payload(period):
 @permission_classes([IsAuthenticated])
 def dashboard_summary(request):
     """Dashboard totals. Pass ?timeframe=week|month|quarter|ytd|year to limit claims to that period."""
-    from apps.policies.models import Policy, PolicyStatus
+    from apps.policies.models import PolicyStatus
     from apps.customers.models import Customer
     from apps.vehicles.models import Vehicle, VehicleStatus
 
@@ -396,9 +395,6 @@ def execute_report(report, parameters):
 
 
 def generate_claims_summary(parameters):
-    from apps.claims.models import Claim
-    from django.db.models import Count, Sum, Avg
-    from django.db.models.functions import TruncMonth
     
     queryset = Claim.objects.all()
     if parameters.get('start_date'):
@@ -419,9 +415,7 @@ def generate_claims_summary(parameters):
 
 
 def generate_financial_summary(parameters):
-    from apps.claims.models import Claim
-    from apps.policies.models import Policy, PremiumHistory
-    from django.db.models import Sum
+    from apps.policies.models import PremiumHistory
     
     return {
         'total_claims_amount': Claim.objects.aggregate(Sum('claim_amount'))['claim_amount__sum'] or 0,
@@ -430,9 +424,6 @@ def generate_financial_summary(parameters):
 
 
 def generate_fraud_analysis(parameters):
-    from apps.investigations.models import FraudAlert
-    from apps.claims.models import Claim
-    from django.db.models import Count, Avg
     
     return {
         'total_fraud_alerts': FraudAlert.objects.count(),
@@ -447,11 +438,7 @@ def generate_fraud_analysis(parameters):
 
 
 def generate_performance_report(parameters):
-    from apps.claims.models import Claim
     from apps.investigations.models import Investigation
-    from django.db.models import Count, Avg
-    from django.utils import timezone
-    from datetime import timedelta
     
     thirty_days_ago = timezone.now() - timedelta(days=30)
     
