@@ -8,7 +8,6 @@ import {
   Sparkles,
   Info,
   RefreshCw,
-  AlertCircle,
   Play,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -20,6 +19,9 @@ import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { ChartCard, BarChart, DoughnutChart } from '../../components/charts/ChartComponents'
 import { formatCurrency, formatDate } from '../../utils/helpers'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
+import { CHART_COLORS } from '../../components/charts/chartColors'
 
 const PRIORITY_LABELS = {
   low: 'Low',
@@ -139,7 +141,7 @@ export function AIAssessment() {
     datasets: [
       {
         data: [parts, labor, paint, other],
-        backgroundColor: ['#1e3a5f', '#007bff', '#00c896', '#94a3b8'],
+        backgroundColor: [CHART_COLORS.navy, CHART_COLORS.blue, CHART_COLORS.green, CHART_COLORS.slate],
         borderWidth: 0,
       },
     ],
@@ -151,7 +153,7 @@ export function AIAssessment() {
       {
         label: 'Amount (INR)',
         data: [claimAmount, predictedRepairCost],
-        backgroundColor: ['#94a3b8', '#1e3a5f'],
+        backgroundColor: [CHART_COLORS.slate, CHART_COLORS.navy],
         borderRadius: 6,
       },
     ],
@@ -196,14 +198,11 @@ export function AIAssessment() {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          {error}
-        </div>
+        <Alert>{error}</Alert>
       )}
 
       {loading && (
-        <div className="p-8 text-center text-sm text-gray-400">Loading AI assessments...</div>
+        <LoadingState label="Loading AI assessments…" />
       )}
 
       {!loading && !assessment && selectedClaimId && (

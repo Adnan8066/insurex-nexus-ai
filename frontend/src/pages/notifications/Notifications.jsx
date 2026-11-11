@@ -10,6 +10,8 @@ import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { formatApiError } from '../../services/api'
 import { useAuth } from '../../context/useAuth'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 // Type tabs (apps/notifications/models.py NotificationType); only types the user actually has are shown.
 const TYPE_FILTERS = [
@@ -110,7 +112,7 @@ export function Notifications() {
         </Button>
       </div>
 
-      {error && <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between"><span>{error}</span><Button variant="outline" size="sm" onClick={loadNotifications}>Retry</Button></div>}
+      {error && <Alert onRetry={loadNotifications}>{error}</Alert>}
 
       <Card>
         <CardHeader
@@ -120,7 +122,7 @@ export function Notifications() {
           ))}</div>}
         />
         <CardContent className="p-0">
-          {loading ? <div className="py-12 text-center text-gray-500">Loading notifications…</div> : filtered.length ? (
+          {loading ? <LoadingState label="Loading notifications…" /> : filtered.length ? (
             <div className="divide-y divide-gray-100">
               {filtered.map((notification) => {
                 const link = fallbackLink(notification)

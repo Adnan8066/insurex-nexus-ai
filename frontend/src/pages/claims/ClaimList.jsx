@@ -4,8 +4,6 @@ import {
   Briefcase,
   Search,
   Plus,
-  Calendar,
-  Car,
   Clock,
   Eye,
   ShieldCheck,
@@ -19,13 +17,14 @@ import { formatApiError } from '../../services/api'
 import { canDeleteClaim } from '../../utils/claimPermissions'
 import { CLAIM_STATUSES, PENDING_CLAIM_STATUSES, INCIDENT_TYPES, labelFor } from '../../constants/domain'
 import { useAuth } from '../../context/useAuth'
-import { Card, CardHeader, CardContent } from '../../components/ui/Card'
+import { Card, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../components/tables/DataTable'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
+import { Alert } from '../../components/ui/Alert'
 
 const incidentTypes = [
   { value: '', label: 'All incident types' },
@@ -228,9 +227,7 @@ export function ClaimList() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {error}
-        </div>
+        <Alert className="mb-4">{error}</Alert>
       )}
 
       {/* Summary KPI Cards */}
@@ -336,7 +333,7 @@ export function ClaimList() {
                     {paginatedClaims.map((claim) => (
                       <TableRow key={claim.id} hover>
                         <TableCell>
-                          <Link to={`/claims/${claim.id}`} className="font-mono font-semibold text-primary hover:underline">
+                          <Link to={`/claims/${claim.id}`} className="whitespace-nowrap font-mono font-semibold text-primary hover:underline">
                             {claim.claimNumber}
                           </Link>
                           <div className="text-[11px] text-gray-500 font-mono mt-0.5">{claim.policyNumber}</div>

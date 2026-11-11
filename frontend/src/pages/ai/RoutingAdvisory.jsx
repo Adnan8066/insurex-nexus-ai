@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Brain, LoaderCircle, Sparkles, Users } from 'lucide-react'
 import { assessmentService } from '../../services'
 import { formatApiError } from '../../services/api'
+import { Alert } from '../../components/ui/Alert'
 
 const initialClaim = {
   complexity_score: 0.7,
@@ -241,7 +242,7 @@ export function RoutingAdvisory() {
         </section>
       </form>
 
-      {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      {error && <Alert>{error}</Alert>}
 
       {result && (
         <section className="card p-5 md:p-6" aria-live="polite">

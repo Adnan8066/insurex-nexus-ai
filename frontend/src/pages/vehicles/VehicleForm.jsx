@@ -10,6 +10,8 @@ import { policyService, vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
 import { formatApiError } from '../../services/api'
 import { VEHICLE_STATUSES } from '../../constants/domain'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 // 17 characters; letters and digits except I, O and Q (same rule as the backend).
 const VIN_PATTERN = /^[A-HJ-NPR-Z0-9]{17}$/
@@ -266,7 +268,7 @@ export function VehicleForm() {
   }
 
   if (loadingVehicle) {
-    return <div className="page max-w-3xl p-8 text-center text-gray-500" role="status">Loading vehicle…</div>
+    return <div className="page max-w-3xl"><LoadingState label="Loading vehicle…" /></div>
   }
 
   return (
@@ -278,7 +280,7 @@ export function VehicleForm() {
           <p className="page-subtitle">A policy is optional and can be added later.</p>
         </div>
       </div>
-      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</div>}
+      {error && <Alert className="mb-4">{error}</Alert>}
 
       <form onSubmit={handleSubmit} className="space-y-6" noValidate>
         <section className="card">

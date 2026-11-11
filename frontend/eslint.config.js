@@ -29,7 +29,7 @@ export default [
       'react/react-in-jsx-scope': 'off',
       'react/jsx-uses-vars': 'error',
       'react/prop-types': 'off',
-      'no-unused-vars': 'off',
+      'no-unused-vars': ['error', { varsIgnorePattern: '^React$', args: 'none' }],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },

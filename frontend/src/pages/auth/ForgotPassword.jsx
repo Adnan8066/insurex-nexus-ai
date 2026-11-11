@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Mail, Lock, ArrowLeft, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, ArrowLeft, CheckCircle, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
-import { clsx } from 'clsx'
+import { Alert } from '../../components/ui/Alert'
 
 export function ForgotPassword() {
   const navigate = useNavigate()
@@ -135,10 +135,7 @@ export function ForgotPassword() {
         {step !== 'sent' && (
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" role="alert">
-                <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
+              <Alert>{error}</Alert>
             )}
 
             {isReset ? (

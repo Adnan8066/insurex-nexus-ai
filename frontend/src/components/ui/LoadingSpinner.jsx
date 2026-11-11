@@ -25,6 +25,16 @@ export function LoadingSpinner({
   )
 }
 
+// Centred spinner with a short label, for sections whose data is still loading.
+export function LoadingState({ label = 'Loading…', className = '' }) {
+  return (
+    <div role="status" className={clsx('flex flex-col items-center justify-center gap-3 py-12 text-sm text-gray-500', className)}>
+      <span className="loading-spinner h-6 w-6" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  )
+}
+
 export function Skeleton({
   className = '',
   variant = 'text',
@@ -56,4 +66,4 @@ export function Skeleton({
   return <>{skeletons}</>
 }
 
-export default { LoadingSpinner, Skeleton }
+export default { LoadingSpinner, LoadingState, Skeleton }

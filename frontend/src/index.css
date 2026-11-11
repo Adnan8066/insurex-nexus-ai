@@ -272,10 +272,7 @@ html.dark footer .text-slate-500 { color: #cbd5e1; }
   --color-primary-light: #3b82f6;
   --color-primary-dark: #1d4ed8;
   --color-surface-navy: #0b132b;
-  --color-secondary: #007bff;
-  --color-secondary-light: #3399ff;
   --color-accent: #00c896;
-  --color-accent-light: #33d6a8;
   --color-warning: #f59e0b;
   --color-warning-light: #fbbf24;
   --color-danger: #ef4444;
@@ -741,6 +738,8 @@ ol {
   color: inherit;
   font: inherit;
   text-align: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
 }
 
 .table tbody tr {

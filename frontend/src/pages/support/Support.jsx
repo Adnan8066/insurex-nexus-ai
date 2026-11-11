@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { authService } from '../../services/authService'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 const roleLabel = (role) => role === 'admin' ? 'Administrator' : 'Customer support agent'
 
@@ -46,7 +47,7 @@ export function Support() {
       <Card>
         <CardHeader title="Your support team" subtitle="Choose a contact to email or call" />
         <CardContent>
-          {loading ? <p className="py-8 text-center text-slate-500" role="status">Loading support contacts…</p> : null}
+          {loading ? <LoadingState label="Loading support contacts…" /> : null}
           {!loading && error ? <p className="py-8 text-center text-red-700" role="alert">{error}</p> : null}
           {!loading && !error && contacts.length === 0 ? (
             <div className="py-8 text-center">

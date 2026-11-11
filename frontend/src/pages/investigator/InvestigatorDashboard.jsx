@@ -3,31 +3,25 @@ import { Link } from 'react-router-dom'
 import {
   Shield,
   Search,
-  Filter,
   AlertTriangle,
   Clock,
   FileText,
-  UserCheck,
-  Eye,
   Send,
   MessageSquare,
-  ChevronRight,
-  AlertCircle,
-  RefreshCw,
-  Play,
-  CheckCircle2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { investigationService } from '../../services'
 import { formatApiError } from '../../services/api'
 import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
-import { Badge, StatusBadge } from '../../components/ui/Badge'
+import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Textarea, Select } from '../../components/forms/FormFields'
 import { Modal } from '../../components/ui/Modal'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/tables/DataTable'
-import { formatDate, formatRelativeTime } from '../../utils/helpers'
+import { formatRelativeTime } from '../../utils/helpers'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 const PRIORITY_LABELS = {
   low: 'Low',
@@ -161,20 +155,11 @@ export function InvestigatorDashboard() {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            {error}
-          </span>
-          <Button variant="outline" size="sm" onClick={loadInvestigations}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1" />
-            Retry
-          </Button>
-        </div>
+        <Alert onRetry={loadInvestigations}>{error}</Alert>
       )}
 
       {loading && investigations.length === 0 && (
-        <div className="p-8 text-center text-sm text-gray-400">Loading investigations...</div>
+        <LoadingState label="Loading investigations…" />
       )}
 
       {/* Investigator Profile Banner */}
@@ -331,7 +316,7 @@ export function InvestigatorDashboard() {
                       <TableCell>
                         <Link
                           to={`/claims/${inv.claim}`}
-                          className="font-mono text-primary hover:underline font-semibold"
+                          className="whitespace-nowrap font-mono font-semibold text-primary hover:underline"
                         >
                           {inv.claim_number}
                         </Link>

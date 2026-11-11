@@ -19,6 +19,7 @@ import { StatusBadge } from '../../components/ui/Badge'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { CLAIM_STATUSES, labelFor } from '../../constants/domain'
 import { formatCurrency, formatDate } from '../../utils/helpers'
+import { Alert } from '../../components/ui/Alert'
 
 // Five plain-language steps; every backend status maps onto one of them.
 const STEPS = [
@@ -110,7 +111,7 @@ export function ClaimTracking() {
   if (!claim) {
     return (
       <div className="page max-w-4xl mx-auto">
-        {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" role="alert">{error}</div>}
+        {error && <Alert className="mb-4">{error}</Alert>}
         <EmptyState
           icon={<Activity className="w-12 h-12" />}
           title="Claim not found"

@@ -1,29 +1,23 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  FileText,
-  Car,
-  Calendar,
-  DollarSign,
-  AlertTriangle,
   Upload,
   CheckCircle2,
   ArrowLeft,
   ArrowRight,
   Shield,
-  MapPin,
-  Clock,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { claimService } from '../../services/claimService'
 import { policyService } from '../../services/policyService'
 import { vehicleService } from '../../services/vehicleService'
 import { useAuth } from '../../context/useAuth'
-import { Card, CardHeader, CardContent } from '../../components/ui/Card'
+import { Card, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input, Select, Textarea } from '../../components/forms/FormFields'
 import { INCIDENT_SEVERITIES, INCIDENT_TYPES, POLICY_TYPES, labelFor } from '../../constants/domain'
 import { formatCurrency, formatDate } from '../../utils/helpers'
+import { Alert } from '../../components/ui/Alert'
 
 const incidentTypeOptions = INCIDENT_TYPES.map(({ value, label, hint }) => ({ value, label: `${label} - ${hint}` }))
 const severityOptions = INCIDENT_SEVERITIES.map(({ value, label, hint }) => ({ value, label: `${label} - ${hint}` }))
@@ -153,7 +147,7 @@ export function SubmitClaim() {
           policyId: requestedPolicy || selectedPolicy || prev.policyId,
           vehicleId: defaultVehicle ? String(defaultVehicle.id) : '',
         }))
-      } catch (err) {
+      } catch {
         setError('Failed to load your policies and vehicles. Please add a policy and vehicle first.')
       }
     }
@@ -344,7 +338,7 @@ export function SubmitClaim() {
         </div>
       </div>
 
-      {error && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">{error}</div>}
+      {error && <Alert className="mb-5">{error}</Alert>}
 
       {/* Stepper Header */}
       <div className="mb-8">

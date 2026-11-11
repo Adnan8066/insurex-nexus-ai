@@ -4,29 +4,24 @@ import { format } from 'date-fns'
 import {
   Car,
   Search,
-  Filter,
   Plus,
   Calendar,
-  Wrench,
-  FileText,
-  AlertTriangle,
   Trash2,
   ImagePlus,
 } from 'lucide-react'
-import { clsx } from 'clsx'
-import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/helpers'
+import { formatDate } from '../../utils/helpers'
 import { vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
-import { Card, CardHeader, CardContent } from '../../components/ui/Card'
+import { Card, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/forms/FormFields'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../components/tables/DataTable'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { formatApiError } from '../../services/api'
 import { VEHICLE_STATUSES } from '../../constants/domain'
+import { Alert } from '../../components/ui/Alert'
 
 const vehicleStatuses = [{ value: '', label: 'All Statuses' }, ...VEHICLE_STATUSES]
 
@@ -206,9 +201,7 @@ export function VehicleList() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {error}
-        </div>
+        <Alert className="mb-4">{error}</Alert>
       )}
 
       <Card>

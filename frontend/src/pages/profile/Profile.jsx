@@ -1,13 +1,6 @@
 import { useState } from 'react'
 import {
-  User,
-  Mail,
-  Phone,
-  Shield,
-  Building,
-  Key,
   CheckCircle2,
-  AlertCircle,
   Save,
   Lock,
 } from 'lucide-react'
@@ -15,6 +8,7 @@ import { useAuth } from '../../context/useAuth'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
+import { Alert } from '../../components/ui/Alert'
 
 export function Profile() {
   const { user, updateProfile, changePassword } = useAuth()
@@ -129,7 +123,7 @@ export function Profile() {
           <CardHeader title="Personal Information" />
           <CardContent className="p-6">
             <form onSubmit={handleSaveProfile} className="space-y-4">
-              {profileError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{profileError}</p>}
+              {profileError && <Alert>{profileError}</Alert>}
               {profileSuccess && (
                 <div className="p-3 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-medium flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
@@ -191,10 +185,7 @@ export function Profile() {
                 </div>
               )}
               {passwordError && (
-                <div className="p-3 bg-red-50 text-red-800 rounded-lg text-xs font-medium flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  {passwordError}
-                </div>
+                <Alert>{passwordError}</Alert>
               )}
 
               <Input

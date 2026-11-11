@@ -3,8 +3,6 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   Briefcase,
   ArrowLeft,
-  Calendar,
-  Clock,
   Car,
   FileText,
   MapPin,
@@ -14,7 +12,6 @@ import {
   Download,
   Upload,
   Activity,
-  ChevronRight,
   UserCheck,
   Trash2,
 } from 'lucide-react'
@@ -32,6 +29,8 @@ import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/Modal'
 import { Select } from '../../components/forms/FormFields'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 const mapClaim = (c) => ({
   id: c.id,
@@ -357,7 +356,7 @@ export function ClaimDetails() {
           </Link>
         </div>
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+          <Alert className="mb-4">{error}</Alert>
         )}
         <EmptyState
           icon={<Briefcase className="w-12 h-12" />}
@@ -460,7 +459,7 @@ export function ClaimDetails() {
       )}
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+        <Alert className="mb-4">{error}</Alert>
       )}
 
       {/* Tabs */}
@@ -781,7 +780,7 @@ export function ClaimDetails() {
                   {documentUploadError && <p className="mt-2 text-sm text-red-600" role="alert">{documentUploadError}</p>}
                 </div>
                 {documentsLoading ? (
-                  <p className="py-8 text-center text-sm text-gray-500" role="status">Loading claim documents…</p>
+                  <LoadingState label="Loading claim documents…" />
                 ) : claim.documents && claim.documents.length > 0 ? (
                   <div className="space-y-3">
                     {claim.documents.map((doc) => (

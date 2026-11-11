@@ -10,6 +10,7 @@ import { policyTiers } from '../../data/policyTiers'
 import { formatCurrency } from '../../utils/helpers'
 import { formatApiError } from '../../services/api'
 import { POLICY_STATUSES, POLICY_TYPES } from '../../constants/domain'
+import { Alert } from '../../components/ui/Alert'
 
 // Local calendar dates (toISOString() would give the UTC date, which is off by a day near midnight).
 const today = () => format(new Date(), 'yyyy-MM-dd')
@@ -267,7 +268,7 @@ export function PolicyForm() {
         </div>
       </div>
 
-      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {error && <Alert className="mb-4">{error}</Alert>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <section className="card">

@@ -11,6 +11,8 @@ import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Input, Select } from '../../components/forms/FormFields'
 import { formatCurrency, formatDate } from '../../utils/helpers'
+import { Alert } from '../../components/ui/Alert'
+import { LoadingState } from '../../components/ui/LoadingSpinner'
 
 const FREQUENCY_OPTIONS = [
   { value: 'annual', label: 'Annual' },
@@ -121,7 +123,7 @@ export function RequestPolicy() {
   }
 
   if (loading) {
-    return <div className="page mx-auto max-w-3xl p-8 text-center text-sm text-gray-500">Loading vehicle…</div>
+    return <div className="page mx-auto max-w-3xl"><LoadingState label="Loading vehicle…" /></div>
   }
   if (loadError || !vehicle) {
     return (
@@ -228,7 +230,7 @@ export function RequestPolicy() {
                 <p className="py-2 text-sm text-gray-700">{form.startDate ? formatDate(oneYearFrom(form.startDate)) : '—'}</p>
               </div>
             </div>
-            {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
+            {error && <Alert>{error}</Alert>}
             <div className="flex justify-end">
               <Button type="submit" variant="primary" loading={submitting}>Get quote and send request</Button>
             </div>

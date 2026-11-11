@@ -36,6 +36,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import ErrorBoundary, { ChartErrorFallback, DataTableErrorFallback } from '../../components/ui/ErrorBoundary'
 import { DashboardSkeleton } from '../../components/ui/Skeleton'
 import { useToast } from '../../components/ui/toastHooks'
+import { CHART_COLORS } from '../../components/charts/chartColors'
 
 const TIMEFRAME_OPTIONS = [
   { value: 'week', label: 'Last 7 Days' },
@@ -51,7 +52,7 @@ const TREND_GRANULARITY = { week: 'day', month: 'day', quarter: 'month', ytd: 'm
 // Matches the backend total-loss threshold used by the dashboard summary.
 const TOTAL_LOSS_THRESHOLD = 50
 
-const STATUS_COLORS = ['#3b82f6', '#f59e0b', '#1e3a5f', '#d97706', '#10b981', '#ef4444', '#6366f1', '#94a3b8']
+const STATUS_COLORS = [CHART_COLORS.blue, CHART_COLORS.amber, CHART_COLORS.navy, CHART_COLORS.orange, CHART_COLORS.green, CHART_COLORS.red, CHART_COLORS.indigo, CHART_COLORS.slate]
 const RISK_VARIANT = { high: 'danger', medium: 'warning', low: 'success' }
 const PRIORITY_VARIANT = { critical: 'danger', high: 'danger', medium: 'warning', low: 'success' }
 
@@ -175,7 +176,7 @@ export function EmployeeDashboard() {
     datasets: [
       {
         data: [fraudBands?.low || 0, fraudBands?.medium || 0, fraudBands?.high || 0],
-        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+        backgroundColor: [CHART_COLORS.green, CHART_COLORS.amber, CHART_COLORS.red],
         borderWidth: 0,
       },
     ],
@@ -189,7 +190,7 @@ export function EmployeeDashboard() {
         type: 'bar',
         label: 'Claims submitted',
         data: trend.map((d) => d.count),
-        backgroundColor: '#1e3a5f',
+        backgroundColor: CHART_COLORS.navy,
         borderRadius: 4,
         maxBarThickness: 36,
         yAxisID: 'y',
@@ -199,8 +200,8 @@ export function EmployeeDashboard() {
         type: 'line',
         label: 'Claim amount',
         data: trend.map((d) => Math.round(Number(d.total_amount) || 0)),
-        borderColor: '#10b981',
-        backgroundColor: '#10b981',
+        borderColor: CHART_COLORS.green,
+        backgroundColor: CHART_COLORS.green,
         pointRadius: 3,
         tension: 0.3,
         yAxisID: 'y1',
