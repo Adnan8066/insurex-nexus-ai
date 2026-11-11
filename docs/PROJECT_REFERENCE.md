@@ -631,7 +631,7 @@ Commands: `npm run lint && npm run build`; `python manage.py check`; `python man
 
 - **API on Render** (`render.yaml`): Python 3.12.11, free plan; build = pip install + collectstatic + migrate; start = gunicorn `config.wsgi`; health check `/api/health/`; `DEBUG=False`, SSL redirect, generated `SECRET_KEY`, Postgres `DATABASE_URL` (set manually), CORS to `https://frontend-omega-murex-45.vercel.app`, gate enforced, auto-assign off.
 - **Frontend on Vercel**: SPA rewrite to `index.html`; set `VITE_API_BASE_URL`.
-- **Jenkins** (Windows agent): Checkout (3 retries) → Frontend (`npm ci`, lint, build) → Backend (venv on Python 3.12, `check`, OpenAPI validate, `test`). RL pytest is not in CI.
+- **Jenkins** (Windows agent): Checkout (3 retries) → Frontend (`npm ci`, lint, build) → Backend (venv on Python 3.12, `check`, OpenAPI validate, `test`) → RL routing tests (`pytest rl/tests` in the backend venv) → check the three India training CSVs → train ML models (`train_project_models`, then `train_vehicle_fraud_model` on `india_vehicle_fraud.csv`) → archive the `.joblib` files, `training_report.json`, `vehicle_fraud_report.json` and the evaluation chart. Archived models are not deployed automatically.
 - Render's free filesystem is ephemeral, so uploaded media needs persistent storage. ML/RL weights must be present on the server (RL `.zip` files are git-ignored).
 
 ---
