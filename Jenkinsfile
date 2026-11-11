@@ -63,16 +63,16 @@ pipeline {
             steps {
                 dir('backend') {
                     bat '''
-                        if not exist "data\\insurance_claims.csv" (
-                            echo Missing training dataset: backend\\data\\insurance_claims.csv
+                        if not exist "data\\india\\india_insurance_claims.csv" (
+                            echo Missing training dataset: backend\\data\\india\\india_insurance_claims.csv
                             exit /b 1
                         )
-                        if not exist "data\\fraud_oracle.csv" (
-                            echo Missing training dataset: backend\\data\\fraud_oracle.csv
+                        if not exist "data\\india\\india_fraud_oracle.csv" (
+                            echo Missing training dataset: backend\\data\\india\\india_fraud_oracle.csv
                             exit /b 1
                         )
-                        dir "data\\insurance_claims.csv"
-                        dir "data\\fraud_oracle.csv"
+                        dir "data\\india\\india_insurance_claims.csv"
+                        dir "data\\india\\india_fraud_oracle.csv"
                     '''
                 }
             }

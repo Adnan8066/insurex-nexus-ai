@@ -150,7 +150,7 @@ Trained artifacts live in [backend/ml/models/](backend/ml/models/):
 Retrain the tabular models from `backend/django_backend`:
 
 ```powershell
-python manage.py train_project_models   # trains from backend/data/
+python manage.py train_project_models   # trains from backend/data/india/ (rupees)
 python manage.py assess_claims          # re-score existing claims with the new models
 ```
 
