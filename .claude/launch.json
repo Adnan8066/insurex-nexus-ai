@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "C:\\Users\\Mohammad.Adnan\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+      "runtimeArgs": ["backend/django_backend/manage.py", "runserver", "8000", "--noreload"],
+      "port": 8000
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

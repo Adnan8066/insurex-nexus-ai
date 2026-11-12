@@ -89,6 +89,8 @@ class ClaimAssessment(models.Model):
     ai_recommendation = models.TextField(_('AI recommendation'), blank=True)
     confidence = models.DecimalField(_('confidence'), max_digits=5, decimal_places=2, blank=True, null=True)
     contributing_factors = models.JSONField(_('contributing factors'), default=list, blank=True)
+    # Plain-language reasons for each score (apps/assessments/explain.py).
+    explanation = models.JSONField(_('explanation'), default=dict, blank=True)
     
     assessed_at = models.DateTimeField(_('assessed at'), blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

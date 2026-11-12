@@ -16,6 +16,22 @@ export const investigationService = {
     return response.data
   },
 
+  async startInvestigation(id) {
+    const response = await api.post(`/investigations/${id}/start/`)
+    return response.data
+  },
+
+  async completeInvestigation(id, data) {
+    const response = await api.post(`/investigations/${id}/complete/`, data)
+    return response.data
+  },
+
+  // formData: evidence_type, title, optional description, source, is_key_evidence and file.
+  async addEvidence(id, formData) {
+    const response = await api.post(`/investigations/${id}/evidence/`, formData)
+    return response.data
+  },
+
   async getFraudAlerts(params = {}) {
     const response = await api.get('/investigations/fraud-alerts/', { params })
     return response.data

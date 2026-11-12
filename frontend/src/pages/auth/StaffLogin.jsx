@@ -1,18 +1,21 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
 import { AuthLayout } from '../../components/auth/BrandArtwork'
 import { Alert } from '../../components/ui/Alert'
+import { DemoLogins } from '../../components/auth/DemoLogins'
+import { demoForm } from '../../components/auth/demoAccounts'
 
 const emptyForm = { email: '', password: '' }
 
 export function StaffLogin() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
-  const [formData, setFormData] = useState(emptyForm)
+  const [formData, setFormData] = useState(() => ({ ...emptyForm, ...demoForm(location.state?.demoAccount) }))
   const [errors, setErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -117,6 +120,14 @@ export function StaffLogin() {
           <Button type="button" variant="outline" fullWidth className="py-3" onClick={() => navigate('/login')}>
             Customer login
           </Button>
+
+          <DemoLogins
+            page="/staff-login"
+            onFill={(form) => {
+              setFormData({ ...emptyForm, ...form })
+              setErrors({})
+            }}
+          />
         </form>
       </div>
     </AuthLayout>

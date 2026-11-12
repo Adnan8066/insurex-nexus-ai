@@ -22,6 +22,7 @@ import { formatCurrency, formatDate } from '../../utils/helpers'
 import { Alert } from '../../components/ui/Alert'
 import { LoadingState } from '../../components/ui/LoadingSpinner'
 import { CHART_COLORS } from '../../components/charts/chartColors'
+import { ScoreExplanation } from '../../components/ai/ScoreExplanation'
 
 const PRIORITY_LABELS = {
   low: 'Low',
@@ -98,12 +99,32 @@ export function AIAssessment() {
   }, [])
 
   useEffect(() => {
-    const targetClaim = claims.find((c) => String(c.id) === String(selectedClaimId)) || claims[0] || null
-    setClaim(targetClaim || null)
-    const targetId = targetClaim ? String(targetClaim.id) : String(selectedClaimId)
-    const match = assessments.find((a) => String(a.claim) === targetId) || null
-    setAssessment(match)
-  }, [selectedClaimId, claims, assessments])
+    const id = String(selectedClaimId || '')
+    const known = claims.find((c) => String(c.id) === id)
+    setClaim(known || null)
+    setAssessment(assessments.find((a) => String(a.claim) === id) || null)
+    if (!id || loading) return undefined
+
+    // The lists hold only the first page; a claim linked from elsewhere is fetched on its own.
+    let cancelled = false
+    const fetchMissing = async () => {
+      try {
+        if (!known) {
+          const fetched = await claimService.getClaim(id)
+          if (!cancelled) setClaims((prev) => (prev.some((c) => String(c.id) === id) ? prev : [fetched, ...prev]))
+        }
+        if (!assessments.some((a) => String(a.claim) === id)) {
+          const res = await assessmentService.getAssessments({ claim: id })
+          const items = Array.isArray(res) ? res : res.results || []
+          if (!cancelled && items.length) setAssessments((prev) => [...items, ...prev.filter((a) => String(a.claim) !== id)])
+        }
+      } catch {
+        // Not found or not visible to this user: the page keeps its empty state.
+      }
+    }
+    fetchMissing()
+    return () => { cancelled = true }
+  }, [selectedClaimId, claims, assessments, loading])
 
   const handleSelectClaim = (id) => {
     setSelectedClaimId(id)
@@ -131,10 +152,11 @@ export function AIAssessment() {
   const claimAmount = Number(claim?.claim_amount) || 0
   const costBreakdown = assessment?.cost_breakdown || {}
   const parts = Number(costBreakdown.parts || costBreakdown.parts_total || 0)
-  const labor = Number(costBreakdown.labor || costBreakdown.labor_total || 0)
+  const labor = Number(costBreakdown.labour || costBreakdown.labor || costBreakdown.labor_total || 0)
   const paint = Number(costBreakdown.paint || costBreakdown.paint_total || 0)
   const other = Number(costBreakdown.other || costBreakdown.other_total || 0)
   const factors = normalizeFactors(assessment?.contributing_factors)
+  const hasCostSplit = parts + labor + paint + other > 0
 
   const costData = {
     labels: ['Parts', 'Labor', 'Paint', 'Other'],
@@ -314,6 +336,8 @@ export function AIAssessment() {
             </Card>
           </div>
 
+          <ScoreExplanation explanation={assessment.explanation} />
+
           {/* AI Recommendation Spotlight Card */}
           <div className="bg-white border-2 border-primary/20 rounded-2xl p-6 shadow-sm">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -360,9 +384,9 @@ export function AIAssessment() {
             <div>
               <ChartCard
                 title="Predicted Cost Composition"
-                subtitle="No repair-part or labor breakdown model is available"
+                subtitle={hasCostSplit ? 'Parts and garage labour in the estimate' : 'Only a total cost is available for this claim'}
               >
-                {Object.keys(costBreakdown).length > 0
+                {hasCostSplit
                   ? <DoughnutChart data={costData} height={280} />
                   : <p className="text-sm text-gray-500 p-6">The model predicts a total repair cost only. A cost breakdown is not available.</p>}
               </ChartCard>

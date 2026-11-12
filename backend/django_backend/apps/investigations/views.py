@@ -14,6 +14,9 @@ from .serializers import (
 )
 from common.permissions import IsStaffMember
 
+STARTABLE_STATUSES = {InvestigationStatus.OPEN, InvestigationStatus.ON_HOLD, InvestigationStatus.PENDING_REVIEW}
+COMPLETABLE_STATUSES = {InvestigationStatus.IN_PROGRESS, InvestigationStatus.PENDING_REVIEW}
+
 
 class InvestigationViewSet(viewsets.ModelViewSet):
     queryset = Investigation.objects.select_related(
@@ -76,18 +79,36 @@ class InvestigationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='start')
     def start_investigation(self, request, pk=None):
         investigation = self.get_object()
+        if investigation.status not in STARTABLE_STATUSES:
+            return Response(
+                {'detail': f'An investigation that is {investigation.get_status_display().lower()} cannot be started.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         investigation.status = InvestigationStatus.IN_PROGRESS
-        investigation.started_at = timezone.now()
+        if not investigation.started_at:
+            investigation.started_at = timezone.now()
         investigation.save(update_fields=['status', 'started_at'])
         serializer = self.get_serializer(investigation)
         return Response(serializer.data)
-    
+
     @action(detail=True, methods=['post'], url_path='complete')
     def complete_investigation(self, request, pk=None):
         investigation = self.get_object()
+        if investigation.status not in COMPLETABLE_STATUSES:
+            return Response(
+                {'detail': 'Start the investigation before completing it.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        findings = str(request.data.get('findings', investigation.findings) or '').strip()
+        if not findings:
+            # Completing unblocks approval of a high-risk claim, so it must say what was found.
+            return Response(
+                {'findings': ['Describe what the investigation found before completing it.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         investigation.status = InvestigationStatus.COMPLETED
         investigation.completed_at = timezone.now()
-        investigation.findings = request.data.get('findings', investigation.findings)
+        investigation.findings = findings
         investigation.conclusion = request.data.get('conclusion', investigation.conclusion)
         investigation.recommendation = request.data.get('recommendation', investigation.recommendation)
         investigation.save(update_fields=['status', 'completed_at', 'findings', 'conclusion', 'recommendation'])

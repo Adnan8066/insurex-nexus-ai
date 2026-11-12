@@ -105,7 +105,27 @@ npm run dev
 
 Open <http://localhost:3000>. The client calls the API at `VITE_API_BASE_URL`, which defaults to `http://127.0.0.1:8000/api/v1`.
 
-### 3. Load demo data (optional)
+### 3. Demo in one command
+
+For a 5-minute walkthrough, run this from `backend/django_backend` after `migrate`:
+
+```powershell
+python manage.py load_demo            # safe to run again; nothing is duplicated
+python manage.py load_demo --reset    # delete the demo data (only the demo data) and recreate it
+```
+
+It creates 3 customers in Bengaluru, Gurugram and Chennai with Indian cars and active policies, 7 claims that show the AI at work (an honest fender-bender, an inflated repair bill, a late claim on a brand-new policy, a night-time theft with no FIR under investigation, a flood write-off, a windshield and a three-car accident with injuries), and scores every claim with the AI models. Log in with:
+
+| Role | Where | Login |
+| --- | --- | --- |
+| Admin | Staff login | `admin@demo.insurex.test` / `InsureX@Demo2026` |
+| Employee | Staff login | `employee@demo.insurex.test` / `InsureX@Demo2026` |
+| Investigator | Staff login | `investigator@demo.insurex.test` / `InsureX@Demo2026` |
+| Customer | Customer sign-in | `customer@demo.insurex.test`, vehicle `KA 01 MJ 4521`, mobile `+91 90000 00001` |
+
+Use `--password` to choose a different password. The command refuses to run when `DEBUG=False`, because it creates accounts with a known password; `--allow-production` overrides that. To get one-click buttons for these logins on the sign-in pages, set `VITE_SHOW_DEMO_LOGINS=true` in `frontend/.env.local` (it is `false` by default; set `VITE_DEMO_PASSWORD` too if you changed the password).
+
+### 4. Load the sample datasets (optional)
 
 The database starts empty. To import the bundled sample datasets, run this from `backend/django_backend`:
 
@@ -178,7 +198,7 @@ Backend settings are read from environment variables. Use `backend/django_backen
 | `JWT_ACCESS_TOKEN_LIFETIME_MINUTES`, `JWT_REFRESH_TOKEN_LIFETIME_DAYS` | `60`, `7` | Token lifetimes |
 | `EMAIL_*` | console backend | SMTP settings |
 
-The frontend's only variable is `VITE_API_BASE_URL`.
+The frontend reads `VITE_API_BASE_URL`, plus `VITE_SHOW_DEMO_LOGINS` (and optionally `VITE_DEMO_PASSWORD`) for the demo login buttons, which are off by default.
 
 Never commit `.env` files or real secrets.
 

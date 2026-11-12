@@ -43,6 +43,20 @@ class InvestigationApiTests(APITestCase):
         completed = self.client.post(f'{base}/complete/', {'findings': 'Consistent story'}, format='json')
         self.assertEqual(completed.status_code, 200, completed.content)
         self.assertEqual(completed.json()['status'], 'completed')
+        # A completed case cannot be restarted.
+        self.assertEqual(self.client.post(f'{base}/start/').status_code, 400)
+
+    def test_complete_requires_start_and_findings(self):
+        self.client.force_authenticate(self.investigator)
+        base = f'/api/v1/investigations/{self.investigation.pk}'
+        not_started = self.client.post(f'{base}/complete/', {'findings': 'x'}, format='json')
+        self.assertEqual(not_started.status_code, 400)
+        self.client.post(f'{base}/start/')
+        no_findings = self.client.post(f'{base}/complete/', {'findings': '   '}, format='json')
+        self.assertEqual(no_findings.status_code, 400)
+        self.assertIn('findings', no_findings.json())
+        self.investigation.refresh_from_db()
+        self.assertEqual(self.investigation.status, 'in_progress')
 
     def test_notes_and_evidence_support_get_and_post(self):
         self.client.force_authenticate(self.investigator)

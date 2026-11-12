@@ -330,6 +330,7 @@ complexity = min(1, 0.2 + 0.12·min(max(vehicles−1,0),3) + 0.2·injuries
 
 **Management commands**
 - `import_project_datasets [--dry-run --skip-insurance --skip-fraud]`: idempotent import of both CSVs into User/Customer/Policy (expired)/Vehicle (synthetic VIN)/Claim (`INS-…`, `FO-…`). Fraud rows → status `investigation`, score 85; others → `closed`, score 10. The raw row is kept in `ai_assessment.source_data`.
+- `load_demo [--reset --password P --allow-production --skip-assessment]`: one-command demo. Creates 4 logins on `@demo.insurex.test` (admin, employee, investigator with password `InsureX@Demo2026` by default; the customer signs in with email + vehicle `KA 01 MJ 4521` + mobile `+91 90000 00001`), 3 customers (`DEMO-CUST-…`) with 2 cars and one active comprehensive policy (`DEMO-POL-…`) per car, and 7 claims (`DEMO-CLM-0001…0007`) with backdated status history, timeline, notes and notifications. Runs `run_claim_assessment` on each claim (a model failure is reported, not fatal), and opens investigation `DEMO-INV-0001` with a fraud alert for the theft claim, assigned to the demo investigator. Idempotent; `--reset` deletes only demo data (demo email domain + `DEMO-` numbers) and keeps a demo staff login that non-demo records reference. Refuses to run when `DEBUG=False` unless `--allow-production`. Demo claims get no `fraud_outcome`, so they never become training labels. Tests: `apps/claims/test_load_demo.py`.
 - `train_project_models`: trains all tabular models (§8).
 
 ### 7.6 assessments: `/api/v1/assessments/` (+ `/api/v1/ai/`)
@@ -352,7 +353,7 @@ complexity = min(1, 0.2 + 0.12·min(max(vehicles−1,0),3) + 0.2·injuries
 
 **Endpoints (staff only; investigators see their own)**
 - `fraud-alerts/`: CRUD + `/{id}/review/`, `/{id}/escalate/` (assigns caller), `/{id}/dismiss/`, `high-risk/`.
-- `/`: CRUD + `/{id}/evidence/`, `/{id}/notes/`, `/{id}/start/`, `/{id}/complete/` (a completed investigation unblocks approval of a high-risk claim).
+- `/`: CRUD + `/{id}/evidence/`, `/{id}/notes/`, `/{id}/start/` (only from open, on hold or pending review), `/{id}/complete/` (only once started, and `findings` must not be empty; a completed investigation unblocks approval of a high-risk claim).
 
 ### 7.8 notifications: `/api/v1/notifications/`
 
@@ -433,6 +434,7 @@ The current artifacts come from this command, which by default trains on the syn
 
 ### Where scores are written (`apps/assessments/ai_views.run_claim_assessment`)
 - Runs all three models, fills the `ClaimAssessment` row, and copies `fraud_risk_score`, `total_loss_probability` and a `fraud_risk` block onto the claim (merged into `ai_assessment`, so imported claims keep their `source_data`).
+- Writes a plain-language `explanation` on the assessment (`apps/assessments/explain.py`): one summary sentence per score (for example "Fraud score 72 of 100 (high risk), mainly because …"), the fraud reasons ranked by points with their source (claim history, photos or AI model; a model reason that repeats a red flag is dropped), the repair estimate as labour + parts or a write-off at the IDV, and the write-off chance with the reported damage and car age. Shown as "Why these scores" on the Claim Assessment page and the claim's AI tab. Claims assessed before this field existed show nothing until re-assessed (`manage.py assess_claims`).
 - Raises or refreshes the claim's `FraudAlert` when the score is in the moderate band (≥ 30) or above; an existing alert keeps its status, investigator and notes.
 - Called by `POST /ai/assess-claim/`, `POST /claims/{id}/assessment/`, automatically when a claim is submitted (failures are logged and never block the claim), and by `python manage.py assess_claims` for backfills.
 
@@ -538,7 +540,7 @@ All endpoints require a staff member; investigators can only act on their assign
 - **EmployeeDashboard**: timeframe selector; KPIs (active policies, claims, pending, high fraud, likely total loss); charts (claims over time combo, status doughnut, fraud doughnut); recent claims and fraud alert tables; CSV export.
 - **AdminDashboard / Analytics**: 7 KPIs, 5 charts (trend, fraud bands, status distribution, total-loss vs repairable, by incident type), CSV export.
 - **UserManagement**: create customer/employee/investigator accounts; list managed accounts.
-- **InvestigatorDashboard**: SIU profile banner, KPIs, case docket with search/filters, notes modal (interview/confidential tags, add note).
+- **InvestigatorDashboard**: SIU profile banner, KPIs, case docket with search/filters; per case **Start** (open/on hold/pending review), **Complete** (findings required, plus conclusion and recommendation), an **Evidence** modal (list, add with type, title, description, source, key-evidence flag and an optional file up to 25 MB) and a notes modal (interview/confidential tags, add note).
 - **ClaimList**: KPIs, search, filters, sortable table, pagination, delete (admin always; others only while `submitted`).
 - **SubmitClaim**: 4-step wizard: (1) policy & vehicle (cascading, active-policy check), (2) incident details, (3) injuries/property/police/witnesses, (4) amount in ₹, description, attachments (≤ 25 MB) and review. Uploads run after creation with `Promise.allSettled`.
 - **ClaimDetails**: tabs Overview (assign adjuster/investigator), Incident, AI Risk (staff), Documents (upload + thumbnails), Timeline; status changer for admin/employee; lifecycle sidebar.
@@ -584,7 +586,7 @@ Tailwind + a large `index.css` with CSS-variable design tokens (primary #2563eb,
 | `LOG_LEVEL` | INFO | |
 
 ### Frontend
-`VITE_API_BASE_URL` (default `http://127.0.0.1:8000/api/v1`, normalised to end with `/api/v1`). Dev server on port 3000.
+`VITE_API_BASE_URL` (default `http://127.0.0.1:8000/api/v1`, normalised to end with `/api/v1`). Dev server on port 3000. `VITE_SHOW_DEMO_LOGINS=true` shows a "Demo accounts" panel on the customer and staff sign-in pages that fills in the `load_demo` logins (`src/components/auth/DemoLogins.jsx`; `VITE_DEMO_PASSWORD` if `--password` was used). Off by default.
 
 ### Local run
 ```powershell
@@ -594,6 +596,7 @@ python -m venv .venv; .venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
 python manage.py migrate
+python manage.py load_demo                    # optional: demo logins + 7 scored claims (DEBUG only)
 python manage.py import_project_datasets      # optional demo data
 python manage.py seed_routing_demo_agents     # optional
 python manage.py runserver                    # http://127.0.0.1:8000/api/v1/schema/swagger-ui/

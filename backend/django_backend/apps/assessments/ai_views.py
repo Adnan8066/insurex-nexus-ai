@@ -22,6 +22,7 @@ from ml_service import (
     MLModelUnavailable,
     CURRENCY_PER_DATASET_UNIT,
 )
+from .explain import explain_assessment
 from .fraud_rules import ALERT_MIN_RED_FLAGS, combined_fraud_score, connected_claims, red_flags
 from common.permissions import IsStaffMember
 from common.params import parse_int
@@ -119,6 +120,7 @@ def run_claim_assessment(claim):
         assessment.claim_priority = 'low'
 
     from ml_service import get_model_version
+    assessment.explanation = json_safe(explain_assessment(claim, predicted_cost, fraud_score, total_loss_prob))
     assessment.ai_recommendation = generate_recommendation(assessment)
     assessment.confidence = calculate_confidence(assessment)
     assessment.model_version = get_model_version()

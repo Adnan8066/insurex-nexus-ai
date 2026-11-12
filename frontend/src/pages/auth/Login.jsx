@@ -1,18 +1,21 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Mail, Car, Smartphone } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
 import { AuthLayout } from '../../components/auth/BrandArtwork'
 import { Alert } from '../../components/ui/Alert'
+import { DemoLogins } from '../../components/auth/DemoLogins'
+import { demoForm } from '../../components/auth/demoAccounts'
 
 const emptyForm = { email: '', license_plate: '', mobile_number: '' }
 
 export function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { customerLogin } = useAuth()
-  const [formData, setFormData] = useState(emptyForm)
+  const [formData, setFormData] = useState(() => ({ ...emptyForm, ...demoForm(location.state?.demoAccount) }))
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -117,6 +120,14 @@ export function Login() {
           <Button type="button" variant="outline" fullWidth className="py-3" onClick={() => navigate('/staff-login')}>
             Staff login
           </Button>
+
+          <DemoLogins
+            page="/login"
+            onFill={(form) => {
+              setFormData({ ...emptyForm, ...form })
+              setErrors({})
+            }}
+          />
         </form>
 
         <div className="text-center">
