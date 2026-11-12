@@ -26,6 +26,7 @@ def _choose_action(env: ClaimRoutingEnv, rng: np.random.Generator, policy: str) 
     eligible = [
         i for i in range(env.n_agents)
         if env.available[i] and env.skill_tiers[i] >= env.required_skill_tier
+        and env.agent_experience[i] >= env._get_info()["required_experience_years"]
     ]
     candidates = eligible or [i for i in range(env.n_agents) if env.available[i]]
     if policy == "random" or (policy == "mixed" and rng.random() < 0.25):
@@ -51,7 +52,7 @@ def generate_dataset(
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     columns = [
-        "episode_id", "step", "behavior_policy", "action_agent_index",
+        "profile_feature_version", "episode_id", "step", "behavior_policy", "action_agent_index",
         *[f"obs_{i}" for i in range(env.observation_space.shape[0])],
         "reward", "next_episode_id",
         *[f"next_obs_{i}" for i in range(env.observation_space.shape[0])],
@@ -68,6 +69,7 @@ def generate_dataset(
                 action = _choose_action(env, rng, policy)
                 next_obs, reward, terminated, truncated, info = env.step(action)
                 row = {
+                    "profile_feature_version": 2,
                     "episode_id": episode,
                     "step": step,
                     "behavior_policy": policy,

@@ -52,6 +52,7 @@ class ClaimSerializer(serializers.ModelSerializer):
     vehicle_info = serializers.SerializerMethodField()
     assigned_adjuster_name = serializers.CharField(source='assigned_adjuster.get_full_name', read_only=True)
     assigned_investigator_name = serializers.CharField(source='assigned_investigator.get_full_name', read_only=True)
+    assignment_history = serializers.SerializerMethodField()
     documents = ClaimDocumentSerializer(many=True, read_only=True)
     status_history = ClaimStatusHistorySerializer(many=True, read_only=True)
     timeline = ClaimTimelineSerializer(many=True, read_only=True)
@@ -69,6 +70,7 @@ class ClaimSerializer(serializers.ModelSerializer):
             'claim_amount', 'description', 'status', 'priority',
             'estimated_repair_cost', 'complexity_score',
             'assigned_adjuster', 'assigned_adjuster_name',
+            'assignment_status', 'assignment_updated_at', 'assignment_history',
             'assigned_investigator', 'assigned_investigator_name',
             'ai_assessment', 'fraud_risk_score', 'total_loss_probability',
             'fraud_outcome', 'fraud_outcome_date', 'fraud_outcome_note',
@@ -76,7 +78,15 @@ class ClaimSerializer(serializers.ModelSerializer):
             'documents', 'status_history', 'timeline', 'notes'
         ]
         read_only_fields = ['id', 'claim_number', 'submitted_at', 'updated_at', 'closed_at', 'complexity_score',
-                            'fraud_outcome', 'fraud_outcome_date', 'fraud_outcome_note']
+                            'fraud_outcome', 'fraud_outcome_date', 'fraud_outcome_note', 'assigned_adjuster',
+                            'assignment_status', 'assignment_updated_at', 'assignment_history']
+
+    def get_assignment_history(self, obj):
+        if not obj.pk:
+            return []
+        return [{'event_type': event.event_type, 'employee_name': event.employee.get_full_name() if event.employee else None,
+                 'strategy': event.strategy, 'model_version': event.model_version, 'reason': event.reason,
+                 'created_at': event.created_at} for event in obj.assignment_events.select_related('employee')[:20]]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -165,7 +175,7 @@ class ClaimUpdateSerializer(serializers.ModelSerializer):
             'property_damage_details', 'witnesses', 'witness_details', 'police_report',
             'police_report_number', 'claim_amount', 'description',
             'estimated_repair_cost',
-            'status', 'priority', 'assigned_adjuster', 'assigned_investigator',
+            'status', 'priority', 'assigned_investigator',
             'ai_assessment', 'fraud_risk_score', 'total_loss_probability'
         ]
 

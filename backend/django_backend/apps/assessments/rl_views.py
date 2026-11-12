@@ -64,6 +64,11 @@ class ActiveAgentStatusSerializer(serializers.Serializer):
     queue_length = serializers.FloatField(min_value=0)
     workload = serializers.FloatField(min_value=0)
     skill_tier = serializers.IntegerField(min_value=1, max_value=5)
+    years_of_experience = serializers.IntegerField(min_value=0, max_value=60, required=False, default=0)
+    max_claim_capacity = serializers.IntegerField(min_value=1, max_value=1000, required=False, allow_null=True)
+    current_shift_status = serializers.ChoiceField(
+        choices=['on_shift', 'off_shift', 'not_configured'], required=False, default='not_configured'
+    )
     available = serializers.BooleanField(required=False, default=True)
 
 
@@ -183,6 +188,10 @@ class RoutingAgentRosterSerializer(serializers.Serializer):
     years_of_experience = serializers.IntegerField()
     max_claim_capacity = serializers.IntegerField()
     availability_status = serializers.CharField()
+    working_days = serializers.ListField(child=serializers.CharField())
+    shift_start_time = serializers.TimeField(allow_null=True)
+    shift_end_time = serializers.TimeField(allow_null=True)
+    current_shift_status = serializers.CharField()
     available = serializers.BooleanField()
     is_demo = serializers.BooleanField()
 
@@ -271,6 +280,7 @@ def _agent_status(profile):
     shift_match = not profile.shift_start_time or not profile.shift_end_time or (
         profile.shift_start_time <= now.time() <= profile.shift_end_time
     )
+    shift_configured = bool(profile.working_days or profile.shift_start_time or profile.shift_end_time)
     return {
         'id': user.id,
         'name': user.get_full_name() or user.email,
@@ -285,6 +295,10 @@ def _agent_status(profile):
         'years_of_experience': profile.years_of_experience,
         'max_claim_capacity': profile.max_claim_capacity,
         'availability_status': profile.availability_status,
+        'working_days': profile.working_days,
+        'shift_start_time': profile.shift_start_time,
+        'shift_end_time': profile.shift_end_time,
+        'current_shift_status': 'not_configured' if not shift_configured else 'on_shift' if schedule_match and shift_match else 'off_shift',
         'available': (
             profile.is_available
             and profile.availability_status == RoutingAgentProfile.Availability.AVAILABLE

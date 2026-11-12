@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Download } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useLocation } from 'react-router-dom'
-import { analyticsService } from '../../services'
+import { analyticsService, claimService } from '../../services'
 import { Button } from '../../components/ui/Button'
 import { ChartCard, ComboChart } from '../../components/charts/ChartComponents'
 import { formatCurrency, formatCurrencyCompact } from '../../utils/helpers'
@@ -62,6 +62,9 @@ export function AdminDashboard() {
   const [trend, setTrend] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [assignment, setAssignment] = useState(null)
+  const [assignmentBusy, setAssignmentBusy] = useState(false)
+  const isAdminDashboard = useLocation().pathname === '/dashboard'
 
   const granularity = TREND_GRANULARITY[dateRange] || 'day'
 
@@ -85,6 +88,28 @@ export function AdminDashboard() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  const loadAssignments = useCallback(async () => {
+    if (!isAdminDashboard) return
+    try { setAssignment(await claimService.getAssignmentDashboard()) } catch (err) { console.error('Failed to load assignments:', err) }
+  }, [isAdminDashboard])
+  useEffect(() => { loadAssignments() }, [loadAssignments])
+
+  const updateAutoAssignment = async (enabled) => {
+    setAssignmentBusy(true)
+    try { setAssignment(await claimService.updateAssignmentSettings({ enabled })) } catch (err) { console.error('Failed to update assignment settings:', err) }
+    finally { setAssignmentBusy(false) }
+  }
+  const updatePpoPreference = async (prefer_qualified_ppo) => {
+    setAssignmentBusy(true)
+    try { setAssignment(await claimService.updateAssignmentSettings({ prefer_qualified_ppo })) } catch (err) { console.error('Failed to update PPO preference:', err) }
+    finally { setAssignmentBusy(false) }
+  }
+  const retryAssignments = async () => {
+    setAssignmentBusy(true)
+    try { await claimService.retryPendingAssignments(); await loadAssignments() } catch (err) { console.error('Failed to retry assignments:', err) }
+    finally { setAssignmentBusy(false) }
+  }
 
   const claims = summary?.claims || {}
   const policies = summary?.policies || {}
@@ -214,6 +239,44 @@ export function AdminDashboard() {
 
       {error && (
         <Alert onRetry={loadData}>{error}</Alert>
+      )}
+
+      {isAdminDashboard && assignment && (
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Automatic claim assignment</h2>
+              <p className="text-sm text-gray-500">Current routing: expertise-aware workload balance. PPO is eligible only after a profile-v2 evaluation passes.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <input type="checkbox" checked={assignment.enabled} disabled={assignmentBusy} onChange={(e) => updateAutoAssignment(e.target.checked)} />
+                Automatic assignment {assignment.enabled ? 'on' : 'off'}
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <input type="checkbox" checked={assignment.prefer_qualified_ppo} disabled={assignmentBusy} onChange={(e) => updatePpoPreference(e.target.checked)} />
+                Use PPO after qualification
+              </label>
+              <Button variant="outline" size="sm" disabled={assignmentBusy || !assignment.pending_unassigned} onClick={retryAssignments}>Retry pending ({assignment.pending_unassigned})</Button>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatTile label="Auto assigned" value={assignment.automatically_assigned} caption="Assignment history" valueClassName="text-blue-700" />
+            <StatTile label="Pending unassigned" value={assignment.pending_unassigned} caption="Waiting for eligible expertise" valueClassName="text-amber-600" />
+            <StatTile label="Failed attempts" value={assignment.failed_attempts} caption="Requires admin review" valueClassName="text-red-600" />
+            <StatTile label="PPO qualification" value={assignment.ppo_qualified ? `Qualified · ${assignment.ppo_model_version}` : 'Not qualified'} caption="Production gate status" valueClassName={assignment.ppo_qualified ? 'text-emerald-700' : 'text-gray-600'} />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <h3 className="mb-2 text-sm font-bold text-gray-700">Current employee workload</h3>
+              <div className="space-y-2">{assignment.employees.length ? assignment.employees.map((employee) => <div key={employee.assigned_adjuster_id} className="flex justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm"><span>{employee.assigned_adjuster__first_name} {employee.assigned_adjuster__last_name}</span><span className="font-semibold">{employee.workload} active · {employee.total_assignments} total</span></div>) : <p className="text-sm text-gray-500">No employee assignments yet.</p>}</div>
+            </div>
+            <div>
+              <h3 className="mb-2 text-sm font-bold text-gray-700">Recent assignment history</h3>
+              <div className="space-y-2">{assignment.history.slice(0, 5).map((event) => <div key={event.id} className="rounded-lg bg-gray-50 px-3 py-2 text-sm"><div className="flex justify-between gap-2"><span className="font-semibold">{event.claim_number} · {event.event_type}</span><span className="text-gray-500">{event.strategy}</span></div><p className="text-gray-500">{event.employee_name || 'Unassigned'} · {event.reason}</p></div>)}</div>
+            </div>
+          </div>
+        </section>
       )}
 
       {loading && !summary && (
