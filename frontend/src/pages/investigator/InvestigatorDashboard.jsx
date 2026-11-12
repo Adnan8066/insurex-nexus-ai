@@ -8,11 +8,16 @@ import {
   FileText,
   Send,
   MessageSquare,
+  Play,
+  CheckCircle2,
+  Paperclip,
+  Star,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { investigationService } from '../../services'
 import { formatApiError } from '../../services/api'
 import { useAuth } from '../../context/useAuth'
+import { useToast } from '../../components/ui/toastHooks'
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -40,6 +45,30 @@ const STATUS_LABELS = {
 }
 
 const ACTIVE_STATUSES = ['open', 'in_progress', 'pending_review']
+// Mirrors STARTABLE_STATUSES / COMPLETABLE_STATUSES in apps/investigations/views.py.
+const STARTABLE_STATUSES = ['open', 'on_hold', 'pending_review']
+const COMPLETABLE_STATUSES = ['in_progress', 'pending_review']
+const CLOSED_STATUSES = ['completed', 'closed']
+
+const EVIDENCE_TYPES = [
+  { value: 'document', label: 'Document' },
+  { value: 'photo', label: 'Photo' },
+  { value: 'video', label: 'Video' },
+  { value: 'audio', label: 'Audio' },
+  { value: 'statement', label: 'Statement' },
+  { value: 'surveillance', label: 'Surveillance' },
+  { value: 'digital', label: 'Digital forensics' },
+  { value: 'financial', label: 'Financial record' },
+  { value: 'medical', label: 'Medical record' },
+  { value: 'other', label: 'Other' },
+]
+const EVIDENCE_TYPE_LABELS = Object.fromEntries(EVIDENCE_TYPES.map((t) => [t.value, t.label]))
+// Same allow-list and size limit as common/uploads.py (EVIDENCE_EXTENSIONS, MAX_UPLOAD_BYTES).
+const EVIDENCE_ACCEPT = '.jpg,.jpeg,.png,.webp,.bmp,.pdf,.mp4,.mov,.m4a,.mp3,.wav'
+const MAX_EVIDENCE_BYTES = 25 * 1024 * 1024
+
+const EMPTY_EVIDENCE = { evidence_type: 'document', title: '', description: '', source: '', is_key_evidence: false }
+const EMPTY_COMPLETION = { findings: '', conclusion: '', recommendation: '' }
 
 const RISK_COLORS = {
   high: 'text-red-600',
@@ -61,6 +90,23 @@ export function InvestigatorDashboard() {
   const [activeInvestigation, setActiveInvestigation] = useState(null)
   const [newNoteText, setNewNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
+
+  const toast = useToast()
+  const [startingId, setStartingId] = useState(null)
+
+  // Evidence modal state
+  const [evidenceCase, setEvidenceCase] = useState(null)
+  const [evidenceForm, setEvidenceForm] = useState(EMPTY_EVIDENCE)
+  const [evidenceFile, setEvidenceFile] = useState(null)
+  const [evidenceError, setEvidenceError] = useState(null)
+  const [savingEvidence, setSavingEvidence] = useState(false)
+  const [fileInputKey, setFileInputKey] = useState(0)
+
+  // Complete modal state
+  const [completeCase, setCompleteCase] = useState(null)
+  const [completionForm, setCompletionForm] = useState(EMPTY_COMPLETION)
+  const [completionError, setCompletionError] = useState(null)
+  const [completing, setCompleting] = useState(false)
 
   const loadInvestigations = useCallback(async () => {
     setLoading(true)
@@ -104,6 +150,102 @@ export function InvestigatorDashboard() {
       setError(formatApiError(err, 'Failed to save note.'))
     } finally {
       setAddingNote(false)
+    }
+  }
+
+  const replaceInvestigation = (updated) => {
+    setInvestigations((prev) => prev.map((inv) => (inv.id === updated.id ? updated : inv)))
+  }
+
+  const handleStart = async (investigation) => {
+    setStartingId(investigation.id)
+    try {
+      const updated = await investigationService.startInvestigation(investigation.id)
+      replaceInvestigation(updated)
+      toast.success(`${investigation.case_number} is now in progress.`)
+    } catch (err) {
+      toast.error(formatApiError(err, 'Could not start the investigation.'))
+    } finally {
+      setStartingId(null)
+    }
+  }
+
+  const handleOpenEvidence = (investigation) => {
+    setEvidenceCase(investigation)
+    setEvidenceForm(EMPTY_EVIDENCE)
+    setEvidenceFile(null)
+    setEvidenceError(null)
+    setFileInputKey((k) => k + 1)
+  }
+
+  const handleEvidenceFile = (e) => {
+    const file = e.target.files?.[0] || null
+    if (file && file.size > MAX_EVIDENCE_BYTES) {
+      setEvidenceError('File is too large. The maximum size is 25 MB.')
+      setEvidenceFile(null)
+      setFileInputKey((k) => k + 1)
+      return
+    }
+    setEvidenceError(null)
+    setEvidenceFile(file)
+  }
+
+  const handleAddEvidence = async (e) => {
+    e.preventDefault()
+    if (!evidenceCase || !evidenceForm.title.trim()) return
+    setSavingEvidence(true)
+    setEvidenceError(null)
+    try {
+      const formData = new FormData()
+      formData.append('evidence_type', evidenceForm.evidence_type)
+      formData.append('title', evidenceForm.title.trim())
+      formData.append('description', evidenceForm.description.trim())
+      formData.append('source', evidenceForm.source.trim())
+      formData.append('is_key_evidence', evidenceForm.is_key_evidence ? 'true' : 'false')
+      if (evidenceFile) formData.append('file', evidenceFile)
+      await investigationService.addEvidence(evidenceCase.id, formData)
+      const updated = await investigationService.getInvestigation(evidenceCase.id)
+      replaceInvestigation(updated)
+      setEvidenceCase(updated)
+      setEvidenceForm(EMPTY_EVIDENCE)
+      setEvidenceFile(null)
+      setFileInputKey((k) => k + 1)
+      toast.success('Evidence added to the case.')
+    } catch (err) {
+      setEvidenceError(formatApiError(err, 'Could not save the evidence.'))
+    } finally {
+      setSavingEvidence(false)
+    }
+  }
+
+  const handleOpenComplete = (investigation) => {
+    setCompleteCase(investigation)
+    setCompletionForm({
+      findings: investigation.findings || '',
+      conclusion: investigation.conclusion || '',
+      recommendation: investigation.recommendation || '',
+    })
+    setCompletionError(null)
+  }
+
+  const handleComplete = async (e) => {
+    e.preventDefault()
+    if (!completeCase || !completionForm.findings.trim()) return
+    setCompleting(true)
+    setCompletionError(null)
+    try {
+      const updated = await investigationService.completeInvestigation(completeCase.id, {
+        findings: completionForm.findings.trim(),
+        conclusion: completionForm.conclusion.trim(),
+        recommendation: completionForm.recommendation.trim(),
+      })
+      replaceInvestigation(updated)
+      setCompleteCase(null)
+      toast.success(`${completeCase.case_number} is complete. The claim can now go for an approval decision.`)
+    } catch (err) {
+      setCompletionError(formatApiError(err, 'Could not complete the investigation.'))
+    } finally {
+      setCompleting(false)
     }
   }
 
@@ -296,7 +438,7 @@ export function InvestigatorDashboard() {
                   <TableHead>Fraud Risk</TableHead>
                   <TableHead>Investigation Status</TableHead>
                   <TableHead>Notes Count</TableHead>
-                  <TableHead className="w-36 text-right">Actions</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -364,7 +506,32 @@ export function InvestigatorDashboard() {
                         </span>
                       </TableCell>
                       <TableCell align="right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                          {STARTABLE_STATUSES.includes(inv.status) && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleStart(inv)}
+                              disabled={startingId === inv.id}
+                            >
+                              <Play className="w-3.5 h-3.5 mr-1" />
+                              {startingId === inv.id ? 'Starting…' : 'Start'}
+                            </Button>
+                          )}
+                          {COMPLETABLE_STATUSES.includes(inv.status) && (
+                            <Button variant="primary" size="sm" onClick={() => handleOpenComplete(inv)}>
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                              Complete
+                            </Button>
+                          )}
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleOpenEvidence(inv)}
+                          >
+                            <Paperclip className="w-3.5 h-3.5 mr-1" />
+                            Evidence ({(inv.evidence || []).length})
+                          </Button>
                           <Button
                             variant="secondary"
                             size="sm"
@@ -464,6 +631,169 @@ export function InvestigatorDashboard() {
               </div>
             </form>
           </div>
+        </Modal>
+      )}
+
+      {/* Evidence Modal */}
+      {evidenceCase && (
+        <Modal
+          isOpen={!!evidenceCase}
+          onClose={() => setEvidenceCase(null)}
+          title={`Evidence: ${evidenceCase.case_number}`}
+          size="lg"
+        >
+          <div className="space-y-5">
+            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+              {(evidenceCase.evidence || []).length > 0 ? (
+                evidenceCase.evidence.map((item) => (
+                  <div key={item.id} className="p-3.5 rounded-xl border border-gray-200 bg-white space-y-1">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                        {item.title}
+                        <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">
+                          {(EVIDENCE_TYPE_LABELS[item.evidence_type] || item.evidence_type).toUpperCase()}
+                        </span>
+                        {item.is_key_evidence && (
+                          <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5">
+                            <Star className="w-3 h-3" /> KEY
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-gray-400 font-mono shrink-0">
+                        {item.collected_at ? formatRelativeTime(item.collected_at) : ''}
+                      </span>
+                    </div>
+                    {item.description && <p className="text-sm text-gray-700">{item.description}</p>}
+                    <div className="flex flex-wrap gap-x-4 text-xs text-gray-500">
+                      {item.source && <span>Source: {item.source}</span>}
+                      {item.collected_by_name && <span>Added by {item.collected_by_name}</span>}
+                      {item.file && (
+                        <a href={item.file} target="_blank" rel="noreferrer" className="text-primary font-semibold hover:underline">
+                          Open file
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6 text-gray-400 text-sm">No evidence recorded yet for this case.</div>
+              )}
+            </div>
+
+            {CLOSED_STATUSES.includes(evidenceCase.status) ? (
+              <p className="text-xs text-gray-500 pt-3 border-t">This case is {STATUS_LABELS[evidenceCase.status].toLowerCase()}, so no more evidence can be added here.</p>
+            ) : (
+              <form onSubmit={handleAddEvidence} className="space-y-3 pt-3 border-t">
+                {evidenceError && <Alert>{evidenceError}</Alert>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Select
+                    label="Type"
+                    options={EVIDENCE_TYPES}
+                    value={evidenceForm.evidence_type}
+                    onChange={(e) => setEvidenceForm((f) => ({ ...f, evidence_type: e.target.value }))}
+                  />
+                  <Input
+                    label="Title"
+                    placeholder="e.g. Repair invoice from garage"
+                    value={evidenceForm.title}
+                    onChange={(e) => setEvidenceForm((f) => ({ ...f, title: e.target.value }))}
+                    maxLength={200}
+                    required
+                  />
+                </div>
+                <Textarea
+                  label="Description"
+                  rows={2}
+                  placeholder="What this shows and why it matters"
+                  value={evidenceForm.description}
+                  onChange={(e) => setEvidenceForm((f) => ({ ...f, description: e.target.value }))}
+                />
+                <Input
+                  label="Source"
+                  placeholder="e.g. Customer, police station, CCTV"
+                  value={evidenceForm.source}
+                  onChange={(e) => setEvidenceForm((f) => ({ ...f, source: e.target.value }))}
+                  maxLength={200}
+                />
+                <div>
+                  <label htmlFor="evidence-file" className="input-label">File (optional)</label>
+                  <input
+                    key={fileInputKey}
+                    id="evidence-file"
+                    type="file"
+                    accept={EVIDENCE_ACCEPT}
+                    onChange={handleEvidenceFile}
+                    className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Images, PDF, video or audio, up to 25 MB.</p>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={evidenceForm.is_key_evidence}
+                      onChange={(e) => setEvidenceForm((f) => ({ ...f, is_key_evidence: e.target.checked }))}
+                    />
+                    Key evidence
+                  </label>
+                  <Button variant="primary" size="sm" type="submit" disabled={savingEvidence || !evidenceForm.title.trim()}>
+                    <Paperclip className="w-3.5 h-3.5 mr-1.5" />
+                    {savingEvidence ? 'Saving…' : 'Add evidence'}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Complete Investigation Modal */}
+      {completeCase && (
+        <Modal
+          isOpen={!!completeCase}
+          onClose={() => setCompleteCase(null)}
+          title={`Complete ${completeCase.case_number}`}
+          size="lg"
+        >
+          <form onSubmit={handleComplete} className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Completing the case records your findings on claim{' '}
+              <strong className="font-mono text-gray-900">{completeCase.claim_number}</strong>. For a high-risk
+              claim, this is what allows an employee to approve or reject it.
+            </p>
+            {completionError && <Alert>{completionError}</Alert>}
+            <Textarea
+              label="Findings (required)"
+              rows={4}
+              placeholder="What you checked and what you found"
+              value={completionForm.findings}
+              onChange={(e) => setCompletionForm((f) => ({ ...f, findings: e.target.value }))}
+              required
+            />
+            <Textarea
+              label="Conclusion"
+              rows={2}
+              placeholder="e.g. Claim is genuine / evidence of an inflated repair bill"
+              value={completionForm.conclusion}
+              onChange={(e) => setCompletionForm((f) => ({ ...f, conclusion: e.target.value }))}
+            />
+            <Textarea
+              label="Recommendation"
+              rows={2}
+              placeholder="e.g. Approve, approve a reduced amount, or reject"
+              value={completionForm.recommendation}
+              onChange={(e) => setCompletionForm((f) => ({ ...f, recommendation: e.target.value }))}
+            />
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <Button variant="outline" size="sm" type="button" onClick={() => setCompleteCase(null)}>
+                Cancel
+              </Button>
+              <Button variant="primary" size="sm" type="submit" disabled={completing || !completionForm.findings.trim()}>
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                {completing ? 'Completing…' : 'Complete investigation'}
+              </Button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>

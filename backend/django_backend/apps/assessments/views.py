@@ -30,7 +30,7 @@ class ClaimAssessmentViewSet(InvestigatorClaimScopeMixin, viewsets.ModelViewSet)
     serializer_class = ClaimAssessmentSerializer
     permission_classes = [IsAuthenticated, IsStaffMember]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['assessment_type', 'status', 'risk_level', 'claim_priority']
+    filterset_fields = ['claim', 'assessment_type', 'status', 'risk_level', 'claim_priority']
     search_fields = ['claim__claim_number', 'claim__customer__email', 'claim__customer__first_name', 'claim__customer__last_name']
     ordering_fields = ['created_at', 'assessed_at', 'fraud_risk_score', 'total_loss_probability']
     ordering = ['-created_at']

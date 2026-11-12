@@ -14,10 +14,10 @@ class ClaimAssessmentSerializer(serializers.ModelSerializer):
             'repair_time_estimate_days', 'comparable_claims_count', 'fraud_risk_score',
             'risk_level', 'risk_factors', 'behavioral_indicators', 'network_analysis',
             'total_loss_probability', 'claim_priority', 'ai_recommendation',
-            'confidence', 'contributing_factors', 'assessed_at', 'created_at',
+            'confidence', 'contributing_factors', 'explanation', 'assessed_at', 'created_at',
             'updated_at', 'reviewed_by', 'reviewed_by_name', 'reviewed_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'assessed_at', 'reviewed_by', 'reviewed_at']
+        read_only_fields = ['id', 'explanation', 'created_at', 'updated_at', 'assessed_at', 'reviewed_by', 'reviewed_at']
 
 class ClaimAssessmentCreateSerializer(serializers.ModelSerializer):
     class Meta:

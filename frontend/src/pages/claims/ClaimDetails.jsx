@@ -31,6 +31,7 @@ import { ConfirmDialog } from '../../components/ui/Modal'
 import { Select } from '../../components/forms/FormFields'
 import { Alert } from '../../components/ui/Alert'
 import { LoadingState } from '../../components/ui/LoadingSpinner'
+import { ScoreExplanation } from '../../components/ai/ScoreExplanation'
 
 const mapClaim = (c) => ({
   id: c.id,
@@ -705,7 +706,9 @@ export function ClaimDetails() {
                       <p className="font-semibold text-gray-900 text-base">{claim.aiAssessment.aiRecommendation}</p>
                     </div>
 
-                    {claim.aiAssessment.factors && claim.aiAssessment.factors.length > 0 && (
+                    <ScoreExplanation explanation={claim.aiAssessment.explanation} className="shadow-none" />
+
+                    {!claim.aiAssessment.explanation?.summary && claim.aiAssessment.factors?.length > 0 && (
                       <div>
                         <h4 className="font-semibold text-gray-900 text-sm mb-3">Assessment Contributing Factors</h4>
                         <div className="space-y-2">
