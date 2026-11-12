@@ -72,7 +72,10 @@ const mapPolicy = (p) => ({
   autoRenew: p.auto_renew,
   policyPlan: p.coverage?.policy_plan || null,
   coverage: p.coverage_details || {},
-  vehicle: p.vehicle_info || (p.vehicle ? {
+  vehicle: p.vehicle_info ? {
+    ...p.vehicle_info,
+    licensePlate: p.vehicle_info.license_plate ?? p.vehicle_info.licensePlate,
+  } : (p.vehicle ? {
     id: p.vehicle.id,
     make: p.vehicle.make,
     model: p.vehicle.model,
@@ -503,23 +506,23 @@ export function PolicyDetails() {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <dt className="text-sm font-medium text-gray-500">Make</dt>
-                          <dd className="mt-1 text-gray-900">{policy.vehicle.make || ''} {policy.vehicle.model || ''}</dd>
+                          <dd className="mt-1 text-gray-900">{[policy.vehicle.make, policy.vehicle.model].filter(Boolean).join(' ') || '—'}</dd>
                         </div>
                         <div>
                           <dt className="text-sm font-medium text-gray-500">Year</dt>
-                          <dd className="mt-1 text-gray-900">{policy.vehicle.year || ''}</dd>
+                          <dd className="mt-1 text-gray-900">{policy.vehicle.year || '—'}</dd>
                         </div>
                         <div>
                           <dt className="text-sm font-medium text-gray-500">Color</dt>
-                          <dd className="mt-1 text-gray-900">{policy.vehicle.color || ''}</dd>
+                          <dd className="mt-1 text-gray-900">{policy.vehicle.color || '—'}</dd>
                         </div>
                         <div>
                           <dt className="text-sm font-medium text-gray-500">VIN</dt>
-                          <dd className="mt-1 text-gray-900 font-mono">{policy.vehicle.vin || ''}</dd>
+                          <dd className="mt-1 text-gray-900 font-mono">{policy.vehicle.vin || '—'}</dd>
                         </div>
                         <div>
                           <dt className="text-sm font-medium text-gray-500">License Plate</dt>
-                          <dd className="mt-1 text-gray-900">{policy.vehicle.licensePlate || ''}</dd>
+                          <dd className="mt-1 text-gray-900">{policy.vehicle.licensePlate || '—'}</dd>
                         </div>
                       </div>
                     </dl>

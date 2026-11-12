@@ -73,7 +73,9 @@ class PolicySerializer(serializers.ModelSerializer):
                 'make': obj.vehicle.make,
                 'model': obj.vehicle.model,
                 'year': obj.vehicle.year,
-                'license_plate': obj.vehicle.license_plate
+                'license_plate': obj.vehicle.license_plate,
+                'vin': obj.vehicle.vin,
+                'color': obj.vehicle.color,
             }
         return None
 
