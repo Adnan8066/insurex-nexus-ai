@@ -41,7 +41,7 @@ export function UserManagement() {
   const [deletingId, setDeletingId] = useState(null)
   const { user: currentUser } = useAuth()
 
-  const canDelete = (account) => account.role !== 'admin' && String(account.id) !== String(currentUser?.id)
+  const canDelete = (account) => account.is_active && account.role !== 'admin' && String(account.id) !== String(currentUser?.id)
   const displayName = (account) => account.full_name || account.name || account.email
 
   const visibleUsers = roleFilter === 'all' ? users : users.filter((account) => account.role === roleFilter)
@@ -78,8 +78,8 @@ export function UserManagement() {
       setPendingDelete(null)
       await loadUsers()
     } catch (err) {
-      setError(formatApiError(err, `Could not delete ${displayName(account)}.`))
-      setPendingDelete(null)
+      await loadUsers()
+      setError(formatApiError(err, `Could not remove ${displayName(account)}.`))
     } finally {
       setDeletingId(null)
     }
@@ -186,7 +186,7 @@ export function UserManagement() {
                       <td className="py-3 pr-4 text-gray-600">{account.email}</td>
                       <td className="py-3 pr-4"><Badge variant="info">{roleLabels[account.role] || account.role}</Badge></td>
                       <td className="py-3 pr-4 text-gray-600">{account.department || '—'}</td>
-                      <td className="py-3 pr-4"><Badge variant={account.is_active ? 'success' : 'neutral'}>{account.is_active ? 'Active' : 'Inactive'}</Badge></td>
+                      <td className="py-3 pr-4"><Badge variant={account.is_active ? 'success' : 'neutral'}>{account.is_active ? 'Active' : 'Deactivated'}</Badge></td>
                       <td className="py-3 text-right">
                         {canDelete(account) && (
                           <Button
@@ -206,9 +206,10 @@ export function UserManagement() {
                       <tr>
                         <td colSpan={6} className="pb-3">
                           <div className="flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 p-3 sm:flex-row sm:items-center sm:justify-between" role="alertdialog" aria-label={`Confirm deleting ${displayName(account)}`}>
-                            <p className="text-sm text-red-800">
-                              Delete <strong>{displayName(account)}</strong> ({account.email})? If this account has policies, claims or other history it will be deactivated instead, so that history is kept.
-                            </p>
+                            <div className="space-y-1 text-sm text-red-800">
+                              {error && <p role="alert" className="font-semibold">{error}</p>}
+                              <p>Remove <strong>{displayName(account)}</strong> ({account.email})? Accounts with policies, claims, or other history are deactivated instead, so that history is kept.</p>
+                            </div>
                             <div className="flex shrink-0 gap-2">
                               <Button variant="outline" size="sm" onClick={() => setPendingDelete(null)} disabled={deletingId === account.id}>Cancel</Button>
                               <Button variant="danger" size="sm" onClick={() => handleDelete(account)} disabled={deletingId === account.id}>

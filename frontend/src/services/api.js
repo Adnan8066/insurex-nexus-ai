@@ -132,10 +132,15 @@ export function formatApiError(err, fallback = 'Something went wrong. Please try
   }
   if (!data || typeof data !== 'object') return fallback
 
-  if (typeof data.detail === 'string' && data.detail.trim()) return data.detail
+  if (typeof data.detail === 'string' && data.detail.trim() && data.detail !== 'Internal server error') return data.detail
   const envelope = data.error
   if (typeof envelope === 'string' && envelope.trim()) return envelope
   if (envelope && typeof envelope === 'object') {
+    if (envelope.message === 'Internal server error') {
+      const details = describeFieldErrors(envelope.details)
+      if (details && details !== 'An unexpected error occurred') return details
+      return envelope.message
+    }
     if (typeof envelope.message === 'string' && envelope.message && envelope.message !== 'An error occurred') {
       return envelope.message
     }
