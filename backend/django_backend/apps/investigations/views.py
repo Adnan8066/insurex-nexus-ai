@@ -13,12 +13,13 @@ from .serializers import (
     FraudAlertSerializer, FraudAlertUpdateSerializer
 )
 from common.permissions import IsStaffMember
+from apps.auditlog.context import AuditActorViewSetMixin
 
 STARTABLE_STATUSES = {InvestigationStatus.OPEN, InvestigationStatus.ON_HOLD, InvestigationStatus.PENDING_REVIEW}
 COMPLETABLE_STATUSES = {InvestigationStatus.IN_PROGRESS, InvestigationStatus.PENDING_REVIEW}
 
 
-class InvestigationViewSet(viewsets.ModelViewSet):
+class InvestigationViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
     queryset = Investigation.objects.select_related(
         'claim', 'claim__customer', 'investigator', 'fraud_alert'
     ).prefetch_related('evidence', 'notes')

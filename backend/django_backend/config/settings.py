@@ -63,6 +63,8 @@ INSTALLED_APPS = [
     'apps.repair_shops',
     'apps.notifications',
     'apps.analytics',
+    'apps.settlements',
+    'apps.auditlog.apps.AuditlogConfig',
 ]
 
 MIDDLEWARE = [
@@ -73,6 +75,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.auditlog.context.AuditActorMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]

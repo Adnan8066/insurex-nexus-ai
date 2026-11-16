@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from decimal import Decimal
+from apps.auditlog.context import AuditActorViewSetMixin
 
 from .models import (Policy, PolicyApplication, PolicyEndorsement, PolicyCoverage,
                      PremiumHistory, PolicyStatus)
@@ -102,7 +103,7 @@ def _check_can_review(user, application):
         raise PermissionDenied('This request is assigned to another employee.')
 
 
-class PolicyViewSet(viewsets.ModelViewSet):
+class PolicyViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
     queryset = Policy.objects.select_related('customer', 'agent', 'vehicle').prefetch_related(
         'coverage_details', 'documents', 'premium_history'
     )

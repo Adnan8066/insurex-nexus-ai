@@ -20,11 +20,12 @@ from .serializers import (
 from common.permissions import IsEmployee, CanIssuePolicy, IsStaffMember
 from common.params import parse_int
 from .workflow import TransitionError, check_transition
+from apps.auditlog.context import AuditActorViewSetMixin
 
 logger = logging.getLogger(__name__)
 
 
-class ClaimViewSet(viewsets.ModelViewSet):
+class ClaimViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
     queryset = Claim.objects.select_related(
         'customer', 'policy', 'vehicle', 'assigned_adjuster',
         'assigned_investigator'

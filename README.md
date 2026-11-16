@@ -153,6 +153,7 @@ All endpoints are under `/api/v1/` and use JWT bearer auth.
 | `notifications/` | Notifications |
 | `analytics/` | Dashboard analytics |
 | `ai/` | AI endpoints, e.g. `assess-claim/` |
+| `audit/audit-events/` | Staff audit history for policy, claim, investigation, and settlement changes |
 
 Swagger UI has the full, authoritative list. The policy and claim workflow is described in [docs/WORKFLOW.md](docs/WORKFLOW.md).
 
