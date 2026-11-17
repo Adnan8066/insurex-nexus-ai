@@ -96,7 +96,7 @@ class ClaimWorkflowTests(ClaimTestBase):
 
     def test_cannot_approve_while_submitted_or_in_investigation(self):
         for current in (ClaimStatus.SUBMITTED, ClaimStatus.INVESTIGATION):
-            claim = self.make_claim(current)
+            claim = self.make_claim(current, assigned_adjuster=self.employee)
             response = self.set_status(claim, 'approved')
             self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.content)
             self.assertIn('cannot be approved', response.json()['detail'])
@@ -104,7 +104,7 @@ class ClaimWorkflowTests(ClaimTestBase):
             self.assertEqual(claim.status, current)
 
     def test_approval_from_under_review_records_history(self):
-        claim = self.make_claim(ClaimStatus.UNDER_REVIEW, fraud=10)
+        claim = self.make_claim(ClaimStatus.UNDER_REVIEW, fraud=10, assigned_adjuster=self.employee)
         response = self.as_user(self.employee).patch(
             f'/api/v1/claims/{claim.pk}/update-status/', {'status': 'approved', 'reason': 'Docs verified'}, format='json',
         )
@@ -116,7 +116,7 @@ class ClaimWorkflowTests(ClaimTestBase):
         self.assertIsNotNone(history.changed_at)
 
     def test_high_risk_claim_requires_completed_investigation(self):
-        claim = self.make_claim(ClaimStatus.UNDER_REVIEW, fraud=80)
+        claim = self.make_claim(ClaimStatus.UNDER_REVIEW, fraud=80, assigned_adjuster=self.employee)
         response = self.set_status(claim, 'approved')
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertIn('high fraud risk', response.json()['detail'])
@@ -128,7 +128,7 @@ class ClaimWorkflowTests(ClaimTestBase):
         self.assertEqual(self.set_status(claim, 'approved').status_code, status.HTTP_200_OK)
 
     def test_generic_patch_cannot_change_status_or_model_outputs(self):
-        claim = self.make_claim(fraud=80)
+        claim = self.make_claim(fraud=80, assigned_adjuster=self.employee)
         response = self.as_user(self.employee).patch(f'/api/v1/claims/{claim.pk}/', {'status': 'approved'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         response = self.as_user(self.employee).patch(f'/api/v1/claims/{claim.pk}/', {'fraud_risk_score': '1'}, format='json')

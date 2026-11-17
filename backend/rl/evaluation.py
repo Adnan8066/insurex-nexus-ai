@@ -260,11 +260,13 @@ def evaluate_across_seeds(
     model: Any | None = None,
     n_agents: int = MAX_AGENTS,
     randomize_fleet: bool = True,
+    extra_policies: dict[str, Policy] | None = None,
 ) -> dict[str, Any]:
     """Compare policies across repeatable synthetic scenarios.
 
     Report per-seed metrics, their means, and population standard
-    deviations. PPO is included only when a model is supplied.
+    deviations. PPO is included only when a model is supplied;
+    ``extra_policies`` adds further named policies (algorithm comparison).
     """
     if not seeds:
         raise ValueError("Provide at least one evaluation seed.")
@@ -277,6 +279,7 @@ def evaluate_across_seeds(
 
     if model is not None:
         policies["ppo"] = lambda _env, observation: masked_model_action(model, observation)
+    policies.update(extra_policies or {})
 
     metric_names = (
         "average_reward",

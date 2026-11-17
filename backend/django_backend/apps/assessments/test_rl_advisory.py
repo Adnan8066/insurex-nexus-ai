@@ -152,6 +152,9 @@ class RoutingAdvisoryAPITests(TestCase):
                 **agent,
                 'queue_length': float(agent['queue_length']),
                 'workload': float(agent['workload']),
+                # Defaults the request serializer adds; the server signs the validated data.
+                'years_of_experience': 0,
+                'current_shift_status': 'not_configured',
                 'available': True,
             }
             for agent in self.payload['active_agents_status']

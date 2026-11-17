@@ -25,7 +25,8 @@ class FraudOutcomeTests(TestCase):
         self.investigator = User.objects.create_user(
             username='outcomeinv', email='outcomeinv@insure.com', password='x', role=Role.INVESTIGATOR,
         )
-        self.claim = self.make_claim('CLM-OUT00001')
+        # Employees only see claims assigned to them, so the recording employee is the adjuster.
+        self.claim = self.make_claim('CLM-OUT00001', assigned_adjuster=self.employee)
         self.client = APIClient()
 
     def make_claim(self, number, days_ago=5, **extra):
