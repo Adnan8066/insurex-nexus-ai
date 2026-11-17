@@ -18,9 +18,10 @@ from .serializers import (
 )
 from apps.claims.models import ClaimStatus, ClaimStatusHistory, ClaimTimeline
 from common.permissions import IsStaffMember
+from apps.auditlog.context import AuditActorViewSetMixin
 
 
-class SettlementViewSet(viewsets.ModelViewSet):
+class SettlementViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
     queryset = Settlement.objects.select_related(
         'claim', 'customer', 'approved_by', 'paid_by'
     ).prefetch_related('timeline', 'payments').all()

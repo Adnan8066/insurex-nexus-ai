@@ -18,6 +18,7 @@ from .serializers import (
 from common.permissions import IsStaffMember
 from common.params import parse_int
 from common.risk import FRAUD_HIGH_THRESHOLD, FRAUD_MODERATE_THRESHOLD, FRAUD_RISK_BANDS
+from apps.accounts.models import Role
 from apps.claims.models import Claim, ClaimStatus
 from apps.policies.models import Policy
 from apps.investigations.models import FraudAlert
@@ -166,7 +167,15 @@ def _period(request):
 
 def _scoped_claims(request, period):
     user = request.user
-    claims = Claim.objects.all() if user.is_staff_member else Claim.objects.filter(customer=user)
+    if user.role == Role.ADMIN:
+        claims = Claim.objects.all()
+    elif user.role == Role.EMPLOYEE:
+        # Keep employee dashboard totals aligned with the claims they can access.
+        claims = Claim.objects.filter(assigned_adjuster=user)
+    elif user.role == Role.INVESTIGATOR:
+        claims = Claim.objects.filter(assigned_investigator=user)
+    else:
+        claims = Claim.objects.filter(customer=user)
     if period['start']:
         claims = claims.filter(submitted_at__date__range=(period['start'], period['end']))
     return claims

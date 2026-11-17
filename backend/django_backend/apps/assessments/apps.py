@@ -4,3 +4,6 @@ class AssessmentsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'apps.assessments'
     verbose_name = 'AI Assessments'
+
+
+    
