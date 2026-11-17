@@ -40,6 +40,8 @@ lightgbm==4.7.0
 # Reinforcement learning advisory simulator
 gymnasium==1.4.0
 stable-baselines3==2.9.0
+# MaskablePPO for the algorithm comparison (rl/compare_algorithms.py); not needed to serve advice
+sb3-contrib==2.9.0
 
 # Task Queue (optional for async)
 celery==5.4.0

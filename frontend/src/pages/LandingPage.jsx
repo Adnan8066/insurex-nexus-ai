@@ -45,8 +45,6 @@ const policyFilters = [
   { value: 'comprehensive', label: 'Comprehensive' },
   { value: 'third-party', label: 'Third party' },
   { value: 'own-damage', label: 'Own damage' },
-  { value: 'electric', label: 'Electric vehicle' },
-  { value: 'two-wheeler', label: 'Two-wheeler' },
 ]
 
 export function LandingPage() {
@@ -65,9 +63,7 @@ export function LandingPage() {
   const visiblePolicies = policyTiers.filter((policy) => {
     if (policyFilter === 'comprehensive') return policy.type === 'auto_comprehensive'
     if (policyFilter === 'third-party') return policy.type === 'auto_liability'
-    if (policyFilter === 'own-damage') return policy.type === 'auto_collision'
-    if (policyFilter === 'electric') return policy.category.includes('(EV)')
-    return policy.category === 'Two-Wheeler'
+    return policy.type === 'auto_collision'
   })
 
   useEffect(() => {
@@ -172,11 +168,11 @@ export function LandingPage() {
                   <div className="landing-car absolute bottom-7"><CarFront className="h-36 w-36 text-blue-800 drop-shadow-xl sm:h-40 sm:w-40" strokeWidth={1.4} /></div>
                   <div className="landing-sparkle absolute left-[32%] top-[32%] text-blue-600">✦</div>
                   <div className="landing-sparkle landing-sparkle-late absolute right-[28%] top-[25%] text-emerald-500">✦</div>
-                  <div className="absolute left-5 top-5 rounded-xl border border-white/70 bg-white/75 px-3 py-2 shadow-md backdrop-blur-md">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700"><span className="landing-status-dot h-2 w-2 rounded-full bg-emerald-500" /> Claims workspace</div>
+                  <div className="absolute left-5 top-5 rounded-xl border border-white/70 bg-white/75 px-3 py-2 shadow-md backdrop-blur-md dark:!border-slate-600 dark:!bg-slate-900/90">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:!text-slate-100"><span className="landing-status-dot h-2 w-2 rounded-full bg-emerald-500" /> Claims workspace</div>
                   </div>
-                  <button type="button" onClick={() => setPoliciesOpen(true)} className="absolute bottom-5 right-4 rounded-xl border border-white/70 bg-white/85 px-3 py-2 shadow-lg backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700"><FileText className="h-4 w-4 text-blue-700" /> Policy details</div>
+                  <button type="button" onClick={() => setPoliciesOpen(true)} className="absolute bottom-5 right-4 rounded-xl border border-white/70 bg-white/85 px-3 py-2 shadow-lg backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:!border-slate-600 dark:!bg-slate-900/90">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:!text-slate-100"><FileText className="h-4 w-4 text-blue-700 dark:!text-blue-300" /> Policy details</div>
                   </button>
                 </div>
                 <div className="relative grid grid-cols-1 gap-3 text-center">
@@ -185,9 +181,9 @@ export function LandingPage() {
                     <span className="mt-1 block text-xs font-semibold text-blue-50">View policy options</span>
                   </button>
                 </div>
-                <div className="relative mt-4 flex items-center gap-3 rounded-2xl border border-white/50 bg-white/95 p-3 shadow-[0_12px_32px_-12px_rgba(15,23,42,0.35)] sm:p-4">
-                  <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700"><ClipboardCheck className="h-5 w-5" /></div>
-                  <div><p className="text-sm font-bold text-slate-800">Updates in one place</p><p className="text-xs text-slate-500">Stay informed as your claim moves</p></div>
+                <div className="relative mt-4 flex items-center gap-3 rounded-2xl border border-white/50 bg-white/95 p-3 shadow-[0_12px_32px_-12px_rgba(15,23,42,0.35)] sm:p-4 dark:!border-slate-700 dark:!bg-slate-900/95">
+                  <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700 dark:!bg-emerald-900/40 dark:!text-emerald-300"><ClipboardCheck className="h-5 w-5" /></div>
+                  <div><p className="text-sm font-bold text-slate-800 dark:!text-slate-100">Updates in one place</p><p className="text-xs text-slate-500 dark:!text-slate-300">Stay informed as your claim moves</p></div>
                 </div>
               </div>
             </div>
@@ -253,7 +249,7 @@ export function LandingPage() {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-7 text-sm text-slate-500 sm:px-8 md:flex-row md:items-center md:justify-between">
           <Link to="/" className="font-bold text-slate-800 dark:text-slate-100">InsureX <span className="text-blue-700 dark:text-blue-400">Nexus AI</span></Link>
           <p className="dark:text-slate-400">Manage your motor policy and claims in one secure workspace.</p>
-          <div className="flex gap-5 font-medium"><Link to="/login" className="hover:text-blue-700">Login</Link><button type="button" onClick={openCallback} className="hover:text-blue-700">Request a callback</button></div>
+          <div className="flex items-center gap-5 font-medium"><Link to="/login" className="inline-flex items-center leading-none hover:text-blue-700">Login</Link><button type="button" onClick={openCallback} className="inline-flex items-center font-[inherit] text-[length:inherit] leading-none hover:text-blue-700">Request a callback</button></div>
         </div>
       </footer>
 
@@ -309,9 +305,6 @@ export function LandingPage() {
             <p className="text-sm font-bold uppercase tracking-[0.14em] text-blue-700">Motor insurance</p>
             <h2 id="policy-catalog-title" className="mt-2 pr-12 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">Explore policy options</h2>
             <p className="mt-2 max-w-3xl leading-6 text-slate-600 dark:text-slate-300">Compare the cover types and add-ons in our current demo catalog. An agent can help confirm availability and explain which option fits your vehicle.</p>
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-900">
-              These are illustrative project examples, not confirmed products or insurer quotes. Coverage, eligibility, and premium must be confirmed by an agent.
-            </div>
             <div className="mt-6">
               <p className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Filter by cover type</p>
               <SegmentedTabs

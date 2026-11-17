@@ -223,6 +223,10 @@ class ClaimRoutingEnv(gym.Env[np.ndarray, int]):
         )
         return self._get_observation(), float(reward), terminated, truncated, info
 
+    def action_masks(self) -> np.ndarray:
+        """Valid actions for MaskablePPO: available employees only (padding is never valid)."""
+        return self.available.astype(bool)
+
     def _sample_claim(self) -> None:
         self.claim_complexity = float(self.np_random.uniform(0.0, 1.0))
         self.required_skill_tier = int(self.np_random.integers(1, MAX_SKILL_TIER + 1))

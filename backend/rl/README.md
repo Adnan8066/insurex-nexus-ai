@@ -75,6 +75,36 @@ padding and unavailable employees during training. The recommendation service
 accepts 1–10 current agent records, pads missing slots, and filters unavailable
 agents from its ranking.
 
+## Compare algorithms
+
+`rl/compare_algorithms.py` trains several learners with the same budget and
+evaluates them on the same held-out seeds as `rl.training`:
+
+| Name | What it is |
+| --- | --- |
+| `random`, `least_workload`, `reward_aware` | Hand-written baselines (no training) |
+| `ppo` | PPO from scratch with the production per-employee network |
+| `ppo_bc` | The production recipe: behaviour cloning on the expert CSV, then gentle PPO fine-tuning |
+| `a2c` | A2C from scratch, same network |
+| `maskable_ppo` | MaskablePPO (sb3-contrib) from scratch; absent employees are masked out instead of penalised |
+| `dqn` | DQN from scratch with a per-employee Q-network |
+| `linucb` | LinUCB contextual bandit: one linear model, immediate reward only, no neural network |
+
+From the `backend` directory:
+
+```powershell
+python -m rl.compare_algorithms --timesteps 50000
+python -m rl.compare_algorithms --algorithms ppo,dqn,linucb --timesteps 20000   # subset
+```
+
+It writes `rl/reports/algorithm_comparison.md` (ranked table),
+`algorithm_comparison.png` (four charts with the heuristic as a red line) and
+`algorithm_comparison.json` (per-seed numbers; Git-ignored). Trained learners
+go to `rl/models/comparison/`. Each learner gets the same gate check as
+`rl.training` (at least as good as `least_workload` on reward, wait, workload
+imbalance and skill mismatch). The script never replaces the production model
+`rl/models/claim_routing_ppo.zip`.
+
 ## Recommendation input
 
 The service expects normalized claim values between 0 and 1 and one to ten
