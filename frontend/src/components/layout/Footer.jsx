@@ -36,7 +36,6 @@ const moduleGroups = [
     badge: 'CLAIM OPERATIONS',
     links: [
       { label: 'User Management', to: '/admin/users', roles: ['admin'] },
-      { label: 'Model Health', to: '/operations', roles: reviewRoles },
     ],
     secondBadge: '',
     secondLinks: [],

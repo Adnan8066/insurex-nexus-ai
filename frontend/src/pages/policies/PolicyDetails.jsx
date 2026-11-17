@@ -61,6 +61,7 @@ const mapPolicy = (p) => ({
   policyNumber: p.policy_number,
   customerName: p.customer_name,
   customerEmail: p.customer_email,
+  customerPhone: p.customer_phone,
   agent: p.agent_name,
   type: p.type,
   status: p.status,
@@ -401,6 +402,16 @@ export function PolicyDetails() {
               <Card>
                 <CardHeader title="Policy Information" />
                 <CardContent>
+                  {['employee', 'admin'].includes(user?.role) && (
+                    <div className="mb-5 rounded-xl bg-gray-50 p-4">
+                      <h3 className="font-semibold text-gray-900">Customer details</h3>
+                      <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div><dt className="text-sm font-medium text-gray-500">Name</dt><dd className="mt-1 text-gray-900">{policy.customerName || 'Not provided'}</dd></div>
+                        <div><dt className="text-sm font-medium text-gray-500">Email</dt><dd className="mt-1 break-all text-gray-900">{policy.customerEmail || 'Not provided'}</dd></div>
+                        <div><dt className="text-sm font-medium text-gray-500">Phone</dt><dd className="mt-1 text-gray-900">{policy.customerPhone || 'Not provided'}</dd></div>
+                      </dl>
+                    </div>
+                  )}
                   <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Policy Type</dt>

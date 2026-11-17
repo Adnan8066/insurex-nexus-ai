@@ -8,7 +8,6 @@ import {
   Brain,
   Briefcase,
   ChevronDown,
-  Cpu,
   FileText,
   Headphones,
   LayoutDashboard,
@@ -68,7 +67,6 @@ const accountItems = [
   { label: 'Employee Profile', to: '/my-profile', Icon: User, roles: ['employee'] },
   { label: 'Employee Workforce', to: '/employees', Icon: Users, roles: ['admin'] },
   { label: 'User management', to: '/admin/users', Icon: Users, roles: ['admin'] },
-  { label: 'Model health', to: '/operations', Icon: Cpu, roles: STAFF_ROLES },
 ]
 
 function visibleNavItems(role) {
