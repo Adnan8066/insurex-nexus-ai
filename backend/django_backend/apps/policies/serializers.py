@@ -44,6 +44,7 @@ class PremiumHistorySerializer(serializers.ModelSerializer):
 class PolicySerializer(serializers.ModelSerializer):
     customer_email = serializers.EmailField(source='customer.email', read_only=True)
     customer_name = serializers.CharField(source='customer.get_full_name', read_only=True)
+    customer_phone = serializers.CharField(source='customer.phone', read_only=True)
     agent_name = serializers.CharField(source='agent.get_full_name', read_only=True)
     vehicle_info = serializers.SerializerMethodField()
     coverage_details = PolicyCoverageSerializer(read_only=True)
@@ -55,7 +56,7 @@ class PolicySerializer(serializers.ModelSerializer):
     class Meta:
         model = Policy
         fields = [
-            'id', 'policy_number', 'customer', 'customer_email', 'customer_name',
+            'id', 'policy_number', 'customer', 'customer_email', 'customer_name', 'customer_phone',
             'agent', 'agent_name', 'type', 'status', 'start_date', 'end_date',
             'premium', 'deductible', 'payment_frequency', 'auto_renew',
             'coverage', 'vehicle', 'vehicle_info', 'property_address',

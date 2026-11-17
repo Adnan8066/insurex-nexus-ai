@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   CheckCircle2,
   Save,
@@ -19,6 +19,17 @@ export function Profile() {
     phone: user?.phone || '',
     department: user?.department || '',
   })
+
+  // The authenticated user may load after this page mounts. Keep the form in
+  // sync so the phone number from the profile API is shown once it arrives.
+  useEffect(() => {
+    setFormData({
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      department: user?.department || '',
+    })
+  }, [user])
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',

@@ -45,12 +45,13 @@ class StaffOnlyUnderwritingFieldsMixin:
 class CustomerSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_full_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    user_phone = serializers.CharField(source='user.phone', read_only=True)
     documents = CustomerDocumentSerializer(many=True, read_only=True)
     
     class Meta:
         model = Customer
         fields = [
-            'id', 'customer_number', 'user', 'user_email', 'user_full_name',
+            'id', 'customer_number', 'user', 'user_email', 'user_full_name', 'user_phone',
             'date_of_birth', 'license_number', 'license_state', 'license_expiry',
             'credit_score', 'risk_rating', 'notes', 'created_at', 'updated_at',
             'documents'
