@@ -11,6 +11,18 @@ export const investigationService = {
     return response.data
   },
 
+  // Fixed vehicle checklist: { checks: [{check_code, check_label, result, note, checked_by_name, checked_at}], completed, total }
+  async getVehicleChecks(id) {
+    const response = await api.get(`/investigations/${id}/vehicle-checks/`)
+    return response.data
+  },
+
+  // checks: [{ check_code, result: 'pass' | 'fail' | 'na', note }]
+  async saveVehicleChecks(id, checks) {
+    const response = await api.post(`/investigations/${id}/vehicle-checks/`, { checks })
+    return response.data
+  },
+
   async addNote(id, data) {
     const response = await api.post(`/investigations/${id}/notes/`, data)
     return response.data

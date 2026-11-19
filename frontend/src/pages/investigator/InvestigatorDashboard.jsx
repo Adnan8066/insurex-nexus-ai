@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Paperclip,
   Star,
+  ClipboardCheck,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { investigationService } from '../../services'
@@ -108,6 +109,14 @@ export function InvestigatorDashboard() {
   const [completionError, setCompletionError] = useState(null)
   const [completing, setCompleting] = useState(false)
 
+  // Vehicle checklist modal state
+  const [checksCase, setChecksCase] = useState(null)
+  const [checksData, setChecksData] = useState(null)
+  const [checksDraft, setChecksDraft] = useState({})
+  const [checksLoading, setChecksLoading] = useState(false)
+  const [checksError, setChecksError] = useState(null)
+  const [savingChecks, setSavingChecks] = useState(false)
+
   const loadInvestigations = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -167,6 +176,58 @@ export function InvestigatorDashboard() {
       toast.error(formatApiError(err, 'Could not start the investigation.'))
     } finally {
       setStartingId(null)
+    }
+  }
+
+  const draftFromChecks = (data) =>
+    Object.fromEntries(data.checks.map((c) => [c.check_code, { result: c.result || '', note: c.note || '' }]))
+
+  const handleOpenChecks = async (investigation) => {
+    setChecksCase(investigation)
+    setChecksData(null)
+    setChecksDraft({})
+    setChecksError(null)
+    setChecksLoading(true)
+    try {
+      const data = await investigationService.getVehicleChecks(investigation.id)
+      setChecksData(data)
+      setChecksDraft(draftFromChecks(data))
+    } catch (err) {
+      setChecksError(formatApiError(err, 'Could not load the vehicle checks.'))
+    } finally {
+      setChecksLoading(false)
+    }
+  }
+
+  const setCheckResult = (code, result) => {
+    setChecksDraft((draft) => ({ ...draft, [code]: { ...draft[code], result } }))
+  }
+
+  const setCheckNote = (code, note) => {
+    setChecksDraft((draft) => ({ ...draft, [code]: { ...draft[code], note } }))
+  }
+
+  const handleSaveChecks = async (e) => {
+    e.preventDefault()
+    if (!checksCase) return
+    const payload = Object.entries(checksDraft)
+      .filter(([, value]) => value.result)
+      .map(([check_code, value]) => ({ check_code, result: value.result, note: (value.note || '').trim() }))
+    if (!payload.length) {
+      setChecksError('Tick at least one check before saving.')
+      return
+    }
+    setSavingChecks(true)
+    setChecksError(null)
+    try {
+      const data = await investigationService.saveVehicleChecks(checksCase.id, payload)
+      setChecksData(data)
+      setChecksDraft(draftFromChecks(data))
+      toast.success(`Vehicle checks saved for ${checksCase.case_number} (${data.completed} of ${data.total}).`)
+    } catch (err) {
+      setChecksError(formatApiError(err, 'Could not save the vehicle checks.'))
+    } finally {
+      setSavingChecks(false)
     }
   }
 
@@ -524,6 +585,12 @@ export function InvestigatorDashboard() {
                               Complete
                             </Button>
                           )}
+                          {!CLOSED_STATUSES.includes(inv.status) && (
+                            <Button variant="secondary" size="sm" onClick={() => handleOpenChecks(inv)}>
+                              <ClipboardCheck className="w-3.5 h-3.5 mr-1" />
+                              Vehicle checks
+                            </Button>
+                          )}
                           <Button
                             variant="secondary"
                             size="sm"
@@ -631,6 +698,81 @@ export function InvestigatorDashboard() {
               </div>
             </form>
           </div>
+        </Modal>
+      )}
+
+      {/* Vehicle Checks Modal */}
+      {checksCase && (
+        <Modal
+          isOpen={!!checksCase}
+          onClose={() => setChecksCase(null)}
+          title={`Vehicle checks: ${checksCase.case_number}`}
+          size="lg"
+        >
+          {checksLoading && <LoadingState label="Loading checks…" />}
+          {!checksLoading && checksData && (
+            <form onSubmit={handleSaveChecks} className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Check each item against the vehicle and tick Pass or Fail. Your results are visible to
+                admins and employees on claim <strong className="font-mono text-gray-900">{checksCase.claim_number}</strong>.
+              </p>
+              <p className="text-xs font-semibold text-gray-500">
+                {Object.values(checksDraft).filter((v) => v.result).length} of {checksData.total} checked
+              </p>
+              {checksError && <Alert>{checksError}</Alert>}
+              <ul className="divide-y divide-gray-100 max-h-96 overflow-y-auto pr-1">
+                {checksData.checks.map((check) => {
+                  const draft = checksDraft[check.check_code] || { result: '', note: '' }
+                  return (
+                    <li key={check.check_code} className="py-3 space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-gray-900">{check.check_label}</span>
+                        <div className="flex gap-1.5 shrink-0" role="group" aria-label={check.check_label}>
+                          {[
+                            { value: 'pass', label: 'Pass', active: 'bg-emerald-600 text-white border-emerald-600' },
+                            { value: 'fail', label: 'Fail', active: 'bg-red-600 text-white border-red-600' },
+                            { value: 'na', label: 'N/A', active: 'bg-gray-600 text-white border-gray-600' },
+                          ].map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              aria-pressed={draft.result === option.value}
+                              onClick={() => setCheckResult(check.check_code, option.value)}
+                              className={clsx(
+                                'px-3 py-1 rounded-lg border text-xs font-semibold',
+                                draft.result === option.value ? option.active : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                              )}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={500}
+                        placeholder="Note (optional), e.g. rear bumper damage does not match the claim"
+                        aria-label={`Note for ${check.check_label}`}
+                        value={draft.note}
+                        onChange={(e) => setCheckNote(check.check_code, e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                      />
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" size="sm" type="button" onClick={() => setChecksCase(null)}>
+                  Close
+                </Button>
+                <Button variant="primary" size="sm" type="submit" disabled={savingChecks}>
+                  <ClipboardCheck className="w-3.5 h-3.5 mr-1.5" />
+                  {savingChecks ? 'Saving…' : 'Save checks'}
+                </Button>
+              </div>
+            </form>
+          )}
+          {!checksLoading && !checksData && checksError && <Alert>{checksError}</Alert>}
         </Modal>
       )}
 

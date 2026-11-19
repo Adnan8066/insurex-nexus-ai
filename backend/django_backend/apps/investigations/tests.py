@@ -66,6 +66,42 @@ class InvestigationApiTests(APITestCase):
         self.assertEqual(self.client.post(f'{base}/evidence/', {'evidence_type': 'document', 'title': 'Statement'}, format='json').status_code, 201)
         self.assertEqual(len(self.client.get(f'{base}/evidence/').json()), 1)
 
+    def test_vehicle_checks_recorded_by_assigned_investigator_and_visible_to_staff(self):
+        base = f'/api/v1/investigations/{self.investigation.pk}/vehicle-checks/'
+        self.client.force_authenticate(self.investigator)
+        checks = [
+            {'check_code': 'vin_matches', 'result': 'pass'},
+            {'check_code': 'damage_matches_incident', 'result': 'fail', 'note': 'Rear damage, claim says front'},
+        ]
+        saved = self.client.post(base, {'checks': checks}, format='json')
+        self.assertEqual(saved.status_code, 200, saved.content)
+        self.assertEqual(saved.json()['completed'], 2)
+        self.assertEqual(saved.json()['total'], 10)
+
+        # Re-saving updates the same row rather than adding a duplicate.
+        self.client.post(base, {'checks': [{'check_code': 'vin_matches', 'result': 'fail'}]}, format='json')
+        self.assertEqual(self.investigation.vehicle_checks.filter(check_code='vin_matches').count(), 1)
+
+        # Employees and admins can read the results but not change them.
+        self.client.force_authenticate(self.employee)
+        viewed = self.client.get(base)
+        self.assertEqual(viewed.status_code, 200)
+        by_code = {row['check_code']: row for row in viewed.json()['checks']}
+        self.assertEqual(by_code['damage_matches_incident']['result'], 'fail')
+        self.assertEqual(by_code['damage_matches_incident']['checked_by_name'], self.investigator.get_full_name())
+        self.assertIsNone(by_code['photos_taken']['result'])
+        self.assertEqual(self.client.post(base, {'checks': checks}, format='json').status_code, 403)
+
+    def test_vehicle_checks_reject_unknown_codes_and_closed_cases(self):
+        base = f'/api/v1/investigations/{self.investigation.pk}/vehicle-checks/'
+        self.client.force_authenticate(self.investigator)
+        bad = self.client.post(base, {'checks': [{'check_code': 'not_a_check', 'result': 'pass'}]}, format='json')
+        self.assertEqual(bad.status_code, 400)
+        self.investigation.status = 'completed'
+        self.investigation.save(update_fields=['status'])
+        closed = self.client.post(base, {'checks': [{'check_code': 'vin_matches', 'result': 'pass'}]}, format='json')
+        self.assertEqual(closed.status_code, 400)
+
     def test_assessment_review_and_investigator_scope(self):
         self.client.force_authenticate(self.employee)
         review = self.client.post(f'/api/v1/assessments/assessments/{self.other_assessment.pk}/review/')

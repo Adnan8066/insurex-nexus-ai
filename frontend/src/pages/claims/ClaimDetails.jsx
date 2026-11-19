@@ -32,6 +32,7 @@ import { Select } from '../../components/forms/FormFields'
 import { Alert } from '../../components/ui/Alert'
 import { LoadingState } from '../../components/ui/LoadingSpinner'
 import { ScoreExplanation } from '../../components/ai/ScoreExplanation'
+import { VehicleChecksPanel } from '../../components/investigations/VehicleChecksPanel'
 
 const mapClaim = (c) => ({
   id: c.id,
@@ -458,6 +459,8 @@ export function ClaimDetails() {
           )}
         </div>
       )}
+
+      {canViewAI && <VehicleChecksPanel claimId={claim.id} />}
 
       {error && (
         <Alert className="mb-4">{error}</Alert>

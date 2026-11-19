@@ -459,11 +459,11 @@ export function FraudDashboard() {
               />
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t">
-              <div className="text-xs text-gray-500">
-                Assigned: <strong>{selectedAlert.assigned_investigator_name || 'None'}</strong>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
+              <div className="text-xs text-gray-500 whitespace-nowrap">
+                Assigned: <strong className="text-gray-800">{selectedAlert.assigned_investigator_name || 'None'}</strong>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
                 <Button
                   variant="secondary"
                   onClick={() => setSelectedAlert(null)}

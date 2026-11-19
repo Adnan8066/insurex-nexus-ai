@@ -1,6 +1,24 @@
 from rest_framework import serializers
 from common.uploads import EVIDENCE_EXTENSIONS, validate_upload
-from .models import Investigation, InvestigationEvidence, InvestigationNote, FraudAlert
+from .models import (
+    Investigation, InvestigationEvidence, InvestigationNote, InvestigationVehicleCheck, FraudAlert,
+    VehicleCheckResult,
+)
+
+class VehicleCheckItemSerializer(serializers.Serializer):
+    """One row of the investigator's vehicle checklist, as submitted by the investigator."""
+    check_code = serializers.CharField()
+    result = serializers.ChoiceField(choices=VehicleCheckResult.choices)
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500, default='')
+
+class InvestigationVehicleCheckSerializer(serializers.ModelSerializer):
+    check_label = serializers.CharField(source='get_check_code_display', read_only=True)
+    checked_by_name = serializers.CharField(source='checked_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = InvestigationVehicleCheck
+        fields = ['id', 'check_code', 'check_label', 'result', 'note', 'checked_by', 'checked_by_name', 'checked_at']
+        read_only_fields = fields
 
 class InvestigationEvidenceSerializer(serializers.ModelSerializer):
     collected_by_name = serializers.CharField(source='collected_by.get_full_name', read_only=True)

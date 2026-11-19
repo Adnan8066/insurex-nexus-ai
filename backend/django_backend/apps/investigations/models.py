@@ -28,6 +28,23 @@ class EvidenceType(models.TextChoices):
     MEDICAL = 'medical', _('Medical Record')
     OTHER = 'other', _('Other')
 
+class VehicleCheckCode(models.TextChoices):
+    VIN_MATCHES = 'vin_matches', _('VIN on the claim matches the vehicle and its chassis plate')
+    PLATE_MATCHES = 'plate_matches', _('Number plate matches the registration record')
+    OWNER_MATCHES = 'owner_matches', _('Registered owner matches the policyholder')
+    ODOMETER_CONSISTENT = 'odometer_consistent', _("Odometer reading fits the vehicle's age and service history")
+    DAMAGE_MATCHES_INCIDENT = 'damage_matches_incident', _('Visible damage matches the reported incident')
+    NO_PRIOR_DAMAGE = 'no_prior_damage', _('No unrepaired earlier damage found')
+    VEHICLE_INSPECTED = 'vehicle_inspected', _('Vehicle physically inspected, with date and location recorded')
+    PHOTOS_TAKEN = 'photos_taken', _('Vehicle photographed and photos attached as evidence')
+    AMOUNT_WITHIN_VALUE = 'amount_within_value', _("Claimed amount is within the vehicle's value")
+    ESTIMATE_REASONABLE = 'estimate_reasonable', _('Repair estimate checked against a garage or market rate')
+
+class VehicleCheckResult(models.TextChoices):
+    PASS = 'pass', _('Pass')
+    FAIL = 'fail', _('Fail')
+    NOT_APPLICABLE = 'na', _('Not applicable')
+
 class Investigation(models.Model):
     claim = models.OneToOneField(
         'claims.Claim',
@@ -146,6 +163,31 @@ class InvestigationNote(models.Model):
     
     def __str__(self):
         return f"Note on {self.investigation} by {self.author}"
+
+class InvestigationVehicleCheck(models.Model):
+    investigation = models.ForeignKey(Investigation, on_delete=models.CASCADE, related_name='vehicle_checks')
+    check_code = models.CharField(_('check'), max_length=40, choices=VehicleCheckCode.choices)
+    result = models.CharField(_('result'), max_length=10, choices=VehicleCheckResult.choices)
+    note = models.TextField(_('note'), blank=True)
+    checked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='vehicle_checks_done'
+    )
+    checked_at = models.DateTimeField(_('checked at'), auto_now=True)
+
+    class Meta:
+        db_table = 'investigation_vehicle_checks'
+        verbose_name = _('investigation vehicle check')
+        verbose_name_plural = _('investigation vehicle checks')
+        constraints = [
+            models.UniqueConstraint(fields=['investigation', 'check_code'], name='unique_vehicle_check_per_case'),
+        ]
+
+    def __str__(self):
+        return f"{self.investigation} - {self.check_code}: {self.result}"
 
 FRAUD_ALERT_STATUS_CHOICES = [
     ('new', _('New')),

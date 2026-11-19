@@ -3,14 +3,19 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 from django.utils import timezone
 from apps.accounts.models import Role
 
-from .models import Investigation, FraudAlert, InvestigationStatus
+from .models import (
+    Investigation, FraudAlert, InvestigationStatus, InvestigationVehicleCheck,
+    VehicleCheckCode, VehicleCheckResult,
+)
 from .serializers import (
     InvestigationSerializer, InvestigationCreateSerializer, InvestigationUpdateSerializer,
     InvestigationEvidenceSerializer, InvestigationNoteSerializer,
-    FraudAlertSerializer, FraudAlertUpdateSerializer
+    FraudAlertSerializer, FraudAlertUpdateSerializer,
+    InvestigationVehicleCheckSerializer, VehicleCheckItemSerializer,
 )
 from common.permissions import IsStaffMember
 from apps.auditlog.context import AuditActorViewSetMixin
@@ -26,7 +31,7 @@ class InvestigationViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
     serializer_class = InvestigationSerializer
     permission_classes = [IsAuthenticated, IsStaffMember]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'priority']
+    filterset_fields = ['status', 'priority', 'claim']
     search_fields = ['case_number', 'claim__claim_number', 'claim__customer__email']
     ordering_fields = ['opened_at', 'started_at', 'completed_at']
     ordering = ['-opened_at']
@@ -77,6 +82,64 @@ class InvestigationViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
         serializer = InvestigationNoteSerializer(investigation.notes.all(), many=True)
         return Response(serializer.data)
     
+    # Fixed vehicle checklist. GET is readable by every staff member who can see the case;
+    # POST is only for the investigator assigned to it, and only while the case is still open.
+    @action(detail=True, methods=['get', 'post'], url_path='vehicle-checks')
+    def vehicle_checks(self, request, pk=None):
+        investigation = self.get_object()
+        if request.method == 'POST':
+            if request.user.role != Role.INVESTIGATOR or investigation.investigator_id != request.user.id:
+                return Response(
+                    {'detail': 'Only the investigator assigned to this case can record vehicle checks.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if investigation.status in {InvestigationStatus.COMPLETED, InvestigationStatus.CLOSED}:
+                return Response(
+                    {'detail': 'This investigation is closed, so its vehicle checks can no longer be changed.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            items = request.data.get('checks')
+            if not isinstance(items, list):
+                return Response({'checks': ['Send a list of checks.']}, status=status.HTTP_400_BAD_REQUEST)
+            serializer = VehicleCheckItemSerializer(data=items, many=True)
+            if not serializer.is_valid():
+                return Response({'checks': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            valid_codes = set(VehicleCheckCode.values)
+            for item in serializer.validated_data:
+                if item['check_code'] not in valid_codes:
+                    return Response(
+                        {'checks': [f"Unknown check: {item['check_code']}"]}, status=status.HTTP_400_BAD_REQUEST,
+                    )
+            with transaction.atomic():
+                for item in serializer.validated_data:
+                    InvestigationVehicleCheck.objects.update_or_create(
+                        investigation=investigation,
+                        check_code=item['check_code'],
+                        defaults={
+                            'result': item['result'],
+                            'note': item.get('note', ''),
+                            'checked_by': request.user,
+                        },
+                    )
+        return Response(self._vehicle_check_payload(investigation))
+
+    @staticmethod
+    def _vehicle_check_payload(investigation):
+        saved = {row.check_code: row for row in investigation.vehicle_checks.select_related('checked_by')}
+        rows = []
+        for code, label in VehicleCheckCode.choices:
+            row = saved.get(code)
+            rows.append({
+                'check_code': code,
+                'check_label': str(label),
+                'result': row.result if row else None,
+                'note': row.note if row else '',
+                'checked_by_name': row.checked_by.get_full_name() if row and row.checked_by else None,
+                'checked_at': row.checked_at if row else None,
+            })
+        completed = sum(1 for r in rows if r['result'] is not None)
+        return {'checks': rows, 'completed': completed, 'total': len(rows)}
+
     @action(detail=True, methods=['post'], url_path='start')
     def start_investigation(self, request, pk=None):
         investigation = self.get_object()
