@@ -18,6 +18,8 @@ class RegistrationTests(APITestCase):
                 'email': 'new-customer@example.com',
                 'password': 'NewStrongPass!920',
                 'password_confirm': 'NewStrongPass!920',
+                'phone': '9812034567',
+                'license_plate': 'KL 01 Z 7315',
                 'role': 'admin',
             },
             format='json',
@@ -26,6 +28,8 @@ class RegistrationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         user = get_user_model().objects.get(email='new-customer@example.com')
         self.assertEqual(user.role, 'customer')
+        self.assertEqual(user.phone, '9812034567')
+        self.assertEqual(user.registration_number, 'KL 01 Z 7315')
 
     def test_registration_rejects_mismatched_passwords(self):
         response = self.client.post(
@@ -34,6 +38,8 @@ class RegistrationTests(APITestCase):
                 'email': 'mismatch@example.com',
                 'password': 'NewStrongPass!920',
                 'password_confirm': 'DifferentStrongPass!920',
+                'phone': '9812034567',
+                'license_plate': 'KL 01 Z 7315',
             },
             format='json',
         )
@@ -62,11 +68,39 @@ class AuthHardeningTests(APITestCase):
         self.assertEqual(codes[:10], [401] * 10)
         self.assertEqual(codes[-1], status.HTTP_429_TOO_MANY_REQUESTS)
 
+    def test_customer_cannot_sign_in_through_staff_login(self):
+        get_user_model().objects.create_user(
+            username='customer1', email='customer1@example.com', password='RightPass!2026', role='customer',
+        )
+        response = self.client.post(
+            '/api/v1/auth/login/',
+            {'email': 'customer1@example.com', 'password': 'RightPass!2026'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_staff_cannot_sign_in_through_customer_login(self):
+        get_user_model().objects.create_user(
+            username='employee1', email='employee1@example.com', password='RightPass!2026', role='employee',
+        )
+        response = self.client.post(
+            '/api/v1/auth/customer-password-login/',
+            {'email': 'employee1@example.com', 'password': 'RightPass!2026'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_registration_with_same_email_local_part_does_not_collide(self):
         for email in ('john@a-example.com', 'john@b-example.com'):
             response = self.client.post(
                 reverse('auth-register'),
-                {'email': email, 'password': 'NewStrongPass!920', 'password_confirm': 'NewStrongPass!920'},
+                {
+                    'email': email,
+                    'password': 'NewStrongPass!920',
+                    'password_confirm': 'NewStrongPass!920',
+                    'phone': '9812034567',
+                    'license_plate': 'KL 01 Z 7315',
+                },
                 format='json',
             )
             self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)

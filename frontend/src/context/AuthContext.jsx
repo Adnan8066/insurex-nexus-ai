@@ -60,7 +60,7 @@ export function AuthProvider({ children }) {
       const userData = storeSession(await authService.customerLogin(credentials))
       return { success: true, user: userData }
     } catch (err) {
-      const message = formatApiError(err, 'Login failed. Check your vehicle number and mobile number and try again.')
+      const message = formatApiError(err, 'Login failed. Check your email and password and try again.')
       setError(message)
       return { success: false, error: message }
     }

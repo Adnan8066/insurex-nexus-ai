@@ -27,7 +27,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'name',
-            'role', 'phone', 'address', 'department', 'avatar',
+            'role', 'phone', 'registration_number', 'address', 'department', 'avatar',
             'date_joined', 'is_verified', 'is_active', 'profile',
         ]
         read_only_fields = ['id', 'date_joined', 'is_verified', 'is_active']
@@ -45,6 +45,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     password_confirm = serializers.CharField(write_only=True, required=False)
     confirmPassword = serializers.CharField(write_only=True, required=False)
     name = serializers.CharField(write_only=True, required=False)
+    license_plate = serializers.CharField(write_only=True, max_length=20)
+    phone = serializers.CharField(max_length=20)
     username = serializers.CharField(required=False, allow_blank=True)
     # Public registration must never allow a caller to choose a privileged role.
     role = serializers.ChoiceField(choices=Role.choices, read_only=True, default=Role.CUSTOMER)
@@ -53,7 +55,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'username', 'email', 'password', 'password_confirm', 'confirmPassword',
-            'name', 'first_name', 'last_name', 'role', 'phone', 'address', 'department',
+            'name', 'first_name', 'last_name', 'role', 'phone', 'license_plate', 'address', 'department',
         ]
     
     def validate(self, attrs):
@@ -83,6 +85,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         validated_data.pop('password_confirm', None)
         validated_data.pop('confirmPassword', None)
         validated_data.pop('name', None)
+        validated_data['registration_number'] = validated_data.pop('license_plate').strip().upper()
         validated_data['role'] = Role.CUSTOMER
         user = User.objects.create_user(**validated_data)
         UserProfile.objects.create(user=user)

@@ -8,8 +8,8 @@ export const authService = {
     return responseData(response)
   },
 
-  async customerLogin({ email, license_plate, mobile_number }) {
-    const response = await api.post('/auth/customer-login/', { email, license_plate, mobile_number })
+  async customerLogin({ email, password }) {
+    const response = await api.post('/auth/customer-password-login/', { email, password })
     return responseData(response)
   },
 

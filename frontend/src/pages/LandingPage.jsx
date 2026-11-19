@@ -171,9 +171,6 @@ export function LandingPage() {
                   <div className="absolute left-5 top-5 rounded-xl border border-white/70 bg-white/75 px-3 py-2 shadow-md backdrop-blur-md dark:!border-slate-600 dark:!bg-slate-900/90">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:!text-slate-100"><span className="landing-status-dot h-2 w-2 rounded-full bg-emerald-500" /> Claims workspace</div>
                   </div>
-                  <button type="button" onClick={() => setPoliciesOpen(true)} className="absolute bottom-5 right-4 rounded-xl border border-white/70 bg-white/85 px-3 py-2 shadow-lg backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:!border-slate-600 dark:!bg-slate-900/90">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:!text-slate-100"><FileText className="h-4 w-4 text-blue-700 dark:!text-blue-300" /> Policy details</div>
-                  </button>
                 </div>
                 <div className="relative grid grid-cols-1 gap-3 text-center">
                   <button type="button" onClick={() => setPoliciesOpen(true)} aria-label="View policy options" className="rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-white transition hover:-translate-y-1 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white">

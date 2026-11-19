@@ -27,6 +27,7 @@ class User(AbstractUser):
         default=Role.CUSTOMER
     )
     phone = models.CharField(_('phone number'), max_length=20, blank=True)
+    registration_number = models.CharField(_('vehicle registration number'), max_length=20, blank=True)
     address = models.TextField(_('address'), blank=True)
     department = models.CharField(_('department'), max_length=100, blank=True)
     avatar = models.ImageField(_('avatar'), upload_to='avatars/', blank=True, null=True)
