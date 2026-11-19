@@ -47,6 +47,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     THROTTLE_SCOPES = {
         'login': 'login',
         'customer_login': 'login',
+        'customer_password_login': 'login',
         'forgot_password': 'password_reset',
         'reset_password': 'password_reset',
         'register': 'register',
@@ -62,7 +63,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     def get_serializer_class(self):
         if self.action == 'register':
             return UserRegistrationSerializer
-        elif self.action == 'login':
+        elif self.action in ('login', 'customer_password_login'):
             return UserLoginSerializer
         elif self.action == 'logout':
             return LogoutRequestSerializer
@@ -139,6 +140,37 @@ class AuthViewSet(viewsets.GenericViewSet):
             }
         })
 
+    @action(detail=False, methods=['post'], url_path='customer-password-login')
+    def customer_password_login(self, request):
+        """Customers sign in with their email and password."""
+        serializer = UserLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+        user = User.objects.filter(email__iexact=email).first()
+        if not user or not user.check_password(password) or user.role != Role.CUSTOMER:
+            return Response({
+                'success': False,
+                'error': {'code': 401, 'message': 'Invalid credentials'},
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        if not user.is_active:
+            return Response({
+                'success': False,
+                'error': {'code': 403, 'message': 'Account is disabled'},
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        user.last_login_ip = self.get_client_ip(request)
+        user.save(update_fields=['last_login_ip'])
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'success': True,
+            'data': {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UserSerializer(user).data,
+            },
+        })
+
     @action(detail=False, methods=['post'])
     def login(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -155,7 +187,7 @@ class AuthViewSet(viewsets.GenericViewSet):
                 'error': {'code': 401, 'message': 'Invalid credentials'}
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        if not user.check_password(password):
+        if not user.check_password(password) or user.role == Role.CUSTOMER:
             return Response({
                 'success': False,
                 'error': {'code': 401, 'message': 'Invalid credentials'}

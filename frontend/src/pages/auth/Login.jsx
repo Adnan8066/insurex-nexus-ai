@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Mail, Car, Smartphone } from 'lucide-react'
+import { Mail, Lock } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
@@ -9,7 +9,7 @@ import { Alert } from '../../components/ui/Alert'
 import { DemoLogins } from '../../components/auth/DemoLogins'
 import { demoForm } from '../../components/auth/demoAccounts'
 
-const emptyForm = { email: '', license_plate: '', mobile_number: '' }
+const emptyForm = { email: '', password: '' }
 
 export function Login() {
   const navigate = useNavigate()
@@ -24,12 +24,7 @@ export function Login() {
     const newErrors = {}
     if (!formData.email) newErrors.email = 'Email is required'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Invalid email format'
-    if (!formData.license_plate.trim()) newErrors.license_plate = 'Vehicle registration number is required'
-    const digits = formData.mobile_number.replace(/\D/g, '')
-    if (!digits) newErrors.mobile_number = 'Mobile number is required'
-    else if (digits.length !== 10 && !(digits.length === 12 && digits.startsWith('91'))) {
-      newErrors.mobile_number = 'Enter a 10-digit mobile number'
-    }
+    if (!formData.password) newErrors.password = 'Password is required'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -65,7 +60,7 @@ export function Login() {
             <span className="text-2xl font-bold text-gray-900">InsureX Nexus AI</span>
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">Customer sign in</h1>
-          <p className="mt-2 text-gray-600">Sign in with your email, vehicle number and mobile number</p>
+          <p className="mt-2 text-gray-600">Sign in with your email and password</p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -88,28 +83,15 @@ export function Login() {
             />
 
             <Input
-              label="Vehicle registration number"
-              name="license_plate"
-              value={formData.license_plate}
+              label="Password"
+              type="password"
+              name="password"
+              value={formData.password}
               onChange={handleChange}
-              error={errors.license_plate}
-              placeholder="KL 01 Z 7315"
-              autoComplete="off"
+              error={errors.password}
+              autoComplete="current-password"
               required
-              leftIcon={<Car className="w-5 h-5 text-gray-400" />}
-            />
-
-            <Input
-              label="Mobile number"
-              type="tel"
-              name="mobile_number"
-              value={formData.mobile_number}
-              onChange={handleChange}
-              error={errors.mobile_number}
-              placeholder="+91 98120 34567"
-              autoComplete="tel"
-              required
-              leftIcon={<Smartphone className="w-5 h-5 text-gray-400" />}
+              leftIcon={<Lock className="w-5 h-5 text-gray-400" />}
             />
           </div>
 

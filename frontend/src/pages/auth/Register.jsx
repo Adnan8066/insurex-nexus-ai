@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Mail, Lock, User, Phone, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, User, Phone, Car, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/forms/FormFields'
@@ -14,6 +14,7 @@ export function Register() {
     name: '',
     email: '',
     phone: '',
+    license_plate: '',
     password: '',
     confirmPassword: '',
   })
@@ -28,6 +29,7 @@ export function Register() {
     if (!formData.email) newErrors.email = 'Email is required'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Invalid email format'
     if (!formData.phone.trim()) newErrors.phone = 'Phone number is required'
+    if (!formData.license_plate.trim()) newErrors.license_plate = 'Vehicle registration number is required'
     if (!formData.password) newErrors.password = 'Password is required'
     else if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters'
     if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match'
@@ -112,6 +114,18 @@ export function Register() {
               autoComplete="tel"
               required
               leftIcon={<Phone className="w-5 h-5 text-gray-400" />}
+            />
+
+            <Input
+              label="Vehicle registration number"
+              name="license_plate"
+              value={formData.license_plate}
+              onChange={handleChange}
+              error={errors.license_plate}
+              placeholder="KL 01 Z 7315"
+              autoComplete="off"
+              required
+              leftIcon={<Car className="w-5 h-5 text-gray-400" />}
             />
 
             <Input

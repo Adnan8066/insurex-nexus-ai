@@ -129,6 +129,15 @@ export function StaffLogin() {
             }}
           />
         </form>
+
+        <div className="text-center">
+          <p className="text-sm text-gray-600">
+            Need a customer account?{' '}
+            <Link to="/register" className="font-medium text-primary hover:underline">
+              Sign up
+            </Link>
+          </p>
+        </div>
       </div>
     </AuthLayout>
   )

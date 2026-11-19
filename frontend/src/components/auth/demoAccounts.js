@@ -10,7 +10,7 @@ export const DEMO_ACCOUNTS = [
     key: 'customer',
     label: 'Customer',
     page: '/login',
-    form: { email: 'customer@demo.insurex.test', license_plate: 'KA 01 MJ 4521', mobile_number: '+91 90000 00001' },
+    form: { email: 'customer@demo.insurex.test', password: DEMO_PASSWORD },
   },
   { key: 'employee', label: 'Employee', page: '/staff-login', form: { email: 'employee@demo.insurex.test', password: DEMO_PASSWORD } },
   { key: 'investigator', label: 'Investigator', page: '/staff-login', form: { email: 'investigator@demo.insurex.test', password: DEMO_PASSWORD } },
