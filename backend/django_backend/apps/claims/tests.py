@@ -403,11 +403,15 @@ class ClaimAutoAssignmentTests(ClaimTestBase):
     def test_claim_intake_does_not_use_rl_even_if_no_suitable_employee_exists(self):
         from apps.assessments.models import RoutingAgentProfile
         from apps.notifications.models import Notification
-        RoutingAgentProfile.objects.create(user=self.employee, skill_tier=1)
-        gate, engine = self.route_with(self.FakeEngine())
+        RoutingAgentProfile.objects.create(
+            user=self.employee, skill_tier=1, primary_specialization='theft',
+        )
+        fake_engine = self.FakeEngine()
+        gate, engine = self.route_with(fake_engine)
         with gate, engine:
             claim = self.post_claim(incident_severity='total_loss')
         self.assertIsNone(claim.assigned_adjuster)
+        self.assertEqual(fake_engine.group_sizes, [])
         alert = Notification.objects.get(recipient=self.admin, title='Claim waiting for employee assignment')
         self.assertIn('No active employee', alert.message)
 
