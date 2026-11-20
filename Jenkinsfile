@@ -5,6 +5,9 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 120, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
  
 
@@ -68,26 +71,10 @@ pipeline {
             }
         }
 
-        stage('Check Training Datasets') {
+        stage('Validate Training Data') {
             steps {
-                dir('backend') {
-                    bat '''
-                        if not exist "data\\india\\india_insurance_claims.csv" (
-                            echo Missing training dataset: backend\\data\\india\\india_insurance_claims.csv
-                            exit /b 1
-                        )
-                        if not exist "data\\india\\india_fraud_oracle.csv" (
-                            echo Missing training dataset: backend\\data\\india\\india_fraud_oracle.csv
-                            exit /b 1
-                        )
-                        if not exist "data\\india\\india_vehicle_fraud.csv" (
-                            echo Missing training dataset: backend\\data\\india\\india_vehicle_fraud.csv
-                            exit /b 1
-                        )
-                        dir "data\\india\\india_insurance_claims.csv"
-                        dir "data\\india\\india_fraud_oracle.csv"
-                        dir "data\\india\\india_vehicle_fraud.csv"
-                    '''
+                dir('backend\\django_backend') {
+                    bat '.venv\\Scripts\\python.exe manage.py mlops_ci_check --phase data'
                 }
             }
         }
@@ -99,9 +86,17 @@ pipeline {
                     bat '.venv\\Scripts\\python.exe manage.py train_vehicle_fraud_model --dataset ..\\data\\india\\india_vehicle_fraud.csv'
                 }
             }
+        }
+
+        stage('Model Quality Gates and Manifest') {
+            steps {
+                dir('backend\\django_backend') {
+                    bat '.venv\\Scripts\\python.exe manage.py mlops_ci_check --phase quality'
+                }
+            }
             post {
-                success {
-                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/training_report.json,backend/ml/models/vehicle_fraud_report.json,backend/ml/models/fraud_oracle_evaluation.png', fingerprint: true
+                always {
+                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/*.json,backend/ml/models/fraud_oracle_evaluation.png', allowEmptyArchive: true, fingerprint: true
                 }
             }
         }

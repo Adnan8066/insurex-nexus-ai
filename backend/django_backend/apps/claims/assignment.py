@@ -49,6 +49,8 @@ def _shift_is_open(profile, now):
 
 
 def _matching_expertise(claim, profile, skills):
+    if profile.primary_specialization.strip().casefold() in {'all', 'all claims', 'general', 'general claims'}:
+        return (profile.primary_specialization.strip() or 'all claims', 1, 'generalist')
     labels = CATEGORY_ALIASES.get(claim.incident_type, {claim.incident_type.replace('_', ' ')})
     labels |= {claim.incident_type.replace('_', ' ')}
     rank = {'beginner': 1, 'intermediate': 2, 'advanced': 3, 'expert': 4}

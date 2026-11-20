@@ -119,7 +119,9 @@ class AuthHardeningTests(APITestCase):
         self.assertEqual(emails, {'real@example.com'})
 
     def test_logout_blacklists_refresh_token(self):
-        get_user_model().objects.create_user(username='u1', email='u1@example.com', password='RightPass!2026')
+        get_user_model().objects.create_user(
+            username='u1', email='u1@example.com', password='RightPass!2026', role='employee',
+        )
         login = self.client.post('/api/v1/auth/login/', {'email': 'u1@example.com', 'password': 'RightPass!2026'}, format='json')
         tokens = login.json()['data']
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + tokens['access'])

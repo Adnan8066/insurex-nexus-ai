@@ -183,6 +183,7 @@ export function RequestPolicy() {
             <p className="text-xs text-gray-500">This is an estimate from demonstration rating factors. The final premium is confirmed when the policy is issued.</p>
             <div className="flex flex-wrap gap-3">
               <Button asChild variant="primary"><Link to={`/vehicles/${vehicle.id}`}>Back to vehicle</Link></Button>
+              <Button asChild variant="outline"><Link to="/my-policy-requests">Track my requests</Link></Button>
               <Button asChild variant="outline"><Link to="/dashboard">Go to dashboard</Link></Button>
             </div>
           </CardContent>
