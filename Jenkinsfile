@@ -115,16 +115,41 @@ pipeline {
             }
         }
 
+        stage('Validate Training Data') {
+            steps {
+                dir('backend\\django_backend') {
+                    bat '.venv\\Scripts\\python.exe manage.py mlops_ci_check --phase data'
+                }
+            }
+        }
+
+        stage('Bundled Data Shift Diagnostic') {
+            steps {
+                dir('backend\\django_backend') {
+                    bat '.venv\\Scripts\\python.exe manage.py mlops_ci_check --phase drift'
+                }
+            }
+        }
+
         stage('Train ML Models') {
             steps {
                 dir('backend\\django_backend') {
                     // Interim: trains on the original US-dollar files in backend/data/ until the
                     // models move to Lumora features (docs/US_MIGRATION_PLAN.md, Phase 3).
                     bat '.venv\\Scripts\\python.exe manage.py train_project_models'
+                    bat '.venv\\Scripts\\python.exe manage.py mlops_ci_check --phase explainability'
+                }
+            }
+        }
+
+        stage('Model Quality Gates and Manifest') {
+            steps {
+                dir('backend\\django_backend') {
+                    bat '.venv\\Scripts\\python.exe manage.py mlops_ci_check --phase quality'
                 }
             }
             post {
-                success {
+                always {
                     archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/*.json,backend/ml/models/*.txt,backend/ml/models/fraud_oracle_evaluation.png', allowEmptyArchive: true, fingerprint: true
                 }
             }

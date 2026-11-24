@@ -12,7 +12,6 @@ from django.http import HttpResponse
 from datetime import timedelta
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
-from django.conf import settings
 from decimal import Decimal
 from apps.auditlog.context import AuditActorViewSetMixin
 

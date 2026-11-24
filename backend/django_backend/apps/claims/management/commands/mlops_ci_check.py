@@ -11,7 +11,6 @@ import numpy as np
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.assessments import vehicle_fraud
 from apps.claims.management.commands.train_project_models import (
     INSURANCE_FEATURES,
     ORACLE_FEATURES,
@@ -39,7 +38,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         backend_dir = settings.BASE_DIR.parent
-        datasets_dir = backend_dir / 'data' / 'india'
+        # The models train on the US-dollar files in backend/data/ until the Lumora models
+        # replace them (docs/US_MIGRATION_PLAN.md, Phase 3).
+        datasets_dir = backend_dir / 'data'
         models_dir = backend_dir / 'ml' / 'models'
         if options['phase'] == 'data':
             self.validate_data(datasets_dir, models_dir)
@@ -56,7 +57,7 @@ class Command(BaseCommand):
         This is a CI proxy for drift until a separately collected production/incoming
         dataset is configured. It catches ordering or source changes within bundled data.
         """
-        datasets = ('india_insurance_claims.csv', 'india_fraud_oracle.csv', 'india_vehicle_fraud.csv')
+        datasets = ('insurance_claims.csv', 'fraud_oracle.csv')
         report = {'checked_at': datetime.now(timezone.utc).isoformat(), 'method': 'first-half vs second-half PSI/TV', 'datasets': {}, 'passed': True, 'errors': []}
         for filename in datasets:
             frame = pd.read_csv(datasets_dir / filename, encoding='utf-8-sig')
@@ -102,51 +103,49 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Dataset partition drift report created (PSI/total variation).'))
 
     def validate_explainability(self, models_dir):
-        """Publish top global feature contributions from the trained vehicle fraud model."""
-        model_path = models_dir / 'vehicle_fraud.joblib'
+        """Publish top global feature contributions from the trained claim fraud model."""
+        model_path = models_dir / 'fraud_risk.joblib'
         if not model_path.is_file():
             raise CommandError(f'Missing model for explainability report: {model_path.name}')
         import joblib
         artifact = joblib.load(model_path)
         model = artifact.get('model') if isinstance(artifact, dict) else artifact
-        if model is None:
-            raise CommandError('Vehicle fraud model bundle is missing its model pipeline.')
+        if hasattr(model, 'calibrated_classifiers_'):
+            model = model.calibrated_classifiers_[0].estimator
+        if model is None or not hasattr(model, 'named_steps'):
+            raise CommandError('Fraud model bundle is missing its model pipeline.')
         estimator = model.named_steps.get('estimator')
         preprocessing = model.named_steps.get('preprocessing')
         importances = getattr(estimator, 'feature_importances_', None)
         if importances is None or preprocessing is None:
-            raise CommandError('Vehicle fraud model does not expose feature importances.')
+            raise CommandError('Fraud model does not expose feature importances.')
         names = preprocessing.get_feature_names_out()
         if len(names) != len(importances) or not np.isfinite(importances).all() or float(np.sum(importances)) <= 0:
-            raise CommandError('Vehicle fraud feature importance values are invalid.')
+            raise CommandError('Fraud model feature importance values are invalid.')
         top = sorted(zip(names, importances), key=lambda pair: float(pair[1]), reverse=True)[:30]
         report = {
             'created_at': datetime.now(timezone.utc).isoformat(),
             'model': model_path.name,
-            'method': 'LightGBM split gain importance; global, not a per-claim causal explanation',
+            'method': 'Estimator feature importance; global, not a per-claim causal explanation',
             'top_features': [{'feature': str(name), 'importance': round(float(value), 8)} for name, value in top],
         }
-        write_json(models_dir / 'vehicle_fraud_explainability.json', report)
-        self.stdout.write(self.style.SUCCESS('Vehicle-fraud global explainability report created.'))
+        write_json(models_dir / 'fraud_explainability.json', report)
+        self.stdout.write(self.style.SUCCESS('Fraud model global explainability report created.'))
 
     def validate_data(self, datasets_dir, models_dir):
         specifications = {
-            'india_insurance_claims.csv': {
+            'insurance_claims.csv': {
                 'required': INSURANCE_FEATURES + ['fraud_reported', 'vehicle_claim', 'total_claim_amount'],
                 'label': 'fraud_reported', 'labels': {'Y', 'N'}, 'minimum_rows': 100,
             },
-            'india_fraud_oracle.csv': {
+            'fraud_oracle.csv': {
                 'required': ORACLE_FEATURES + ['FraudFound_P'],
                 'label': 'FraudFound_P', 'labels': {'0', '1'}, 'minimum_rows': 100,
-            },
-            'india_vehicle_fraud.csv': {
-                'required': vehicle_fraud.FEATURES + ['fraud_outcome'],
-                'label': 'fraud_outcome', 'labels': set(vehicle_fraud.LABELS), 'minimum_rows': 40,
             },
         }
         audit = {
             'validated_at': datetime.now(timezone.utc).isoformat(),
-            'data_classification': 'synthetic demo datasets; not production claim outcomes',
+            'data_classification': 'public sample datasets in US dollars; not production claim outcomes',
             'datasets': {},
         }
         errors = []
@@ -173,12 +172,10 @@ class Command(BaseCommand):
             counts = {str(label): int(count) for label, count in labels.value_counts().items()}
             if not spec['labels'].issubset(set(counts)):
                 errors.append(f'{filename} must contain every expected class {sorted(spec["labels"])}.')
-            if filename == 'india_vehicle_fraud.csv' and min(counts.get(label, 0) for label in ('fraud', 'genuine')) < 8:
-                errors.append(f'{filename} needs at least 8 rows in each fraud_outcome class.')
-            if filename == 'india_insurance_claims.csv':
+            if filename == 'insurance_claims.csv':
                 target = pd.to_numeric(frame['vehicle_claim'], errors='coerce')
                 if target.isna().any() or not target.map(math.isfinite).all() or (target < 0).any():
-                    errors.append('india_insurance_claims.csv vehicle_claim target must be finite and non-negative.')
+                    errors.append('insurance_claims.csv vehicle_claim target must be finite and non-negative.')
             audit['datasets'][filename] = {
                 'rows': int(len(frame)),
                 'columns': int(len(frame.columns)),
@@ -196,14 +193,13 @@ class Command(BaseCommand):
 
     def validate_quality(self, backend_dir, models_dir):
         training_path = models_dir / 'training_report.json'
-        vehicle_path = models_dir / 'vehicle_fraud_report.json'
         data_path = models_dir / 'data_validation.json'
         required_artifacts = [
             'fraud_risk.joblib', 'repair_cost.joblib', 'total_loss.joblib',
-            'fraud_oracle_fraud.joblib', 'vehicle_fraud.joblib', 'fraud_oracle_evaluation.png',
+            'fraud_oracle_fraud.joblib', 'fraud_oracle_evaluation.png',
         ]
         errors = []
-        for path in (training_path, vehicle_path, data_path):
+        for path in (training_path, data_path):
             if not path.is_file():
                 errors.append(f'Missing report: {path.name}')
         artifact_paths = [models_dir / name for name in required_artifacts]
@@ -214,7 +210,6 @@ class Command(BaseCommand):
             raise CommandError('MLOps quality gate failed:\n- ' + '\n- '.join(errors))
 
         training = json.loads(training_path.read_text(encoding='utf-8'))
-        vehicle = json.loads(vehicle_path.read_text(encoding='utf-8'))
         data_audit = json.loads(data_path.read_text(encoding='utf-8'))
         if not data_audit.get('passed'):
             errors.append('The dataset validation report did not pass.')
@@ -238,17 +233,10 @@ class Command(BaseCommand):
         oracle_selection = oracle.get('threshold_selection', {}).get('selected_validation_metrics', {})
         if float(oracle_selection.get('recall', 0)) < 0.75:
             errors.append('Fraud Oracle validation recall must be at least 0.75.')
-        oracle_rate = float(data_audit.get('datasets', {}).get('india_fraud_oracle.csv', {}).get('label_counts', {}).get('1', 0))
-        oracle_rows = int(data_audit.get('datasets', {}).get('india_fraud_oracle.csv', {}).get('rows', 0))
+        oracle_rate = float(data_audit.get('datasets', {}).get('fraud_oracle.csv', {}).get('label_counts', {}).get('1', 0))
+        oracle_rows = int(data_audit.get('datasets', {}).get('fraud_oracle.csv', {}).get('rows', 0))
         if not oracle_rows or float(oracle_selection.get('precision', 0)) <= oracle_rate / oracle_rows:
             errors.append('Fraud Oracle validation precision must exceed the dataset fraud rate.')
-
-        vehicle_metrics = vehicle.get('metrics', {}).get('at_selected_threshold', {})
-        vehicle_rate = int(vehicle.get('fraud_claims', 0)) / max(int(vehicle.get('labelled_claims', 0)), 1)
-        if float(vehicle_metrics.get('recall', 0)) < 0.75:
-            errors.append('Vehicle-fraud out-of-fold recall must be at least 0.75.')
-        if float(vehicle_metrics.get('precision', 0)) <= vehicle_rate:
-            errors.append('Vehicle-fraud out-of-fold precision must exceed the dataset fraud rate.')
 
         gate = {
             'validated_at': datetime.now(timezone.utc).isoformat(),
@@ -283,7 +271,7 @@ class Command(BaseCommand):
             'artifacts': {path.name: {'bytes': path.stat().st_size, 'sha256': sha256_file(path)} for path in artifact_paths},
             'reports': {
                 path.name: sha256_file(path)
-                for path in (training_path, vehicle_path, data_path, models_dir / 'model_quality_gate.json')
+                for path in (training_path, data_path, models_dir / 'model_quality_gate.json')
             },
         }
         write_json(models_dir / 'mlops_manifest.json', manifest)

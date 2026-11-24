@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -342,11 +343,11 @@ CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
-# Run tasks in-process (no broker needed) when asked, and always during `manage.py test`.
-import sys as _sys
+# Run tasks in-process (no broker needed) when asked, and always under `manage.py test` or pytest.
 CELERY_TASK_ALWAYS_EAGER = (
     os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'False').lower() == 'true'
-    or _sys.argv[1:2] == ['test']
+    or sys.argv[1:2] == ['test']
+    or 'pytest' in sys.modules
 )
 CELERY_TASK_EAGER_PROPAGATES = True
 # Scheduled jobs for `celery -A config beat`. Intervals are in seconds.
