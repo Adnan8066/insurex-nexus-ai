@@ -1,6 +1,12 @@
 pipeline {
     agent any
- 
+
+    environment {
+        PYTHONHASHSEED = '42'
+        OMP_NUM_THREADS = '1'
+        MKL_NUM_THREADS = '1'
+        OPENBLAS_NUM_THREADS = '1'
+    }
 
     options {
         skipDefaultCheckout(true)
@@ -44,6 +50,7 @@ pipeline {
                     }
                     bat 'npm run lint'
                     bat 'npm run build'
+                    bat 'npm audit --audit-level=high'
                 }
             }
         }
@@ -55,9 +62,21 @@ pipeline {
                     bat 'py -3.12 -m venv .venv'
                     bat '.venv\\Scripts\\python.exe -m pip install --upgrade pip'
                     bat '.venv\\Scripts\\python.exe -m pip install -r requirements.txt'
+                    bat '.venv\\Scripts\\python.exe -m pip install pip-audit'
+                    bat '.venv\\Scripts\\python.exe -m pip freeze > ..\\ml\\models\\python_environment.txt'
+                    bat '.venv\\Scripts\\python.exe -m ruff check apps common config'
+                    bat '.venv\\Scripts\\pip-audit.exe -r requirements.txt'
                     bat '.venv\\Scripts\\python.exe manage.py check'
                     bat '.venv\\Scripts\\python.exe manage.py spectacular --validate --file "%TEMP%\\insurex-openapi-schema.yml"'
-                    bat '.venv\\Scripts\\python.exe manage.py test'
+                    bat 'set DJANGO_SETTINGS_MODULE=config.settings && .venv\\Scripts\\coverage.exe run --source=apps -m pytest --junitxml=TEST-django.xml'
+                    bat '.venv\\Scripts\\coverage.exe report -m --fail-under=0'
+                    bat '.venv\\Scripts\\coverage.exe xml -o coverage.xml'
+                }
+            }
+            post {
+                always {
+                    junit testResults: 'backend/django_backend/TEST-*.xml', allowEmptyResults: true
+                    archiveArtifacts artifacts: 'backend/django_backend/coverage.xml', allowEmptyArchive: true
                 }
             }
         }
@@ -79,11 +98,20 @@ pipeline {
             }
         }
 
+        stage('Bundled Data Shift Diagnostic') {
+            steps {
+                dir('backend\\django_backend') {
+                    bat '.venv\\Scripts\\python.exe manage.py mlops_ci_check --phase drift'
+                }
+            }
+        }
+
         stage('Train ML Models') {
             steps {
                 dir('backend\\django_backend') {
                     bat '.venv\\Scripts\\python.exe manage.py train_project_models'
                     bat '.venv\\Scripts\\python.exe manage.py train_vehicle_fraud_model --dataset ..\\data\\india\\india_vehicle_fraud.csv'
+                    bat '.venv\\Scripts\\python.exe manage.py mlops_ci_check --phase explainability'
                 }
             }
         }
@@ -96,7 +124,7 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/*.json,backend/ml/models/fraud_oracle_evaluation.png', allowEmptyArchive: true, fingerprint: true
+                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/*.json,backend/ml/models/*.txt,backend/ml/models/fraud_oracle_evaluation.png', allowEmptyArchive: true, fingerprint: true
                 }
             }
         }
