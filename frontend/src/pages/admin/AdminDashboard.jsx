@@ -221,25 +221,11 @@ export function AdminDashboard() {
       )}
 
       {/* KPI tiles: labels wrap instead of truncating */}
-      <div className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 transition-opacity ${loading && summary ? 'opacity-60' : ''}`}>
+      <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 transition-opacity ${loading && summary ? 'opacity-60' : ''}`}>
         <StatTile label="New Policies" value={policies.total || 0} caption={`Started · ${rangeLabel}`} />
         <StatTile label="Active Policies" value={policies.active || 0} caption="In force during period" valueClassName="text-blue-700" />
         <StatTile label="Total Claims" value={totalClaims} caption={`Submitted · ${rangeLabel}`} captionClassName="text-blue-600 font-semibold" />
         <StatTile label="Pending Claims" value={pendingClaims} caption="Awaiting decision" valueClassName="text-amber-600" captionClassName="text-amber-600" />
-        <StatTile
-          label="High Triage Priority"
-          value={fraud.high_risk_claims || 0}
-          caption={`${fraud.flag_rate || 0}% of claims · ${fraud.siu_referrals || 0} SIU referral${fraud.siu_referrals === 1 ? '' : 's'}`}
-          valueClassName="text-red-600"
-          captionClassName="text-red-600"
-        />
-        <StatTile
-          label="Total Loss Cases"
-          value={totalLossCases}
-          caption={`≥${claims.total_loss_threshold ?? 50}% total-loss probability`}
-          valueClassName="text-purple-700"
-        />
-        <StatTile label="Avg Claim Cost" value={formatCurrency(averageClaimCost)} caption={`Per claim · ${rangeLabel}`} valueClassName="text-emerald-700" />
       </div>
 
       <ChartCard

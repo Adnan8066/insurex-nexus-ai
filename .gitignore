@@ -70,3 +70,7 @@ InsureX_Demo_Data.xlsx
 # Generated datasets (regenerate with the motorsynth generator in backend/data/us)
 backend/data/us/sample/
 backend/data/us/output/
+backend/data/us/lumora_full/
+
+# Lumora training runs (models and reports; regenerate with ml/lumora/train_fraud_model.py)
+backend/ml/lumora/runs/
