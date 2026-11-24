@@ -22,6 +22,14 @@ python-dotenv==1.0.1
 # File Upload
 Pillow==11.0.0
 
+# Background jobs (claim scoring, policy expiry, renewal reminders). Needs Redis at CELERY_BROKER_URL.
+celery==5.4.0
+redis==5.0.8
+
+# Object storage for uploads; only imported when USE_S3_STORAGE=true
+django-storages[s3]==1.14.4
+boto3==1.35.36
+
 # Data Processing
 pandas==2.2.3
 # Pinned to the versions the shipped models were trained with; joblib
@@ -42,10 +50,6 @@ gymnasium==1.4.0
 stable-baselines3==2.9.0
 # MaskablePPO for the algorithm comparison (rl/compare_algorithms.py); not needed to serve advice
 sb3-contrib==2.9.0
-
-# Task Queue (optional for async)
-celery==5.4.0
-redis==5.0.1
 
 # Testing
 pytest==8.1.1

@@ -105,6 +105,28 @@ class DashboardAnalyticsTests(APITestCase):
         self.assertEqual(sum(row['count'] for row in data), 0)
 
 
+@override_settings(ALLOWED_HOSTS=['testserver'], SECURE_SSL_REDIRECT=False)
+class OverviewEndpointTests(APITestCase):
+    """/analytics/overview/ must answer 200 with no data, and with some data."""
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.admin = User.objects.create_user(username='ov-admin', email='ov-admin@example.com', password='x', role='admin')
+
+    def test_overview_returns_200_on_empty_database(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get('/api/v1/analytics/overview/')
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_overview_returns_200_for_each_timeframe_on_empty_database(self):
+        self.client.force_authenticate(self.admin)
+        for timeframe in ('week', 'month', 'quarter', 'ytd', 'year'):
+            with self.subTest(timeframe=timeframe):
+                response = self.client.get(f'/api/v1/analytics/overview/?timeframe={timeframe}')
+                self.assertEqual(response.status_code, 200, response.content)
+
+
 class CustomerAnalyticsLeakTests(DashboardAnalyticsTests):
     def setUp(self):
         self.client.force_authenticate(self.customer)

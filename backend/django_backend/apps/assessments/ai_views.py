@@ -23,7 +23,9 @@ from ml_service import (
     CURRENCY_PER_DATASET_UNIT,
 )
 from .explain import explain_assessment
-from .fraud_rules import ALERT_MIN_RED_FLAGS, combined_fraud_score, connected_claims, red_flags
+from .fraud_rules import (
+    ALERT_MIN_RED_FLAGS, TRIAGE_HEURISTIC_VERSION, combined_fraud_score, connected_claims, red_flags,
+)
 from common.permissions import IsStaffMember
 from common.params import parse_int
 from common.risk import FRAUD_HIGH_THRESHOLD, fraud_risk_band
@@ -102,6 +104,7 @@ def run_claim_assessment(claim):
     assessment.comparable_claims_count = predicted_cost['comparable_count']
 
     assessment.fraud_risk_score = fraud_score['score']
+    assessment.triage_heuristic_version = fraud_score.get('heuristic_version', '')
     assessment.risk_level = fraud_risk_band(fraud_score['score'])
     assessment.risk_factors = fraud_score['factors']
     assessment.behavioral_indicators = fraud_score['behavioral']
@@ -205,6 +208,7 @@ def detect_fraud_internal(claim):
     result['behavioral'] = [flag['message'] for flag in flags]
     result['factors'] = [f"{flag['message']} (+{flag['points']} points)" for flag in flags] + list(result.get('factors') or [])
     result['network'] = connected_claims(claim)
+    result['heuristic_version'] = TRIAGE_HEURISTIC_VERSION
     return result
 
 

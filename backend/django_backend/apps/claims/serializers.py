@@ -58,6 +58,10 @@ class ClaimSerializer(serializers.ModelSerializer):
     timeline = ClaimTimelineSerializer(many=True, read_only=True)
     notes = ClaimNoteSerializer(many=True, read_only=True)
     
+    # Triage semantics for the same value as fraud_risk_score (kept for compatibility).
+    triage_priority_score = serializers.SerializerMethodField()
+    heuristic_version = serializers.SerializerMethodField()
+
     class Meta:
         model = Claim
         fields = [
@@ -72,7 +76,8 @@ class ClaimSerializer(serializers.ModelSerializer):
             'assigned_adjuster', 'assigned_adjuster_name',
             'assignment_status', 'assignment_updated_at', 'assignment_history',
             'assigned_investigator', 'assigned_investigator_name',
-            'ai_assessment', 'fraud_risk_score', 'total_loss_probability',
+            'ai_assessment', 'fraud_risk_score', 'triage_priority_score', 'heuristic_version',
+            'total_loss_probability',
             'fraud_outcome', 'fraud_outcome_date', 'fraud_outcome_note',
             'submitted_at', 'updated_at', 'closed_at',
             'documents', 'status_history', 'timeline', 'notes'
@@ -80,6 +85,19 @@ class ClaimSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'claim_number', 'submitted_at', 'updated_at', 'closed_at', 'complexity_score',
                             'fraud_outcome', 'fraud_outcome_date', 'fraud_outcome_note', 'assigned_adjuster',
                             'assignment_status', 'assignment_updated_at', 'assignment_history']
+
+    def get_triage_priority_score(self, obj):
+        # Same value as fraud_risk_score, under the name that matches what it means.
+        return obj.fraud_risk_score
+
+    def get_heuristic_version(self, obj):
+        from apps.assessments.fraud_rules import TRIAGE_HEURISTIC_VERSION
+        from apps.assessments.models import ClaimAssessment
+        version = (
+            ClaimAssessment.objects.filter(claim=obj).exclude(triage_heuristic_version='')
+            .order_by('-assessed_at').values_list('triage_heuristic_version', flat=True).first()
+        )
+        return version or TRIAGE_HEURISTIC_VERSION
 
     def get_assignment_history(self, obj):
         if not obj.pk:
@@ -96,6 +114,8 @@ class ClaimSerializer(serializers.ModelSerializer):
             # (or when the caller did not supply a request context).
             data.pop('ai_assessment', None)
             data.pop('fraud_risk_score', None)
+            data.pop('triage_priority_score', None)
+            data.pop('heuristic_version', None)
             data.pop('total_loss_probability', None)
             data['notes'] = [note for note in data.get('notes', []) if not note.get('is_internal')]
         return data
@@ -179,7 +199,9 @@ class ClaimUpdateSerializer(serializers.ModelSerializer):
             'ai_assessment', 'fraud_risk_score', 'total_loss_probability'
         ]
 
-    MODEL_OUTPUT_FIELDS = {'ai_assessment', 'fraud_risk_score', 'total_loss_probability'}
+    MODEL_OUTPUT_FIELDS = {
+        'ai_assessment', 'fraud_risk_score', 'triage_priority_score', 'heuristic_version', 'total_loss_probability',
+    }
 
     def validate(self, attrs):
         request = self.context.get('request')

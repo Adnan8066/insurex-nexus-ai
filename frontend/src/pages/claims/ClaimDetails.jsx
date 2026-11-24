@@ -33,6 +33,7 @@ import { Alert } from '../../components/ui/Alert'
 import { LoadingState } from '../../components/ui/LoadingSpinner'
 import { ScoreExplanation } from '../../components/ai/ScoreExplanation'
 import { VehicleChecksPanel } from '../../components/investigations/VehicleChecksPanel'
+import { usePolling } from '../../hooks/usePolling'
 
 const mapClaim = (c) => ({
   id: c.id,
@@ -195,6 +196,18 @@ export function ClaimDetails() {
       investigator: String(result.assignedInvestigatorId || ''),
     })
   }
+
+  // Background refresh of the claim's status and timeline. It keeps the staff user's unsaved
+  // drafts (status, assignment, outcome) and the loaded documents, and it stays quiet on failure.
+  const silentRefreshClaim = async () => {
+    try {
+      const latest = mapClaim(await claimService.getClaim(id))
+      setClaim((current) => ({ ...latest, documents: current?.documents ?? latest.documents }))
+    } catch {
+      // Keep the current view; the next poll will try again.
+    }
+  }
+  usePolling(silentRefreshClaim, 20000, Boolean(claim))
 
   const refreshDocuments = async () => {
     setDocumentsLoading(true)
@@ -665,8 +678,13 @@ export function ClaimDetails() {
 
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <h4 className="font-semibold text-gray-900 mb-1">Incident Summary & Narrative</h4>
-                  <p className="text-sm text-gray-700 leading-relaxed">
-                    Vehicle was operating under normal conditions near {claim.location} when incident occurred. Impact resulted in {severityLabel.toLowerCase()} damage requiring professional assessment and repair authorization.
+                  <p className="text-xs text-gray-500 mb-2">
+                    {claim.incidentDate ? formatDate(claim.incidentDate) : 'Date not recorded'}
+                    {claim.location ? ` • ${claim.location}` : ''}
+                    {severityLabel ? ` • ${severityLabel} severity` : ''}
+                  </p>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                    {claim.description?.trim() || 'The customer did not write an incident description for this claim.'}
                   </p>
                 </div>
               </CardContent>
@@ -691,7 +709,7 @@ export function ClaimDetails() {
                         <div className="text-2xl font-bold text-blue-900 mt-1">{formatCurrency(claim.aiAssessment.predictedRepairCost)}</div>
                       </div>
                       <div className="p-4 bg-amber-50/70 border border-amber-100 rounded-xl">
-                        <span className="text-xs font-semibold text-amber-700 uppercase">Fraud Risk Score</span>
+                        <span className="text-xs font-semibold text-amber-700 uppercase" title="Ranks claims for human review. It does not confirm fraud.">Triage Priority Score (Heuristic v1)</span>
                         <div className="text-2xl font-bold text-amber-800 mt-1">{claim.aiAssessment.fraudRiskScore}%</div>
                       </div>
                       <div className="p-4 bg-purple-50/70 border border-purple-100 rounded-xl">

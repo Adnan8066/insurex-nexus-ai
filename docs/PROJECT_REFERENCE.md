@@ -107,7 +107,7 @@ InsureX Nexus AI is an AI-assisted **motor insurance** platform aimed at the Ind
 └── Jenkinsfile                   CI pipeline
 ```
 
-\* `settlements` exists but is not installed; `repair_shops` is retired (migrations only). See §15.
+\* `settlements` is installed and routed (§7.10). `repair_shops` is retired (migrations only). See §15.
 
 ---
 
@@ -371,16 +371,24 @@ complexity = min(1, 0.2 + 0.12·min(max(vehicles−1,0),3) + 0.2·injuries
 - `reports/` + `/{id}/run/` (claims_summary, financial_summary, fraud_analysis, performance), `executions/`, `metrics/`, `snapshots/latest/`.
 - `POST export/` → 501 (not configured). `GET overview/` → see §15.
 
-### 7.10 settlements (present but **not installed or routed**)
+### 7.10 settlements (installed and routed at `/api/v1/settlements/`)
 
-- `Settlement` (`SET-XXXXXXXX`), `SettlementTimeline`, `SettlementPayment` (`PAY-XXXXXXXX`).
-- **Payout formula** (`services/payout.py`):
+- **Models**: `Settlement` (`SET-XXXXXXXX`, with status, payment status, payment method, approved/deductible/depreciation amounts and the payout calculation), `SettlementTimeline` (one entry per status change), `SettlementPayment` (`PAY-XXXXXXXX`).
+- **Statuses**: settlement `calculated`, `under_review`, `approved`, `rejected`, `paid`; payment `pending`, `processing`, `completed`, `failed`, `refunded`; methods bank transfer, wire, check, digital wallet, card.
+- **Endpoints** (`views.py`):
+  - `GET/POST /` list and create. Create is staff-only and calculates the payout.
+  - `GET /{id}/`, `PATCH /{id}/` read and update (update is staff-only).
+  - `POST /{id}/approve/`, `POST /{id}/reject/`, `POST /{id}/pay/`, `POST /{id}/complete-payment/`: staff only.
+  - `GET /{id}/timeline/`, `GET /{id}/payments/`: any authenticated user who can see the record.
+  - `GET /my-settlements/`: the caller's own settlements.
+  - `GET /by-claim/<claim_id>/`: settlements for one claim.
+- **Access**: staff see every settlement. Customers see only their own (the queryset is filtered by customer).
+- **Payout formula** (`services/payout.py`, verified against the code):
 ```
-depreciation_rate = min(0.05 × vehicle_age_years, 0.80)
+depreciation_rate = min(CLAIM_ANNUAL_DEPRECIATION_RATE × vehicle_age_years, CLAIM_MAX_DEPRECIATION_RATE)   # 0.05 and 0.80 by default
 depreciation      = 0 if zero-depreciation add-on else repair_cost × depreciation_rate
 payout            = max(0, repair_cost − deductible − depreciation)
 ```
-- Designed flow: create (claim must be approved) → approve (moves the claim to `repair_settlement`) / reject → pay → complete-payment.
 
 ### 7.11 repair_shops (retired)
 Only migrations remain (0001 creates RepairShop/RepairJob/…; 0002 deletes them) plus `tests.py` with smoke tests (health + 401 on core endpoints).
@@ -642,14 +650,14 @@ Commands: `npm run lint && npm run build`; `python manage.py check`; `python man
 ## 15. Known issues and inconsistencies
 
 **Functional**
-1. **Settlements app not wired in**: missing from `INSTALLED_APPS` and `config/urls.py`, so its payout endpoints are unreachable and its tables are never migrated. The claim status `repair_settlement` therefore can only be set manually.
-2. **Policy route collisions**: `premium-history` (GET vs POST) and `coverage` (GET vs PUT/PATCH) are separate `@action`s with the same `url_path` (`policies/views.py:362-388`). One method of each pair likely returns 405.
-3. **`/analytics/overview/` likely 500s**: it passes a DRF `Request` into another `@api_view` (`analytics/views.py:323`).
-4. **RL models fail their evaluation gate**: the heuristic beats PPO, so routing advice returns 503 in production and auto-assign never fires.
+1. **Resolved**: the settlements app is in `INSTALLED_APPS` and routed at `/api/v1/settlements/` (§7.10).
+2. **Resolved**: `premium-history` (GET/POST) and `coverage` (GET/PUT/PATCH) each use one action that branches on the method (`policies/views.py`). Writes are admin-only. `PolicyApiTests` covers both.
+3. **Resolved**: `/analytics/overview/` and `/analytics/dashboard/` share a plain helper (`_build_dashboard_summary`) instead of calling one `@api_view` from another. `OverviewEndpointTests` covers empty data and every timeframe.
+4. **RL models fail their evaluation gate**: the heuristic beats PPO. The advisory endpoint now returns HTTP 200 with the least-busy rule (`routing_mode: rule_fallback`, plus `fallback_reason`) instead of 503. Claim auto-assign logs `routing_mode=rule_fallback` whenever it uses the workload rule. PPO is used only when the model is qualified.
 5. **RL default training dataset breaks BC**: `training.py` defaults to the `mixed` CSV, but behaviour cloning requires `least_workload` rows. Use the `expert` CSV.
 6. **Severity ↔ skill-tier mapping differs** between the environment and the recommender for intermediate severities (0.15/0.4/0.7).
-7. **ClaimDetails "Incident narrative"** shows template text, not the customer's `description`.
-8. **Unguarded frontend routes**: investigators can open `/claims/new`, `/policies`, `/vehicles` by URL (the backend still enforces permissions).
+7. **Resolved**: the claim page's narrative shows the customer's `description`, with a fallback only when it is empty.
+8. **Resolved**: `/claims/new`, `/policies` and `/vehicles` now have role guards. Investigators are redirected to `/investigators`.
 
 **Dead / unused code**
 - `common/pagination.py` and several permission classes are unused.

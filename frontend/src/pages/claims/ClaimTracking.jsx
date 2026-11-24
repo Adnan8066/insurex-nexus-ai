@@ -66,7 +66,7 @@ const STAFF_NEXT = {
 
 function formatDateTime(value) {
   if (!value) return '—'
-  return new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  return new Date(value).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 export function ClaimTracking() {

@@ -49,20 +49,10 @@ def _count(value, one, many):
     return f"{n} {one if n == 1 else many}"
 
 
-def rupees(value):
-    """Indian digit grouping: 1234567 -> ₹12,34,567."""
+def dollars(value):
+    """US dollars, whole units: 1234567 -> $1,234,567."""
     amount = int(round(float(value)))
-    sign, digits = ('-', str(-amount)) if amount < 0 else ('', str(amount))
-    if len(digits) > 3:
-        head, tail = digits[:-3], digits[-3:]
-        groups = []
-        while len(head) > 2:
-            groups.insert(0, head[-2:])
-            head = head[:-2]
-        if head:
-            groups.insert(0, head)
-        digits = ','.join(groups + [tail])
-    return f"{sign}₹{digits}"
+    return f"-${-amount:,}" if amount < 0 else f"${amount:,}"
 
 
 def _model_reason_phrase(feature, value):
@@ -73,8 +63,8 @@ def _model_reason_phrase(feature, value):
         'reporting_delay_days': lambda: f"the claim was reported {_count(n, 'day', 'days')} after the incident",
         'claim_to_repair_ratio': lambda: f"the amount claimed is {n:.1f} times the expected repair cost",
         'claim_to_vehicle_price_ratio': lambda: f"the amount claimed is {n:.0%} of the car's price",
-        'claim_amount_inr': lambda: f"the amount claimed is high ({rupees(n)})",
-        'total_claim_amount': lambda: f"the amount claimed is high ({rupees(n)})",
+        'claim_amount_inr': lambda: f"the amount claimed is high ({dollars(n)})",
+        'total_claim_amount': lambda: f"the amount claimed is high ({dollars(n)})",
         'vehicle_age_years': lambda: f"the car is {_count(n, 'year', 'years')} old",
         'auto_year': lambda: f"the car was made in {int(n)}",
         'past_claims_count': lambda: f"the customer has {_count(n, 'earlier claim', 'earlier claims')}",
@@ -202,27 +192,27 @@ def explain_repair_cost(claim, predicted_cost):
     details = []
     if breakdown.get('constructive_total_loss'):
         idv = breakdown.get('insured_declared_value')
-        summary = (f"Estimated payout {rupees(cost)}: the repair would cost more than 75% of the car's "
-                   f"insured value ({rupees(idv)}), so it is treated as a write-off.")
+        summary = (f"Estimated payout {dollars(cost)}: the repair would cost more than 75% of the car's "
+                   f"insured value ({dollars(idv)}), so it is treated as a write-off.")
     elif 'labour' in breakdown and 'parts' in breakdown:
         severity = _SEVERITY_WORDS.get(breakdown.get('severity'), breakdown.get('severity') or '')
         car = _SEGMENT_WORDS.get(breakdown.get('segment'), 'a car')
-        summary = (f"Estimated repair {rupees(cost)} = garage labour {rupees(breakdown['labour'])} + parts "
-                   f"{rupees(breakdown['parts'])}, for {severity} damage to {car} "
-                   f"that costs {rupees(breakdown.get('ex_showroom_price', 0))} new.")
+        summary = (f"Estimated repair {dollars(cost)} = shop labor {dollars(breakdown['labour'])} + parts "
+                   f"{dollars(breakdown['parts'])}, for {severity} damage to {car} "
+                   f"that costs {dollars(breakdown.get('ex_showroom_price', 0))} new.")
         if predicted_cost.get('time_estimate'):
             details.append(f"Typical repair time: {_count(predicted_cost['time_estimate'], 'day', 'days')}.")
     else:
-        summary = f"Estimated repair {rupees(cost)}, predicted by the AI model from similar past claims."
+        summary = f"Estimated repair {dollars(cost)}, predicted by the AI model from similar past claims."
     claimed = _number(getattr(claim, 'claim_amount', None))
     if claimed and cost:
         ratio = claimed / cost
         if ratio >= 1.5:
-            details.append(f"The customer claimed {rupees(claimed)}, {ratio:.1f} times this estimate. Check the bill.")
+            details.append(f"The customer claimed {dollars(claimed)}, {ratio:.1f} times this estimate. Check the bill.")
         elif ratio <= 0.67:
-            details.append(f"The customer claimed {rupees(claimed)}, well below this estimate.")
+            details.append(f"The customer claimed {dollars(claimed)}, well below this estimate.")
         else:
-            details.append(f"The customer claimed {rupees(claimed)}, in line with this estimate.")
+            details.append(f"The customer claimed {dollars(claimed)}, in line with this estimate.")
     return {'summary': summary, 'details': details}
 
 

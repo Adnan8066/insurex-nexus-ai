@@ -43,7 +43,7 @@ LABELS = {'fraud': 1, 'genuine': 0}
 
 FEATURE_LABELS = {
     'vehicle_age_years': 'Vehicle age (years)',
-    'claim_amount_inr': 'Claimed amount (₹)',
+    'claim_amount_inr': 'Claimed amount ($)',
     'claim_to_repair_ratio': 'Claim vs repair estimate',
     'claim_to_vehicle_price_ratio': 'Claim vs vehicle price',
     'days_policy_to_incident': 'Days from policy start to incident',

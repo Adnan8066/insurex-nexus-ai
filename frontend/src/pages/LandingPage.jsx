@@ -82,7 +82,7 @@ export function LandingPage() {
     setSubmitting(true)
     setSubmitError('')
     try {
-      await callbackService.request({ ...form, phone: `+91 ${form.phone.trim()}` })
+      await callbackService.request({ ...form, phone: `+1 ${form.phone.trim()}` })
       setSubmitted(true)
       setForm({ name: '', phone: '', vehicle_type: '', consent: false })
     } catch (error) {
@@ -273,11 +273,11 @@ export function LandingPage() {
                   </label>
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Contact number</span>
-                    <span className="flex items-center gap-3 rounded-xl border border-slate-300 px-4 focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-100 dark:border-slate-700 dark:focus-within:ring-blue-900"><span aria-hidden="true" className="font-semibold text-slate-400">+91</span><input required type="tel" inputMode="tel" autoComplete="tel-national" maxLength={20} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Enter your phone number" className="min-w-0 flex-1 border-0 bg-transparent py-3.5 text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" /></span>
+                    <span className="flex items-center gap-3 rounded-xl border border-slate-300 px-4 focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-100 dark:border-slate-700 dark:focus-within:ring-blue-900"><span aria-hidden="true" className="font-semibold text-slate-400">+1</span><input required type="tel" inputMode="tel" autoComplete="tel-national" maxLength={20} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="(555) 555-0123" className="min-w-0 flex-1 border-0 bg-transparent py-3.5 text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" /></span>
                   </label>
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Vehicle type</span>
-                    <span className="flex items-center gap-3 rounded-xl border border-slate-300 px-4 focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-100 dark:border-slate-700 dark:focus-within:ring-blue-900"><CarFront className="h-5 w-5 shrink-0 text-slate-400" /><select required value={form.vehicle_type} onChange={(event) => setForm({ ...form, vehicle_type: event.target.value })} className="min-w-0 flex-1 appearance-none bg-transparent py-3.5 text-slate-800 outline-none dark:text-slate-100"><option value="">Select vehicle type</option><option value="car">Car</option><option value="two_wheeler">Two-wheeler</option><option value="commercial">Commercial vehicle</option><option value="other">Other</option></select><ChevronRight className="h-4 w-4 rotate-90 text-slate-400" /></span>
+                    <span className="flex items-center gap-3 rounded-xl border border-slate-300 px-4 focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-100 dark:border-slate-700 dark:focus-within:ring-blue-900"><CarFront className="h-5 w-5 shrink-0 text-slate-400" /><select required value={form.vehicle_type} onChange={(event) => setForm({ ...form, vehicle_type: event.target.value })} className="min-w-0 flex-1 appearance-none bg-transparent py-3.5 text-slate-800 outline-none dark:text-slate-100"><option value="">Select vehicle type</option><option value="car">Car</option><option value="two_wheeler">Motorcycle</option><option value="commercial">Commercial vehicle</option><option value="other">Other</option></select><ChevronRight className="h-4 w-4 rotate-90 text-slate-400" /></span>
                   </label>
                   <label className="flex cursor-pointer items-start gap-3 text-sm leading-5 text-slate-600 dark:text-slate-300">
                     <input type="checkbox" required checked={form.consent} onChange={(event) => setForm({ ...form, consent: event.target.checked })} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600" />

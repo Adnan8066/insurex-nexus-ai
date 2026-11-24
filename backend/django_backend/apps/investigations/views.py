@@ -9,7 +9,7 @@ from apps.accounts.models import Role
 
 from .models import (
     Investigation, FraudAlert, InvestigationStatus, InvestigationVehicleCheck,
-    VehicleCheckCode, VehicleCheckResult,
+    InvestigationOutcome, OUTCOME_TO_CLAIM_FRAUD_OUTCOME, VehicleCheckCode, VehicleCheckResult,
 )
 from .serializers import (
     InvestigationSerializer, InvestigationCreateSerializer, InvestigationUpdateSerializer,
@@ -170,12 +170,38 @@ class InvestigationViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
                 {'findings': ['Describe what the investigation found before completing it.']},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # The investigator's outcome. Optional for compatibility; without it the case stays "pending".
+        outcome = str(request.data.get('investigation_outcome', '') or '').strip()
+        if outcome and outcome not in InvestigationOutcome.values:
+            return Response(
+                {'investigation_outcome': [f'Choose one of: {", ".join(InvestigationOutcome.values)}.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if outcome == InvestigationOutcome.PENDING:
+            outcome = ''
+        outcome_notes = str(request.data.get('outcome_notes', '') or '').strip()[:1000]
+        now = timezone.now()
+
         investigation.status = InvestigationStatus.COMPLETED
-        investigation.completed_at = timezone.now()
+        investigation.completed_at = now
         investigation.findings = findings
         investigation.conclusion = request.data.get('conclusion', investigation.conclusion)
         investigation.recommendation = request.data.get('recommendation', investigation.recommendation)
-        investigation.save(update_fields=['status', 'completed_at', 'findings', 'conclusion', 'recommendation'])
+        if outcome:
+            investigation.investigation_outcome = outcome
+            investigation.outcome_notes = outcome_notes
+            investigation.outcome_reviewed_at = now
+        investigation.save(update_fields=[
+            'status', 'completed_at', 'findings', 'conclusion', 'recommendation',
+            'investigation_outcome', 'outcome_notes', 'outcome_reviewed_at', 'updated_at',
+        ])
+        if outcome:
+            # Keep the claim-level outcome (used by the claim page and the outcome export) in step.
+            claim = investigation.claim
+            claim.fraud_outcome = OUTCOME_TO_CLAIM_FRAUD_OUTCOME[outcome]
+            claim.fraud_outcome_date = timezone.localdate()
+            claim.fraud_outcome_note = (outcome_notes or f'Set by investigation {investigation.case_number}')[:500]
+            claim.save(update_fields=['fraud_outcome', 'fraud_outcome_date', 'fraud_outcome_note', 'updated_at'])
         serializer = self.get_serializer(investigation)
         return Response(serializer.data)
 

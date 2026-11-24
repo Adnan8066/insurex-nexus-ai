@@ -1,0 +1,19 @@
+{
+  "version": "v1",
+  "label": "Triage Priority Score (Heuristic v1)",
+  "description": "Rule-based review-priority weights added to the model score. Hand-picked, not fitted to outcome data. A high score prioritises a claim for human review; it is not a finding of fraud.",
+  "alert_min_red_flags": 2,
+  "max_combined_score": 99.0,
+  "red_flag_points": {
+    "repeat_vehicle": 25,
+    "amount_over_vehicle_price": 25,
+    "new_policy": 20,
+    "frequent_claims": 20,
+    "theft_without_police_report": 20,
+    "amount_over_estimate": 15,
+    "recent_policy_change": 15,
+    "policy_ending": 10,
+    "late_report": 10,
+    "injury_without_police_report": 10
+  }
+}

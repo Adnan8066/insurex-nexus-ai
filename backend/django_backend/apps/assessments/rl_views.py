@@ -3,6 +3,7 @@
 from functools import lru_cache
 from importlib.util import find_spec
 import json
+import logging
 import os
 from pathlib import Path
 import sys
@@ -19,6 +20,32 @@ from rest_framework.response import Response
 
 from common.permissions import IsStaffMember
 from .models import RoutingAgentProfile, RoutingRecommendationReview
+
+logger = logging.getLogger(__name__)
+
+
+def _least_busy_fallback(active_agents):
+    """Deterministic rule used when the PPO advisor is unavailable: least queue, then least workload."""
+    candidates = [agent for agent in active_agents if agent.get('available', True)] or list(active_agents)
+    ranked = sorted(
+        candidates,
+        key=lambda agent: (float(agent.get('queue_length') or 0), float(agent.get('workload') or 0), str(agent.get('id'))),
+    )
+    options = [
+        {'agent_id': str(agent.get('id')), 'queue_length': agent.get('queue_length'), 'workload': agent.get('workload')}
+        for agent in ranked
+    ]
+    return {
+        'status': 'recommendation_available' if options else 'no_agents_available',
+        'recommended_agent_id': options[0]['agent_id'] if options else None,
+        'predicted_wait_time': None,
+        'workload_impact_summary': 'Least-busy rule fallback: lowest queue length, then lowest workload.',
+        'ranked_options': options,
+        'ranked_alternatives': options[1:],
+        'advisory_only': True,
+        'automated_assignment': False,
+        'requires_human_review': True,
+    }
 
 def _make_rl_importable():
     """Put ``backend/`` on sys.path so the sibling ``rl`` package can be imported."""
@@ -371,42 +398,40 @@ def routing_recommendation(request):
     request_serializer.is_valid(raise_exception=True)
     payload = request_serializer.validated_data
     gate_enforced = os.environ.get('CLAIM_ROUTING_ENFORCE_EVALUATION_GATE', 'false').lower() == 'true'
+    fallback_reason = None
     if gate_enforced and not _evaluation_gate_passed(_model_artifact_path()):
-        return Response(
-            {'detail': 'The PPO candidate has not passed the held-out evaluation gate against the least-workload heuristic. Production recommendations are disabled until a qualified artifact and evaluation report are deployed.'},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        fallback_reason = 'PPO candidate has not passed the held-out evaluation gate'
+    if fallback_reason is None:
+        try:
+            engine = _load_recommendation_engine()
+            result = engine.get_routing_recommendations(
+                claim_data=payload["claim_data"],
+                active_agents_status=payload["active_agents_status"],
+            )
+            result['routing_mode'] = 'ppo'
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:  # missing dependencies, missing artifact, or inference failure
+            fallback_reason = f'PPO advisor unavailable: {exc.__class__.__name__}'
+    if fallback_reason is not None:
+        result = _least_busy_fallback(payload["active_agents_status"])
+        result['routing_mode'] = 'rule_fallback'
+        result['fallback_reason'] = fallback_reason
+        logger.warning(
+            'routing_mode=rule_fallback claim_id=%s reason=%s', payload.get('claim_id'), fallback_reason
         )
-    try:
-        engine = _load_recommendation_engine()
-        result = engine.get_routing_recommendations(
-            claim_data=payload["claim_data"],
-            active_agents_status=payload["active_agents_status"],
-        )
-        result['recommendation_id'] = str(uuid4())
-        result['claim_id'] = payload.get('claim_id')
-        result['review_token'] = signing.dumps(
-            {
-                'recommendation_id': result['recommendation_id'],
-                'claim_id': payload.get('claim_id'),
-                'claim_data': payload['claim_data'],
-                'active_agents_status': payload['active_agents_status'],
-                'recommendation': result,
-            },
-            salt='claim-routing-review',
-        )
-    except ImportError:
-        return Response(
-            {"detail": "RL inference dependencies are not installed."},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-    except FileNotFoundError as exc:
-        return Response(
-            {"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
-    except RuntimeError as exc:
-        return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except ValueError as exc:
-        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    result['recommendation_id'] = str(uuid4())
+    result['claim_id'] = payload.get('claim_id')
+    result['review_token'] = signing.dumps(
+        {
+            'recommendation_id': result['recommendation_id'],
+            'claim_id': payload.get('claim_id'),
+            'claim_data': payload['claim_data'],
+            'active_agents_status': payload['active_agents_status'],
+            'recommendation': result,
+        },
+        salt='claim-routing-review',
+    )
     return Response(result, status=status.HTTP_200_OK)
 
 

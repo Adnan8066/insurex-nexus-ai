@@ -1,0 +1,370 @@
+# =============================================================================
+# motorsynth — synthetic US personal-auto insurer
+# Every number that shapes the dataset lives here. Edit, re-run, get a new world.
+# =============================================================================
+
+company:
+  name: "Lumora Mutual Auto Insurance Company"     # fictional
+  short: "LUMORA"
+  hq: "Columbus, OH"
+  founded: 1987
+  policy_prefix: "LMA"
+  claim_prefix: "LMC"
+
+run:
+  seed: 20261120
+  target_policy_terms: 1000000      # ~1M policy-term rows; everything else scales from this
+  window_start: "2023-01-01"        # first term start in the data
+  window_end:   "2025-12-31"        # last term start in the data
+  as_of_date:   "2026-06-30"        # evaluation date: claims open/closed as of this date
+  term_months: 12
+  output_dir: "output"
+  write_csv: true
+  write_parquet: true
+
+# ---------------------------------------------------------------- book of business
+book:
+  initial_book_share: 0.62          # share of households already in force at window start
+  retention: 0.86                   # probability a term renews
+  vehicles_per_household: {1: 0.45, 2: 0.37, 3: 0.13, 4: 0.05}
+  extra_drivers: {0: 0.38, 1: 0.44, 2: 0.13, 3: 0.05}  # beyond the named insured
+  channel_mix: {DIRECT_ONLINE: 0.33, CALL_CENTER: 0.14, CAPTIVE_AGENT: 0.27, INDEPENDENT_AGENT: 0.26}
+  full_coverage_share: 0.74         # vehicles with collision + comprehensive
+  comp_only_share: 0.05             # comprehensive without collision
+  bi_limit_mix: {STATE_MIN: 0.18, "50/100": 0.22, "100/300": 0.42, "250/500": 0.18}
+  coll_deductible_mix: {250: 0.10, 500: 0.52, 1000: 0.33, 2000: 0.05}
+  comp_deductible_mix: {0: 0.08, 250: 0.20, 500: 0.50, 1000: 0.22}
+  credit_tier_mix: {A: 0.30, B: 0.36, C: 0.24, D: 0.10}
+  homeowner_share: 0.58
+  lien_share_by_vehicle_age: {0-3: 0.72, 4-7: 0.45, 8-30: 0.08}
+  commission_rate: {DIRECT_ONLINE: 0.0, CALL_CENTER: 0.0, CAPTIVE_AGENT: 0.08, INDEPENDENT_AGENT: 0.12}
+
+# ---------------------------------------------------------------- loss model
+# Base annual frequencies per insured vehicle (before rating relativities).
+# Calibrated so realized per-coverage frequencies land near Verisk 2024 Personal Auto
+# figures: BI ~0.7%, PD ~2.6%, No-fault ~1.3%, Collision ~4.5%, Comprehensive ~6.4%.
+frequency:
+  at_fault_accident: 0.034          # insured at fault (single + multi vehicle)
+  at_fault_multi_vehicle_share: 0.76
+  not_at_fault_accident: 0.021      # other party at fault
+  nafa_first_party_claim_prob: 0.45 # insured claims own collision instead of waiting on other carrier
+  uninsured_other_party: 0.13
+  tp_bi_given_multi_vehicle: 0.19
+  insured_injury_given_accident: 0.17
+  comp_glass: 0.031
+  comp_theft: 0.0022
+  comp_weather: 0.0085
+  comp_animal: 0.0080
+  comp_vandalism: 0.0040
+  comp_fire: 0.0005
+  comp_flood: 0.0006
+  monthly_seasonality: [1.12, 1.05, 0.97, 0.94, 0.97, 0.98, 1.00, 1.00, 0.97, 1.00, 1.01, 1.10]
+  hourly_profile: [0.6,0.4,0.3,0.25,0.3,0.6,1.3,2.0,1.9,1.3,1.2,1.3,1.4,1.4,1.5,1.9,2.2,2.3,1.8,1.3,1.1,1.0,0.9,0.8]
+  report_lag_days_mean: 1.6         # exponential, genuine claims
+  household_heterogeneity_shape: 3.0  # gamma frailty: unobserved risk the rating plan does not capture
+
+severity:   # lognormal (mean, sigma) of the *true* economic loss before deductible / limits
+  COLL: {mean: 9600, sigma: 0.85}
+  PD:   {mean: 7000, sigma: 0.80}
+  BI:   {mean: 33000, sigma: 1.05}
+  PIP:  {mean: 13500, sigma: 0.95}
+  MEDPAY: {mean: 3600, sigma: 0.80}
+  UMBI: {mean: 29000, sigma: 1.05}
+  UMPD: {mean: 5200, sigma: 0.80}
+  COMP_GLASS: {mean: 600, sigma: 0.45}
+  COMP_WEATHER: {mean: 4200, sigma: 0.65}
+  COMP_ANIMAL: {mean: 3900, sigma: 0.70}
+  COMP_VANDALISM: {mean: 1600, sigma: 0.75}
+  attorney_rate_bi: 0.48
+  attorney_severity_mult: 2.3
+  total_loss_threshold: 0.75        # repair cost / ACV
+  salvage_share_of_acv: [0.12, 0.30]
+  subrogation_recovery_prob: 0.82
+
+# ---------------------------------------------------------------- pricing
+pricing:
+  target_loss_ratio: 0.68           # premium scale is solved so the whole book lands here
+  min_premium_per_vehicle: 420
+  youngest_driver_factor: {16-20: 2.30, 21-24: 1.55, 25-29: 1.15, 30-59: 1.00, 60-69: 0.94, 70-99: 1.12}
+  credit_factor: {A: 0.80, B: 0.95, C: 1.12, D: 1.38}
+  violation_factor_each: 1.22
+  multi_car_discount: 0.90
+  homeowner_discount: 0.95
+  miles_factor: {low: 0.90, mid: 1.00, high: 1.15}
+
+# ---------------------------------------------------------------- SIU / investigations
+siu:
+  capacity_share_of_claims: 0.028   # SIU can open roughly this share of claims
+  base_referral_genuine: 0.006
+  referral_weight_per_signal: 0.11
+  confirm_prob_if_fraud: 0.68
+  inconclusive_prob_if_fraud: 0.22
+  false_confirm_prob_if_genuine: 0.015
+
+# ---------------------------------------------------------------- data-quality noise
+# Kept deliberately light and fully logged: the point is realism, not chaos.
+data_quality:
+  enabled: true
+  missing_email: 0.035
+  missing_phone: 0.006
+  make_model_typo: 0.008
+  duplicate_customer_record: 0.004
+  zip_leading_zero_dropped: 0.02    # only applies to ZIPs starting with 0 (NJ, MA)
+  report_before_loss_date: 0.0004
+  invalid_vin_checkdigit: 0.0015
+
+# =============================================================================
+# SCENARIOS — anomalies are categories with partial, probabilistic fingerprints.
+#   layer:      FRAUD | LEAKAGE | BENIGN (genuine look-alike)
+#   unit:       what one instance is (claim, feature, policy, vehicle, payment, ring)
+#   prevalence: share of eligible units  (or `instances` for rings / events)
+#   signals:    each is applied independently with its probability, so no two
+#               instances look identical and no single rule catches them all
+#   geo / window: where and when the scenario is active (null = everywhere / always)
+# Set `enabled: false` to switch any scenario off.
+# =============================================================================
+scenarios:
+
+  # ---------------- opportunistic (soft) fraud — diffuse, nationwide
+  SOFT_ESTIMATE_PADDING:
+    enabled: true
+    layer: FRAUD
+    family: SOFT_FRAUD
+    unit: feature
+    eligible: [COLL, PD]
+    prevalence: 0.040
+    inflation: [1.12, 1.55]
+    signals: {unrelated_lines: 0.75, replace_not_repair: 0.55, inflated_labor_hours: 0.50, late_supplement: 0.40}
+  SOFT_PRIOR_DAMAGE:
+    enabled: true
+    layer: FRAUD
+    family: SOFT_FRAUD
+    unit: feature
+    eligible: [COLL, COMP_WEATHER]
+    prevalence: 0.012
+    signals: {second_impact_zone: 0.85, wear_language_in_notes: 0.45, same_zone_prior_claim: 0.30}
+  SOFT_INJURY_BUILDUP:
+    enabled: true
+    layer: FRAUD
+    family: SOFT_FRAUD
+    unit: feature
+    eligible: [BI, PIP, UMBI]
+    prevalence: 0.14
+    inflation: [1.35, 2.40]
+    signals: {early_attorney: 0.60, excess_chiro_pt: 0.75, mri_soft_tissue: 0.45, treatment_gap: 0.35, low_impact_high_injury: 0.40}
+  SOFT_UNLISTED_DRIVER:
+    enabled: true
+    layer: FRAUD
+    family: RATING_MISREP
+    unit: policy
+    prevalence: 0.018              # of households
+    frequency_uplift: 1.9
+    signals: {operator_not_on_policy: 1.0, operator_under_25: 0.80, operator_same_surname: 0.85, operator_address_match: 0.70}
+  SOFT_RIDESHARE_UNDISCLOSED:
+    enabled: true
+    layer: FRAUD
+    family: RATING_MISREP
+    unit: vehicle
+    prevalence: 0.012
+    geo: [LOS_ANGELES, NEW_YORK, MIAMI, CHICAGO, HOUSTON, ATLANTA, DALLAS, SF_BAY, PHOENIX]
+    frequency_uplift: 2.2
+    signals: {odometer_vs_declared_miles: 0.80, night_weekend_loss: 0.70, unrelated_passengers: 0.55, airport_or_venue_location: 0.40}
+
+  # ---------------- hard fraud — individual
+  HARD_POST_LOSS_INCEPTION:
+    enabled: true
+    layer: FRAUD
+    family: HARD_FRAUD
+    unit: policy
+    eligible: [NEW_BUSINESS]
+    prevalence: 0.0035
+    signals: {loss_within_10_days: 1.0, prior_coverage_lapse: 0.75, online_bind_night: 0.55, coverage_added_at_bind: 0.60, damage_older_than_loss_date: 0.35}
+  HARD_OWNER_GIVEUP:
+    enabled: true
+    layer: FRAUD
+    family: HARD_FRAUD
+    unit: vehicle
+    prevalence: 0.0008
+    signals: {theft_or_fire: 1.0, financed_vehicle: 0.80, missed_payments: 0.55, recent_coverage_change: 0.45, late_report: 0.50, burned_recovered_remote: 0.35, keys_unaccounted: 0.40}
+  HARD_DUPLICATE_LOSS:
+    enabled: true
+    layer: FRAUD
+    family: HARD_FRAUD
+    unit: claim
+    eligible: [COLL, COMP_WEATHER, COMP_VANDALISM]
+    prevalence: 0.0025
+    signals: {same_damage_lines: 0.85, different_shop: 0.55, similar_narrative: 0.70, within_180_days: 0.65}
+  HARD_PHANTOM_VEHICLE:
+    enabled: true
+    layer: FRAUD
+    family: HARD_FRAUD
+    unit: policy
+    eligible: [NEW_BUSINESS]
+    prevalence: 0.0006
+    signals: {vin_fails_checkdigit: 0.55, vin_cloned_from_other_vehicle: 0.45, no_lienholder_on_new_vehicle: 0.70, total_loss_within_90_days: 1.0, no_prior_insurance: 0.60}
+
+  # ---------------- organized rings — the headline storylines
+  RING_BODYSHOP_HOUSTON:
+    enabled: true
+    layer: FRAUD
+    family: ORGANIZED_RING
+    unit: ring
+    geo: [HOUSTON]
+    window: ["2024-03-01", "2025-12-31"]
+    shops: 2
+    steer_share: 0.30               # share of in-window Houston collision features steered to ring shops
+    inflation: [1.25, 1.70]
+    signals: {supplement: 0.80, replace_not_repair: 0.70, inflated_labor_hours: 0.75, affiliated_tow: 0.55, same_appraiser: 0.65}
+  RING_PIP_MILL_MIAMI:
+    enabled: true
+    layer: FRAUD
+    family: ORGANIZED_RING
+    unit: ring
+    geo: [MIAMI]
+    window: ["2023-09-01", "2025-10-31"]
+    households: 140                 # recruited policies
+    staged_accidents: 260
+    occupants: [2, 4]
+    signals: {shared_phone_or_address: 0.65, same_clinic: 0.92, same_attorney: 0.88, identical_treatment_plan: 0.80, low_property_damage: 0.85, claimant_repeats: 0.55}
+  RING_SWOOP_AND_SQUAT:
+    enabled: true
+    layer: FRAUD
+    family: ORGANIZED_RING
+    unit: ring
+    geo: [LOS_ANGELES, ATLANTA]
+    window: ["2023-06-01", "2025-12-31"]
+    staged_accidents: 340           # our innocent insureds rear-end the ring's vehicle
+    crew_vehicles_per_ring: 9
+    occupants: [2, 4]
+    signals: {repeat_tp_vehicle: 0.75, repeat_tp_claimants: 0.55, same_attorney: 0.85, same_provider: 0.80, freeway_merge_location: 0.65, sudden_stop_narrative: 0.80}
+  RING_TOW_STORAGE_PHILLY:
+    enabled: true
+    layer: FRAUD
+    family: ORGANIZED_RING
+    unit: ring
+    geo: [PHILADELPHIA]
+    window: ["2024-01-01", "2025-06-30"]
+    tow_companies: 2
+    capture_share: 0.35
+    signals: {excess_storage_days: 0.85, above_market_tow_rate: 0.80, unauthorized_tow_to_affiliate_shop: 0.45}
+  RING_GLASS_SOLICITATION:
+    enabled: true
+    layer: FRAUD
+    family: ORGANIZED_RING
+    unit: ring
+    geo: [TAMPA, ORLANDO, PHOENIX]
+    window: ["2023-04-01", "2025-12-31"]
+    vendors: 3
+    extra_claims_per_month: 55
+    signals: {vendor_reported: 0.90, adas_calibration_on_non_adas_vehicle: 0.55, repeat_glass_claim: 0.40, door_to_door_cluster_zip: 0.70}
+
+  # ---------------- intermediary (producer) fraud
+  PRODUCER_GARAGING_EVASION:
+    enabled: true
+    layer: FRAUD
+    family: PRODUCER_FRAUD
+    unit: policy
+    geo_declared: [ALLENTOWN]       # where the policies say the cars live
+    geo_true: [NEW_YORK]            # where they actually live and crash
+    producers: 2
+    book_share: 0.70                # share of those producers' policies that are misrepresented
+    policies: 2000
+    signals: {loss_far_from_garaging: 0.85, out_of_state_phone: 0.70, out_of_state_license: 0.60, shared_garaging_address: 0.55}
+  PRODUCER_GHOST_POLICIES:
+    enabled: true
+    layer: FRAUD
+    family: PRODUCER_FRAUD
+    unit: policy
+    geo: [ATLANTA]
+    producers: 1
+    window: ["2024-01-01", "2025-06-30"]
+    policies: 900
+    signals: {cancel_nonpay_within_60d: 0.90, commission_paid: 1.0, shared_email_domain_or_phone: 0.50, minimal_vehicle_info: 0.40}
+
+  # ---------------- internal fraud
+  INTERNAL_ADJUSTER_DIVERSION:
+    enabled: true
+    layer: FRAUD
+    family: INTERNAL_FRAUD
+    unit: payment
+    geo: [DALLAS]
+    window: ["2024-07-01", "2025-09-30"]
+    adjusters: 1
+    payments: 120
+    signals: {just_below_authority: 0.80, new_vendor_low_volume: 0.90, vendor_linked_to_employee: 0.50, payment_after_closure: 0.35}
+
+  # ---------------- leakage (process failures, not fraud)
+  LEAK_MISSED_SUBROGATION:
+    enabled: true
+    layer: LEAKAGE
+    family: CLAIMS_LEAKAGE
+    unit: feature
+    eligible: [NOT_AT_FAULT_COLL]
+    prevalence: 0.09
+    signals: {other_party_identified: 0.90, police_report_other_at_fault: 0.70}
+  LEAK_DUPLICATE_PAYMENT:
+    enabled: true
+    layer: LEAKAGE
+    family: CLAIMS_LEAKAGE
+    unit: payment
+    prevalence: 0.0025
+    signals: {same_payee_same_amount: 1.0, within_14_days: 0.85}
+  LEAK_DEDUCTIBLE_NOT_APPLIED:
+    enabled: true
+    layer: LEAKAGE
+    family: CLAIMS_LEAKAGE
+    unit: feature
+    eligible: [COLL, COMP]
+    prevalence: 0.008
+    signals: {deductible_zero_on_paid: 1.0}
+  LEAK_SALVAGE_NOT_RECOVERED:
+    enabled: true
+    layer: LEAKAGE
+    family: CLAIMS_LEAKAGE
+    unit: feature
+    eligible: [TOTAL_LOSS]
+    prevalence: 0.10
+    signals: {total_loss_no_salvage: 1.0}
+
+  # ---------------- benign look-alikes: genuine, but they trip naive rules
+  BENIGN_CAT_HAIL:
+    enabled: true
+    layer: BENIGN
+    family: CATASTROPHE
+    unit: event
+    events:
+      - {metro: DENVER, start: "2024-06-03", days: 3, vehicle_hit_rate: 0.11}
+      - {metro: DALLAS, start: "2025-04-19", days: 2, vehicle_hit_rate: 0.08}
+  BENIGN_CAT_FLOOD:
+    enabled: true
+    layer: BENIGN
+    family: CATASTROPHE
+    unit: event
+    events:
+      - {metro: HOUSTON, start: "2024-07-08", days: 4, vehicle_hit_rate: 0.018}
+      - {metro: TAMPA, start: "2024-10-09", days: 3, vehicle_hit_rate: 0.030}
+  BENIGN_THEFT_WAVE_KIA_HYUNDAI:
+    enabled: true
+    layer: BENIGN
+    family: TREND
+    unit: vehicle
+    geo: [CHICAGO, COLUMBUS, MINNEAPOLIS, SEATTLE]
+    window: ["2023-01-01", "2024-06-30"]
+    model_years: [2015, 2021]
+    annual_theft_rate: 0.035
+  BENIGN_WINTER_PILEUP:
+    enabled: true
+    layer: BENIGN
+    family: CATASTROPHE
+    unit: event
+    events:
+      - {metro: MINNEAPOLIS, start: "2024-01-12", vehicles: 18}
+      - {metro: BUFFALO, start: "2025-01-21", vehicles: 14}
+      - {metro: DETROIT, start: "2025-02-07", vehicles: 12}
+  BENIGN_LATE_REPORT_HOSPITALIZED:
+    enabled: true
+    layer: BENIGN
+    family: LOOKALIKE
+    unit: claim
+    eligible: [INSURED_INJURY]
+    prevalence: 0.06

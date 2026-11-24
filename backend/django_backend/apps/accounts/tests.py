@@ -119,13 +119,22 @@ class AuthHardeningTests(APITestCase):
         self.assertEqual(emails, {'real@example.com'})
 
     def test_logout_blacklists_refresh_token(self):
-        get_user_model().objects.create_user(username='u1', email='u1@example.com', password='RightPass!2026')
+        # /auth/login/ is the staff sign-in: it rejects customer accounts by design, so use an employee.
+        get_user_model().objects.create_user(
+            username='u1', email='u1@example.com', password='RightPass!2026', role='employee',
+        )
         login = self.client.post('/api/v1/auth/login/', {'email': 'u1@example.com', 'password': 'RightPass!2026'}, format='json')
+        self.assertEqual(login.status_code, 200, login.content)
+        self.assertTrue(login.json()['success'])
         tokens = login.json()['data']
+        self.assertTrue(tokens['access'] and tokens['refresh'])
+
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + tokens['access'])
         logout = self.client.post('/api/v1/auth/logout/', {'refresh': tokens['refresh']}, format='json')
         self.assertEqual(logout.status_code, 200)
         self.client.credentials()
+
+        # The blacklisted refresh token can no longer be used to get a new access token.
         refreshed = self.client.post('/api/v1/auth/token/refresh/', {'refresh': tokens['refresh']}, format='json')
         self.assertEqual(refreshed.status_code, 401)
 

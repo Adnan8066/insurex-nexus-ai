@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { usePolling } from '../../hooks/usePolling'
 import { Link } from 'react-router-dom'
 import {
   Shield,
@@ -69,7 +70,15 @@ const EVIDENCE_ACCEPT = '.jpg,.jpeg,.png,.webp,.bmp,.pdf,.mp4,.mov,.m4a,.mp3,.wa
 const MAX_EVIDENCE_BYTES = 25 * 1024 * 1024
 
 const EMPTY_EVIDENCE = { evidence_type: 'document', title: '', description: '', source: '', is_key_evidence: false }
-const EMPTY_COMPLETION = { findings: '', conclusion: '', recommendation: '' }
+const EMPTY_COMPLETION = { findings: '', conclusion: '', recommendation: '', outcome: '', outcomeNotes: '' }
+
+// The investigator's finding on completion. Only this decides fraud or clearance; a triage flag never does.
+const OUTCOME_CHOICES = [
+  { value: 'confirmed_fraud', label: 'Confirmed fraud' },
+  { value: 'cleared', label: 'Cleared (claim is genuine)' },
+  { value: 'inconclusive', label: 'Inconclusive (not enough evidence)' },
+]
+const OUTCOME_LABELS = Object.fromEntries(OUTCOME_CHOICES.map((choice) => [choice.value, choice.label]))
 
 const RISK_COLORS = {
   high: 'text-red-600',
@@ -117,23 +126,27 @@ export function InvestigatorDashboard() {
   const [checksError, setChecksError] = useState(null)
   const [savingChecks, setSavingChecks] = useState(false)
 
-  const loadInvestigations = useCallback(async () => {
-    setLoading(true)
+  // silent: background refresh. A failed refresh keeps the cases already on screen.
+  const loadInvestigations = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const data = await investigationService.getInvestigations()
       setInvestigations(Array.isArray(data) ? data : data.results || [])
     } catch (err) {
       setError(formatApiError(err, 'Failed to load investigations. Please try again.'))
-      setInvestigations([])
+      if (!silent) setInvestigations([])
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     loadInvestigations()
   }, [loadInvestigations])
+
+  // New cases and status changes appear without a reload.
+  usePolling(() => loadInvestigations({ silent: true }), 30000)
 
   const handleOpenNotes = (investigation) => {
     setActiveInvestigation(investigation)
@@ -285,13 +298,17 @@ export function InvestigatorDashboard() {
       findings: investigation.findings || '',
       conclusion: investigation.conclusion || '',
       recommendation: investigation.recommendation || '',
+      outcome: investigation.investigation_outcome && investigation.investigation_outcome !== 'pending'
+        ? investigation.investigation_outcome
+        : '',
+      outcomeNotes: investigation.outcome_notes || '',
     })
     setCompletionError(null)
   }
 
   const handleComplete = async (e) => {
     e.preventDefault()
-    if (!completeCase || !completionForm.findings.trim()) return
+    if (!completeCase || !completionForm.findings.trim() || !completionForm.outcome) return
     setCompleting(true)
     setCompletionError(null)
     try {
@@ -299,6 +316,8 @@ export function InvestigatorDashboard() {
         findings: completionForm.findings.trim(),
         conclusion: completionForm.conclusion.trim(),
         recommendation: completionForm.recommendation.trim(),
+        investigation_outcome: completionForm.outcome,
+        outcome_notes: completionForm.outcomeNotes.trim(),
       })
       replaceInvestigation(updated)
       setCompleteCase(null)
@@ -496,7 +515,7 @@ export function InvestigatorDashboard() {
                   <TableHead>Claim Ref</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Priority</TableHead>
-                  <TableHead>Fraud Risk</TableHead>
+                  <TableHead>Triage Priority</TableHead>
                   <TableHead>Investigation Status</TableHead>
                   <TableHead>Notes Count</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -558,6 +577,11 @@ export function InvestigatorDashboard() {
                           }
                         >
                           {STATUS_LABELS[inv.status] || inv.status}
+                          {inv.investigation_outcome && inv.investigation_outcome !== 'pending' && (
+                            <span className="block text-[11px] font-semibold text-gray-700">
+                              Outcome: {OUTCOME_LABELS[inv.investigation_outcome] || inv.investigation_outcome}
+                            </span>
+                          )}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -926,11 +950,29 @@ export function InvestigatorDashboard() {
               value={completionForm.recommendation}
               onChange={(e) => setCompletionForm((f) => ({ ...f, recommendation: e.target.value }))}
             />
+            <Select
+              label="Investigation outcome (required)"
+              options={OUTCOME_CHOICES}
+              placeholder="Choose the outcome"
+              value={completionForm.outcome}
+              onChange={(e) => setCompletionForm((f) => ({ ...f, outcome: e.target.value }))}
+              required
+            />
+            <p className="text-xs text-gray-500">
+              The outcome is your finding after investigation. The triage priority score only ranks claims for review and is not a fraud finding.
+            </p>
+            <Textarea
+              label="Outcome notes (optional)"
+              rows={2}
+              placeholder="Why you reached this outcome"
+              value={completionForm.outcomeNotes}
+              onChange={(e) => setCompletionForm((f) => ({ ...f, outcomeNotes: e.target.value }))}
+            />
             <div className="flex justify-end gap-2 pt-2 border-t">
               <Button variant="outline" size="sm" type="button" onClick={() => setCompleteCase(null)}>
                 Cancel
               </Button>
-              <Button variant="primary" size="sm" type="submit" disabled={completing || !completionForm.findings.trim()}>
+              <Button variant="primary" size="sm" type="submit" disabled={completing || !completionForm.findings.trim() || !completionForm.outcome}>
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
                 {completing ? 'Completing…' : 'Complete investigation'}
               </Button>

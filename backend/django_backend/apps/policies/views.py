@@ -152,7 +152,12 @@ class PolicyViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
             return [IsAuthenticated(), IsEmployee()]
         if self.action == 'form_options':
             return [IsAuthenticated(), IsEmployee()]
-        if self.action in ['update', 'partial_update', 'destroy', 'update_coverage', 'add_premium_payment']:
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return [IsAuthenticated(), IsAdmin()]
+        # Premium payments and coverage edits: reading is open to staff; writing is admin-only.
+        if self.action == 'premium_history' and self.request.method == 'POST':
+            return [IsAuthenticated(), IsAdmin()]
+        if self.action == 'coverage' and self.request.method in ('PUT', 'PATCH'):
             return [IsAuthenticated(), IsAdmin()]
         if self.action == 'documents' and self.request.method == 'POST':
             return [IsAuthenticated(), IsAdmin()]
@@ -166,25 +171,38 @@ class PolicyViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
         data = serializer.validated_data
         is_customer_request = request.user.role == Role.CUSTOMER
         if is_customer_request:
-            # Underwriting inputs are not self-declared: apply the default score and
+            # The premium comes from the vehicle record and the customer's no-claim years;
             # leave agent assignment to the staff member who reviews the request.
-            data['risk_score'] = Decimal(str(settings.POLICY_DEFAULT_RISK_SCORE))
-            data['risk_factors'] = {'source': 'customer request; default risk score pending staff review'}
+            data['risk_factors'] = {'source': 'customer request; premium from vehicle record and NCB, pending staff review'}
             data['policy_terms'].pop('agent', None)
             vehicle_id = data['policy_terms'].get('vehicle')
             if vehicle_id and PolicyApplication.objects.filter(
                 customer=request.user, status=PolicyApplication.Status.QUOTED, policy_terms__vehicle=vehicle_id,
             ).exists():
                 raise Conflict('A policy request for this vehicle is already waiting for review.')
-        from .services.rating import calculate_premium
+        from .services.rating import PLAN_DEDUCTIBLE, calculate_premium
+        from apps.vehicles.models import Vehicle
+        terms = data['policy_terms']
+        vehicle = Vehicle.objects.filter(pk=terms.get('vehicle')).first() if terms.get('vehicle') else None
+        if vehicle is None:
+            return Response({'detail': 'Choose a vehicle for the quote.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             quote = calculate_premium(
-                coverage_limit=data['coverage_limit'],
-                deductible=data['deductible'],
-                risk_score=data['risk_score'],
+                policy_type=data['policy_type'],
+                ex_showroom_price=vehicle.ex_showroom_price,
+                vehicle_year=vehicle.year,
+                engine_cc=vehicle.engine_cc,
+                registration_city=vehicle.registration_city,
+                ncb_years=terms.get('ncb_years', 0),
+                add_ons=terms.get('add_ons', []),
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        # The insured value (IDV) and deductible come from the plan and the vehicle, not from the request.
+        data['asset_value'] = vehicle.ex_showroom_price
+        data['coverage_limit'] = Decimal(quote.breakdown['idv'])
+        data['deductible'] = PLAN_DEDUCTIBLE[data['policy_type']]
+        data['risk_score'] = Decimal('0')
         application = PolicyApplication.objects.create(
             **data,
             created_by=request.user,
@@ -516,41 +534,36 @@ class PolicyViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="{policy.policy_number}.html"'
         return response
 
-    @action(detail=True, methods=['get'], url_path='premium-history')
+    # GET lists premium history; POST records a payment. One action per URL path, so the
+    # methods are not shadowed by the router.
+    @action(detail=True, methods=['get', 'post'], url_path='premium-history')
     def premium_history(self, request, pk=None):
         policy = self.get_object()
-        history = policy.premium_history.all()
-        serializer = PremiumHistorySerializer(history, many=True)
+        if request.method == 'POST':
+            serializer = PremiumHistorySerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(policy=policy)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = PremiumHistorySerializer(policy.premium_history.all(), many=True)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'], url_path='premium-history')
-    def add_premium_payment(self, request, pk=None):
-        policy = self.get_object()
-        serializer = PremiumHistorySerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(policy=policy)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='coverage')
+    # GET reads coverage details; PUT/PATCH update them. One action per URL path.
+    @action(detail=True, methods=['get', 'put', 'patch'], url_path='coverage')
     def coverage(self, request, pk=None):
         policy = self.get_object()
+        if request.method in ('PUT', 'PATCH'):
+            coverage, _ = PolicyCoverage.objects.get_or_create(policy=policy)
+            serializer = PolicyCoverageSerializer(coverage, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         try:
             coverage = policy.coverage_details
-            serializer = PolicyCoverageSerializer(coverage)
-            return Response(serializer.data)
         except PolicyCoverage.DoesNotExist:
             return Response({'detail': 'Coverage details not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    @action(detail=True, methods=['put', 'patch'], url_path='coverage')
-    def update_coverage(self, request, pk=None):
-        policy = self.get_object()
-        coverage, created = PolicyCoverage.objects.get_or_create(policy=policy)
-        serializer = PolicyCoverageSerializer(coverage, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(PolicyCoverageSerializer(coverage).data)
     
     @action(detail=False, methods=['get'], url_path='expiring')
     def expiring_soon(self, request):

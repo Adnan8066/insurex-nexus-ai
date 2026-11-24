@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from .explain import explain_assessment, explain_fraud, explain_repair_cost, explain_total_loss, rupees
+from .explain import explain_assessment, explain_fraud, explain_repair_cost, explain_total_loss, dollars
 
 
 def _claim(**overrides):
@@ -15,10 +15,11 @@ def _claim(**overrides):
 
 class RupeesTests(SimpleTestCase):
     def test_indian_digit_grouping(self):
-        self.assertEqual(rupees(950), '₹950')
-        self.assertEqual(rupees(54500), '₹54,500')
-        self.assertEqual(rupees(760000), '₹7,60,000')
-        self.assertEqual(rupees(12345678), '₹1,23,45,678')
+        self.assertEqual(dollars(950), '$950')
+        self.assertEqual(dollars(54500), '$54,500')
+        self.assertEqual(dollars(760000), '$760,000')
+        self.assertEqual(dollars(12345678), '$12,345,678')
+        self.assertEqual(dollars(-1200), '-$1,200')
 
 
 class FraudExplanationTests(SimpleTestCase):
@@ -61,8 +62,8 @@ class RepairAndTotalLossTests(SimpleTestCase):
             'breakdown': {'labour': 12000, 'parts': 42500, 'severity': 'major',
                           'segment': 'hatchback/sedan', 'ex_showroom_price': 760000},
         })
-        self.assertEqual(result['summary'], 'Estimated repair ₹54,500 = garage labour ₹12,000 + parts ₹42,500, '
-                                            'for major damage to a hatchback or sedan that costs ₹7,60,000 new.')
+        self.assertEqual(result['summary'], 'Estimated repair $54,500 = shop labor $12,000 + parts $42,500, '
+                                            'for major damage to a hatchback or sedan that costs $760,000 new.')
         self.assertIn('3.2 times this estimate', result['details'][-1])
 
     def test_constructive_total_loss(self):
@@ -73,7 +74,7 @@ class RepairAndTotalLossTests(SimpleTestCase):
 
     def test_model_estimate_without_breakdown(self):
         result = explain_repair_cost(_claim(claim_amount=60000), {'cost': 65863.92, 'breakdown': {}})
-        self.assertEqual(result['summary'], 'Estimated repair ₹65,864, predicted by the AI model from similar past claims.')
+        self.assertEqual(result['summary'], 'Estimated repair $65,864, predicted by the AI model from similar past claims.')
         self.assertIn('in line with this estimate', result['details'][0])
 
     def test_total_loss(self):

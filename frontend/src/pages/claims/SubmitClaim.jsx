@@ -480,7 +480,7 @@ export function SubmitClaim() {
                   <Input
                     label="Incident Location (Address / Crossroads)"
                     name="location"
-                    placeholder="e.g. MG Road near Trinity Metro, Bengaluru"
+                    placeholder="e.g. N High St & E 5th Ave, Columbus, OH"
                     value={formData.location}
                     onChange={handleChange}
                     required
@@ -604,7 +604,7 @@ export function SubmitClaim() {
                 <h2 className="text-lg font-bold text-gray-900 border-b pb-2">Step 4: Claim Amount & Verification</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
-                    label="Estimated Repair or Claim Amount (₹)"
+                    label="Estimated Repair or Claim Amount ($)"
                     type="number"
                     min="1"
                     name="claimAmount"

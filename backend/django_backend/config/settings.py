@@ -147,14 +147,38 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Demonstration factors only; configure approved product-specific rates before
-# using these calculations for actual insurance contracts or claim decisions.
-POLICY_BASE_ANNUAL_RATE = os.environ.get('POLICY_BASE_ANNUAL_RATE', '0.025')
-POLICY_DEDUCTIBLE_CREDIT_RATE = os.environ.get('POLICY_DEDUCTIBLE_CREDIT_RATE', '0.20')
-POLICY_RATING_VERSION = os.environ.get('POLICY_RATING_VERSION', 'demo-v1')
-# Risk score used for quotes a customer requests themselves; staff review it
-# before the quote is issued as a policy.
-POLICY_DEFAULT_RISK_SCORE = os.environ.get('POLICY_DEFAULT_RISK_SCORE', '25')
+# Motor premium tables used by apps/policies/services/rating.py.
+# SPEC = figure from the product spec (IRDAI-style structure).
+# PLACEHOLDER = not in the spec; must be replaced with approved insurer data
+# before these quotes are used for real contracts.
+POLICY_RATING_TABLES = {
+    'rating_version': 'irdai-style-v1',
+    # SPEC: third-party premium by engine capacity (cc), private car, 1 year.
+    'tp_premium': {'under_1000': '2094', 'from_1000_to_1500': '3416', 'above_1500': '7897'},
+    # SPEC: depreciation by vehicle age in years (age taken from the model year).
+    'depreciation': {0: '0.05', 1: '0.15', 2: '0.20', 3: '0.30', 4: '0.40', 5: '0.50'},
+    # PLACEHOLDER: depreciation above 5 years (SPEC says mutually assessed).
+    'depreciation_max': '0.50',
+    # SPEC: no-claim bonus by consecutive claim-free years, applied to the OD part only.
+    'ncb': {0: '0', 1: '0.20', 2: '0.25', 3: '0.35', 4: '0.45', 5: '0.50'},
+    # PLACEHOLDER: OD rate as a share of IDV, inside the SPEC range of about 2.2%–3.2%.
+    'od_rate': {'A': '0.030', 'B': '0.025'},
+    # PLACEHOLDER: registration cities treated as Zone A (metro). Other cities are Zone B.
+    'zone_a_cities': ['mumbai', 'delhi', 'new delhi', 'bengaluru', 'bangalore', 'chennai',
+                      'kolkata', 'hyderabad', 'pune', 'ahmedabad'],
+    # PLACEHOLDER: add-on prices. 'percent' is a share of IDV, 'fixed' is rupees per year.
+    'addons': {
+        'zero_depreciation': {'percent': '0.005'},
+        'engine_protect': {'percent': '0.003'},
+        'roadside_assistance': {'fixed': '600'},
+        'consumables': {'fixed': '400'},
+        'key_protect': {'fixed': '300'},
+    },
+    # PLACEHOLDER: compulsory personal accident cover for the owner-driver (SPEC: about 300–400 a year).
+    'cpa_premium': '350',
+    # SPEC: GST on motor premiums.
+    'gst_rate': '0.18',
+}
 CLAIM_ANNUAL_DEPRECIATION_RATE = os.environ.get('CLAIM_ANNUAL_DEPRECIATION_RATE', '0.05')
 CLAIM_MAX_DEPRECIATION_RATE = os.environ.get('CLAIM_MAX_DEPRECIATION_RATE', '0.80')
 
@@ -170,6 +194,23 @@ else:
         'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
         'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
     }
+
+# Uploads (claim photos, documents, vehicle images). Local disk is for development only:
+# hosted filesystems such as Render's free tier lose files on restart. Set
+# USE_S3_STORAGE=true to store uploads in an S3-compatible bucket (AWS S3, Cloudflare R2,
+# or Supabase Storage) through django-storages.
+USE_S3_STORAGE = os.environ.get('USE_S3_STORAGE', 'False').lower() == 'true'
+if USE_S3_STORAGE:
+    STORAGES['default'] = {'BACKEND': 'storages.backends.s3.S3Storage'}
+    AWS_STORAGE_BUCKET_NAME = os.environ['AWS_STORAGE_BUCKET_NAME']  # required when enabled
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+    AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL') or None
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME') or None
+    AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN') or None
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = True
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.environ.get('MEDIA_ROOT', BASE_DIR / 'media')
@@ -199,6 +240,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'login': os.environ.get('THROTTLE_LOGIN_RATE', '10/min'),
         'password_reset': os.environ.get('THROTTLE_PASSWORD_RESET_RATE', '5/hour'),
+        'login_code': os.environ.get('THROTTLE_LOGIN_CODE_RATE', '10/hour'),
         'register': os.environ.get('THROTTLE_REGISTER_RATE', '20/hour'),
         'public_form': os.environ.get('THROTTLE_PUBLIC_FORM_RATE', '20/hour'),
     },
@@ -291,12 +333,33 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'InsureX Nexus AI <nor
 
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
-MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://localhost:5000')
+# Customer sign-in by emailed one-time code (apps/accounts/login_codes.py).
+CUSTOMER_LOGIN_CODE_TTL_MINUTES = int(os.environ.get('CUSTOMER_LOGIN_CODE_TTL_MINUTES', 10))
+CUSTOMER_LOGIN_CODE_MAX_ATTEMPTS = int(os.environ.get('CUSTOMER_LOGIN_CODE_MAX_ATTEMPTS', 5))
+
 
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
+# Run tasks in-process (no broker needed) when asked, and always during `manage.py test`.
+import sys as _sys
+CELERY_TASK_ALWAYS_EAGER = (
+    os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'False').lower() == 'true'
+    or _sys.argv[1:2] == ['test']
+)
+CELERY_TASK_EAGER_PROPAGATES = True
+# Scheduled jobs for `celery -A config beat`. Intervals are in seconds.
+CELERY_BEAT_SCHEDULE = {
+    'check-policy-expirations': {
+        'task': 'apps.policies.tasks.check_policy_expirations',
+        'schedule': 24 * 60 * 60.0,
+    },
+    'send-renewal-reminders': {
+        'task': 'apps.policies.tasks.send_renewal_reminders',
+        'schedule': 24 * 60 * 60.0,
+    },
+}
 
 LOGGING = {
     'version': 1,

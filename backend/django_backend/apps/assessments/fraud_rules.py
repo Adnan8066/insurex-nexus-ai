@@ -4,8 +4,10 @@ The trained models only see one claim at a time. These checks add the
 signals investigators look for across a customer's policy and claim history.
 Each flag explains itself; none of them is proof of fraud.
 """
+import json
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from apps.claims.models import Claim
 from common.risk import FRAUD_MODERATE_THRESHOLD
@@ -19,26 +21,23 @@ REPEAT_VEHICLE_WINDOW_DAYS = 180
 RECENT_ENDORSEMENT_DAYS = 30
 AMOUNT_OVER_ESTIMATE_RATIO = Decimal('1.5')
 
-# Two independent red flags raise a fraud alert even when the model score is low.
-ALERT_MIN_RED_FLAGS = 2
+# The weights and thresholds live in a versioned file so every score can say which
+# rule version produced it. Change the numbers there and bump "version".
+_CONFIG_PATH = Path(__file__).with_name('triage_heuristic_v1.json')
+with _CONFIG_PATH.open(encoding='utf-8') as _config_file:
+    _TRIAGE_CONFIG = json.load(_config_file)
 
-# Score points each red flag adds on top of the model's fraud probability.
-# The model only sees one claim, so these carry the history signals it cannot.
-# These are hand-picked review-priority weights, not fitted to data.
-RED_FLAG_POINTS = {
-    'repeat_vehicle': 25,
-    'amount_over_vehicle_price': 25,
-    'new_policy': 20,
-    'frequent_claims': 20,
-    'theft_without_police_report': 20,
-    'amount_over_estimate': 15,
-    'recent_policy_change': 15,
-    'policy_ending': 10,
-    'late_report': 10,
-    'injury_without_police_report': 10,
-}
+TRIAGE_HEURISTIC_VERSION = _TRIAGE_CONFIG['version']
+TRIAGE_HEURISTIC_LABEL = _TRIAGE_CONFIG['label']
+
+# Two independent red flags raise a fraud alert even when the model score is low.
+ALERT_MIN_RED_FLAGS = int(_TRIAGE_CONFIG['alert_min_red_flags'])
+
+# Score points each red flag adds on top of the model's score. These are review-priority
+# weights, not fitted to outcome data.
+RED_FLAG_POINTS = {code: int(points) for code, points in _TRIAGE_CONFIG['red_flag_points'].items()}
 # A rule-boosted score never claims certainty.
-MAX_COMBINED_SCORE = 99.0
+MAX_COMBINED_SCORE = float(_TRIAGE_CONFIG['max_combined_score'])
 
 
 def _flag(code, message):

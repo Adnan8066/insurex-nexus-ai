@@ -16,6 +16,7 @@ import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { formatCurrency, formatRelativeTime } from '../../utils/helpers'
 import { policyService, claimService, analyticsService } from '../../services'
+import { usePolling } from '../../hooks/usePolling'
 import { formatApiError } from '../../services/api'
 import {
   CLAIM_STATUSES,
@@ -93,7 +94,9 @@ export function EmployeeDashboard() {
   const [exporting, setExporting] = useState(false)
   const [connectionError, setConnectionError] = useState(null)
 
-  const fetchData = useCallback(async () => {
+  // silent: background refresh. It does not show an error toast on failure, so a brief
+  // network blip does not interrupt the user.
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
     setRefreshing(true)
     setConnectionError(null)
     try {
@@ -112,9 +115,11 @@ export function EmployeeDashboard() {
     } catch (err) {
       const message = formatApiError(err, 'Unable to load dashboard data.')
       setConnectionError(message)
-      toast.error(message, {
-        action: { label: 'Retry', onClick: () => fetchData(), persist: false },
-      })
+      if (!silent) {
+        toast.error(message, {
+          action: { label: 'Retry', onClick: () => fetchData(), persist: false },
+        })
+      }
     } finally {
       setRefreshing(false)
       setLoading(false)
@@ -124,6 +129,9 @@ export function EmployeeDashboard() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // Keep queue and status figures current while the dashboard is open.
+  usePolling(() => fetchData({ silent: true }), 30000)
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams)
@@ -162,12 +170,12 @@ export function EmployeeDashboard() {
         ['Generated at', new Date().toLocaleString()],
         ['Claims in period', periodClaimCount],
         ['Pending claims in period', pendingCount],
-        ['High fraud risk claims in period', highRiskCount],
+        ['High triage priority claims in period', highRiskCount],
         ['Likely total loss claims in period', totalLossCount],
         ['Active policies', activePolicyCount],
         [],
         ['Claims (latest)'],
-        ['Claim number', 'Customer', 'Status', 'Incident type', 'Submitted', 'Amount', 'Priority', 'Fraud risk'],
+        ['Claim number', 'Customer', 'Status', 'Incident type', 'Submitted', 'Amount', 'Priority', 'Triage priority'],
         ...claims.map((claim) => [
           claim.claimNumber,
           claim.customerName,
@@ -231,9 +239,9 @@ export function EmployeeDashboard() {
       link: '/claims?status=pending',
     },
     {
-      title: 'High Fraud Risk',
+      title: 'High Triage Priority',
       value: highRiskCount,
-      caption: 'Claims with a high fraud score',
+      caption: 'Claims ranked high for review priority (Heuristic v1)',
       icon: AlertTriangle,
       iconColor: 'text-red-600',
       bgColor: 'bg-red-50',
@@ -364,7 +372,7 @@ export function EmployeeDashboard() {
                             ) : '—'}
                           </TableCell>
                           <TableCell className="text-sm text-gray-600">{claim.assignedAdjuster || 'Unassigned'}</TableCell>
-                          <TableCell className="text-sm text-gray-600">{claim.assignmentUpdatedAt ? format(new Date(claim.assignmentUpdatedAt), 'dd MMM yyyy, h:mm a') : '—'}</TableCell>
+                          <TableCell className="text-sm text-gray-600">{claim.assignmentUpdatedAt ? format(new Date(claim.assignmentUpdatedAt), 'MMM d, yyyy, h:mm a') : '—'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -388,7 +396,7 @@ export function EmployeeDashboard() {
             <Card>
               <CardHeader
                 title="Fraud Alerts"
-                subtitle="Claims with a medium or high fraud score"
+                subtitle="Claims with a medium or high triage priority score (Heuristic v1)"
               />
               <CardContent className="p-0">
                 {fraudAlerts.length > 0 ? (

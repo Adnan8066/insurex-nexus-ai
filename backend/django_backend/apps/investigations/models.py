@@ -28,6 +28,20 @@ class EvidenceType(models.TextChoices):
     MEDICAL = 'medical', _('Medical Record')
     OTHER = 'other', _('Other')
 
+class InvestigationOutcome(models.TextChoices):
+    # Set only by the investigator when the case is completed. A triage flag is never an outcome.
+    PENDING = 'pending', _('Pending')
+    CLEARED = 'cleared', _('Cleared (claim is genuine)')
+    CONFIRMED_FRAUD = 'confirmed_fraud', _('Confirmed fraud')
+    INCONCLUSIVE = 'inconclusive', _('Inconclusive')
+
+# Matches the claim-level fraud_outcome values used by claims.Claim.
+OUTCOME_TO_CLAIM_FRAUD_OUTCOME = {
+    InvestigationOutcome.CONFIRMED_FRAUD: 'fraud',
+    InvestigationOutcome.CLEARED: 'genuine',
+    InvestigationOutcome.INCONCLUSIVE: 'unclear',
+}
+
 class VehicleCheckCode(models.TextChoices):
     VIN_MATCHES = 'vin_matches', _('VIN on the claim matches the vehicle and its chassis plate')
     PLATE_MATCHES = 'plate_matches', _('Number plate matches the registration record')
@@ -82,6 +96,12 @@ class Investigation(models.Model):
     findings = models.TextField(_('findings'), blank=True)
     conclusion = models.TextField(_('conclusion'), blank=True)
     recommendation = models.TextField(_('recommendation'), blank=True)
+    investigation_outcome = models.CharField(
+        _('investigation outcome'), max_length=20,
+        choices=InvestigationOutcome.choices, default=InvestigationOutcome.PENDING,
+    )
+    outcome_notes = models.TextField(_('outcome notes'), blank=True, max_length=1000)
+    outcome_reviewed_at = models.DateTimeField(_('outcome recorded at'), blank=True, null=True)
     opened_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(_('started at'), blank=True, null=True)
     completed_at = models.DateTimeField(_('completed at'), blank=True, null=True)

@@ -110,7 +110,7 @@ export function Register() {
               value={formData.phone}
               onChange={handleChange}
               error={errors.phone}
-              placeholder="+91 98765 43210"
+              placeholder="(555) 555-0123"
               autoComplete="tel"
               required
               leftIcon={<Phone className="w-5 h-5 text-gray-400" />}

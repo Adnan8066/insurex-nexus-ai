@@ -9,7 +9,6 @@ import { Input, Select } from '../../components/forms/FormFields'
 import { policyService, vehicleService } from '../../services'
 import { useAuth } from '../../context/useAuth'
 import { formatApiError } from '../../services/api'
-import { VEHICLE_STATUSES } from '../../constants/domain'
 import { Alert } from '../../components/ui/Alert'
 import { LoadingState } from '../../components/ui/LoadingSpinner'
 
@@ -74,6 +73,7 @@ export function VehicleForm() {
     customer: searchParams.get('customer') || '', policy: '', make: '', model: '', year: new Date().getFullYear(),
     vin: '', licensePlate: '', licenseState: '', color: '', fuelType: 'gasoline', transmission: 'automatic',
     currentMileage: '', registrationExpiry: '', purchaseDate: '', purchasePrice: '', status: 'active',
+    engineCc: '', exShowroomPrice: '', registrationCity: '',
   })
   const [loading, setLoading] = useState(false)
   const [loadingVehicle, setLoadingVehicle] = useState(isEdit)
@@ -122,6 +122,9 @@ export function VehicleForm() {
               registrationExpiry: vehicle.registration_expiry || '',
               purchaseDate: vehicle.purchase_date || '',
               purchasePrice: vehicle.purchase_price || '',
+              engineCc: vehicle.engine_cc ?? '',
+              exShowroomPrice: vehicle.ex_showroom_price || '',
+              registrationCity: vehicle.registration_city || '',
               status: vehicle.status || 'active',
             }))
           }
@@ -228,6 +231,9 @@ export function VehicleForm() {
         registration_expiry: formData.registrationExpiry || null,
         purchase_date: formData.purchaseDate || null,
         purchase_price: formData.purchasePrice || null,
+        engine_cc: formData.engineCc ? Number(formData.engineCc) : null,
+        ex_showroom_price: formData.exShowroomPrice || null,
+        registration_city: formData.registrationCity || '',
         current_mileage: Number(formData.currentMileage) || 0,
         fuel_type: formData.fuelType,
         transmission: formData.transmission,
@@ -316,11 +322,14 @@ export function VehicleForm() {
               { value: 'automatic', label: 'Automatic' }, { value: 'manual', label: 'Manual' },
               { value: 'cvt', label: 'CVT' }, { value: 'semi_automatic', label: 'Semi-Automatic' },
             ]} />
-            <Input label="Odometer (km)" name="currentMileage" type="number" min="0" value={formData.currentMileage} onChange={handleChange} error={fieldErrors.currentMileage} />
+            <Input label="Odometer (miles)" name="currentMileage" type="number" min="0" value={formData.currentMileage} onChange={handleChange} error={fieldErrors.currentMileage} />
             <Input label="Registration Expiry" name="registrationExpiry" type="date" value={formData.registrationExpiry} onChange={handleChange} error={fieldErrors.registrationExpiry} />
             <Input label="Purchase Date" name="purchaseDate" type="date" max={today} value={formData.purchaseDate} onChange={handleChange} error={fieldErrors.purchaseDate} />
             <Input label="Purchase Price" name="purchasePrice" type="number" min="0" step="0.01" value={formData.purchasePrice} onChange={handleChange} error={fieldErrors.purchasePrice} />
-            <Select label="Status" name="status" value={formData.status} onChange={handleChange} options={VEHICLE_STATUSES} error={fieldErrors.status} />
+            <Input label="Ex-showroom Price (INR)" name="exShowroomPrice" type="number" min="0" step="0.01" value={formData.exShowroomPrice} onChange={handleChange} error={fieldErrors.exShowroomPrice} />
+            <Input label="Engine Capacity (cc)" name="engineCc" type="number" min="1" step="1" value={formData.engineCc} onChange={handleChange} error={fieldErrors.engineCc} />
+            <Input label="Registration City" name="registrationCity" maxLength={60} value={formData.registrationCity} onChange={handleChange} error={fieldErrors.registrationCity} />
+            <Select label="Status" name="status" value={formData.status} onChange={handleChange} options={[{ value: 'active', label: 'Active' }]} error={fieldErrors.status} />
           </div>
           {showExpiredWarning && (
             <div className="mx-6 mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="status">

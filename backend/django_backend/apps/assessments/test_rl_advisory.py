@@ -97,8 +97,32 @@ class RoutingAdvisoryAPITests(TestCase):
         ) as load_engine:
             response = client.post(self.endpoint, self.payload, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        # Graceful fallback: the least-busy rule answers with HTTP 200 instead of a 503.
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = response.json()
+        self.assertEqual(body['routing_mode'], 'rule_fallback')
+        self.assertIn('held-out evaluation gate', body['fallback_reason'])
+        self.assertFalse(body['automated_assignment'])
         load_engine.assert_not_called()
+
+    def test_inference_error_falls_back_to_least_busy_agent(self):
+        User = get_user_model()
+        client = APIClient()
+        client.force_authenticate(user=User.objects.create_user(
+            username='fallback-reviewer', email='fallback@example.com', password='TestPassword!123', role='employee'
+        ))
+        payload = dict(self.payload)
+        payload['active_agents_status'] = [
+            {'id': 'busy', 'queue_length': 9, 'workload': 8.0, 'skill_tier': 2, 'available': True},
+            {'id': 'free', 'queue_length': 1, 'workload': 1.0, 'skill_tier': 2, 'available': True},
+        ]
+        with patch('apps.assessments.rl_views._load_recommendation_engine', side_effect=FileNotFoundError('no model')):
+            response = client.post(self.endpoint, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = response.json()
+        self.assertEqual(body['routing_mode'], 'rule_fallback')
+        self.assertEqual(body['recommended_agent_id'], 'free')
 
     def test_roster_uses_configured_profiles(self):
         User = get_user_model()

@@ -18,24 +18,15 @@ from .serializers import (
     UserSerializer, UserRegistrationSerializer, UserLoginSerializer, AdminUserCreateSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer, UserUpdateSerializer,
-    RefreshTokenRequestSerializer, LogoutRequestSerializer, CustomerLoginSerializer
+    RefreshTokenRequestSerializer, LogoutRequestSerializer,
+    CustomerCodeRequestSerializer, CustomerCodeVerifySerializer,
 )
+from . import login_codes
 from common.permissions import IsAdmin
 from .account_removal import MANAGED_ROLES, account_history_records, deactivate_account, describe_history
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-
-
-def _normalize_plate(value):
-    """'KL 01 Z 7315', 'kl01z7315' -> 'KL01Z7315'."""
-    return ''.join(ch for ch in str(value or '').upper() if ch.isalnum())
-
-
-def _last_ten_digits(value):
-    """'+91 98120-34567' -> '9812034567' (the last 10 digits of the number)."""
-    digits = ''.join(ch for ch in str(value or '') if ch.isdigit())
-    return digits[-10:]
 
 
 class AuthViewSet(viewsets.GenericViewSet):
@@ -46,7 +37,8 @@ class AuthViewSet(viewsets.GenericViewSet):
     # REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']; keyed by client IP).
     THROTTLE_SCOPES = {
         'login': 'login',
-        'customer_login': 'login',
+        'customer_request_code': 'login_code',
+        'customer_verify_code': 'login',
         'customer_password_login': 'login',
         'forgot_password': 'password_reset',
         'reset_password': 'password_reset',
@@ -98,38 +90,46 @@ class AuthViewSet(viewsets.GenericViewSet):
             }
         }, status=status.HTTP_201_CREATED)
     
-    @action(detail=False, methods=['post'], url_path='customer-login')
-    def customer_login(self, request):
-        """Customers sign in with their vehicle registration number and mobile number."""
-        from apps.vehicles.models import Vehicle
+    @action(detail=False, methods=['post'], url_path='customer-login/request-code')
+    def customer_request_code(self, request):
+        """Email a one-time sign-in code to a customer.
 
-        serializer = CustomerLoginSerializer(data=request.data)
+        The response is the same whether or not the email has an account, so it can't be used
+        to discover customers.
+        """
+        serializer = CustomerCodeRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        plate = _normalize_plate(serializer.validated_data['license_plate'])
-        mobile = _last_ten_digits(serializer.validated_data['mobile_number'])
-        email = serializer.validated_data['email'].strip().lower()
-        invalid = {
-            'success': False,
-            'error': {'code': 401, 'message': 'Email, vehicle number or mobile number is incorrect.'},
-        }
-        if not plate or len(mobile) != 10:
-            return Response(invalid, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            login_codes.issue_code(serializer.validated_data['email'])
+        except Exception:
+            logger.exception('Could not send a customer sign-in code')
+            return Response({
+                'success': False,
+                'error': {'code': 503, 'message': 'We could not send the code right now. Please try again shortly.'},
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({
+            'success': True,
+            'data': {
+                'message': 'If that email belongs to a customer account, a sign-in code is on its way.',
+                'expires_in_minutes': login_codes.ttl_minutes(),
+            },
+        })
 
-        customers = {
-            vehicle.customer_id: vehicle.customer
-            for vehicle in Vehicle.objects.select_related('customer').filter(
-                customer__role=Role.CUSTOMER, customer__is_active=True,
-            )
-            if _normalize_plate(vehicle.license_plate) == plate
-            and _last_ten_digits(vehicle.customer.phone) == mobile
-            and vehicle.customer.email.lower() == email
-        }
-        if len(customers) != 1:
-            return Response(invalid, status=status.HTTP_401_UNAUTHORIZED)
+    @action(detail=False, methods=['post'], url_path='customer-login/verify-code')
+    def customer_verify_code(self, request):
+        """Customers sign in with their email and the one-time code sent to it."""
+        serializer = CustomerCodeVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = login_codes.verify_code(serializer.validated_data['email'], serializer.validated_data['code'])
+        if user is None:
+            return Response({
+                'success': False,
+                'error': {'code': 401, 'message': 'That code is incorrect or has expired. Request a new one.'},
+            }, status=status.HTTP_401_UNAUTHORIZED)
 
-        user = next(iter(customers.values()))
         user.last_login_ip = self.get_client_ip(request)
-        user.save(update_fields=['last_login_ip'])
+        user.is_verified = True
+        user.save(update_fields=['last_login_ip', 'is_verified'])
         refresh = RefreshToken.for_user(user)
         return Response({
             'success': True,

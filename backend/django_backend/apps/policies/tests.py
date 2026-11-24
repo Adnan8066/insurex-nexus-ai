@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
@@ -49,6 +51,25 @@ class PolicyApiTests(APITestCase):
         self.client.force_authenticate(self.customer)
         self.assertEqual(self.client.get(url).status_code, 403)
 
+    def test_premium_history_and_coverage_support_get_and_write_methods(self):
+        base = f'/api/v1/policies/{self.policy.pk}'
+        payment = {'amount': '1200.00', 'due_date': '2026-11-19', 'status': 'paid',
+                   'payment_method': 'upi', 'transaction_id': 'TX-TEST-1'}
+        self.client.force_authenticate(self.employee)
+        before = self.client.get(f'{base}/premium-history/')
+        self.assertEqual(before.status_code, 200)
+        self.assertEqual(self.client.post(f'{base}/premium-history/', payment, format='json').status_code, 403)
+        self.assertEqual(self.client.get(f'{base}/coverage/').status_code, 404)
+        self.assertEqual(self.client.put(f'{base}/coverage/', {'liability': '1'}, format='json').status_code, 403)
+
+        self.client.force_authenticate(self.admin)
+        created = self.client.post(f'{base}/premium-history/', payment, format='json')
+        self.assertEqual(created.status_code, 201, created.content)
+        self.assertEqual(len(self.client.get(f'{base}/premium-history/').json()), len(before.json()) + 1)
+        updated = self.client.patch(f'{base}/coverage/', {'liability': '500000.00'}, format='json')
+        self.assertEqual(updated.status_code, 200, updated.content)
+        self.assertEqual(self.client.get(f'{base}/coverage/').status_code, 200)
+
     def test_negative_premium_or_deductible_rejected(self):
         self.client.force_authenticate(self.admin)
         for field, value in (('premium', '-1'), ('deductible', '-1')):
@@ -68,6 +89,7 @@ class CustomerPolicyRequestTests(APITestCase):
         cls.vehicle = Vehicle.objects.create(
             customer=cls.customer, make='Hyundai', model='Creta', year=2026, vin='VINTEST0000000041',
             color='White', license_plate='KL41Z6262', license_state='KL',
+            ex_showroom_price=Decimal('2500000'), engine_cc=1500, registration_city='Kochi',
         )
 
     def request_payload(self, **overrides):
@@ -86,12 +108,16 @@ class CustomerPolicyRequestTests(APITestCase):
         self.client.force_authenticate(self.customer)
         return self.client.post('/api/v1/policies/quote/', self.request_payload(), format='json')
 
-    def test_customer_request_uses_default_risk_and_notifies_staff(self):
+    def test_customer_request_uses_vehicle_premium_and_notifies_staff(self):
         from apps.notifications.models import Notification
         response = self.submit_request()
         self.assertEqual(response.status_code, 201, response.content)
         body = response.json()
-        self.assertEqual(body['risk_score'], '25.00')
+        self.assertEqual(body['risk_score'], '0.00')
+        # 2026 car, age 0 -> 5% depreciation -> IDV 23,75,000 covered.
+        self.assertEqual(body['coverage_limit'], '2375000.00')
+        self.assertEqual(body['deductible'], '1000.00')
+        self.assertEqual(body['rating_breakdown']['idv'], '2375000.00')
         self.assertTrue(body['requested_by_customer'])
         self.assertNotIn('agent', body['policy_terms'])
         self.assertIn('Creta', body['vehicle_label'])
@@ -148,7 +174,8 @@ class PolicyRequestAssignmentTests(APITestCase):
         cls.customer = User.objects.create_user(username='acust', email='acust@example.com', password='x', role='customer')
         cls.vehicles = [
             Vehicle.objects.create(customer=cls.customer, make='Make', model=f'M{index}', year=2024,
-                                   vin=f'VINTEST00000005{index}{index}', color='Red', license_plate=f'KL0{index}', license_state='KL')
+                                   vin=f'VINTEST00000005{index}{index}', color='Red', license_plate=f'KL0{index}', license_state='KL',
+                                   ex_showroom_price=Decimal('1200000'), engine_cc=1200, registration_city='Kochi')
             for index in range(3)
         ]
 
@@ -191,7 +218,8 @@ class NoEmployeeAvailableTests(APITestCase):
         cls.admin = User.objects.create_user(username='nadm', email='nadm@example.com', password='x', role='admin')
         cls.customer = User.objects.create_user(username='ncust', email='ncust@example.com', password='x', role='customer')
         cls.vehicle = Vehicle.objects.create(customer=cls.customer, make='Make', model='Solo', year=2024,
-                                             vin='VINTEST0000000061', color='Red', license_plate='KL61', license_state='KL')
+                                             vin='VINTEST0000000061', color='Red', license_plate='KL61', license_state='KL',
+                                             ex_showroom_price=Decimal('1200000'), engine_cc=1200, registration_city='Kochi')
 
     def test_admin_is_alerted_and_new_employee_receives_waiting_request(self):
         from apps.notifications.models import Notification

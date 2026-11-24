@@ -15,9 +15,9 @@ _MODEL_FILES = {
     "total_loss": "total_loss.joblib",
     "fraud_oracle_fraud": "fraud_oracle_fraud.joblib",
 }
-# Rupees per unit of the training data's currency. The models are trained on the Indian dataset
-# (data/india/, rupees), so the default is 1. Set 83 only if models trained on the original
-# US-dollar insurance_claims.csv are restored (backup in ml/models_us_backup).
+# US dollars per unit of the training data's currency. The models are trained on US-dollar data
+# (data/insurance_claims.csv and fraud_oracle.csv until the Lumora models replace them), so the
+# default is 1.
 CURRENCY_PER_DATASET_UNIT = float(os.environ.get("ML_CURRENCY_PER_DATASET_UNIT", "1"))
 _models = {name: None for name in _MODEL_FILES}
 _model_mtimes = {}

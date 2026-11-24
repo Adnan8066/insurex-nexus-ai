@@ -66,6 +66,18 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const customerCodeLogin = async ({ email, code }) => {
+    setError(null)
+    try {
+      const userData = storeSession(await authService.verifyCustomerCode({ email, code }))
+      return { success: true, user: userData }
+    } catch (err) {
+      const message = formatApiError(err, 'That code is incorrect or has expired. Request a new one.')
+      setError(message)
+      return { success: false, error: message }
+    }
+  }
+
   const register = async (registrationData) => {
     setError(null)
     try {
@@ -156,6 +168,7 @@ export function AuthProvider({ children }) {
     error,
     login,
     customerLogin,
+    customerCodeLogin,
     register,
     logout,
     forgotPassword,

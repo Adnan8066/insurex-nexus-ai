@@ -71,7 +71,7 @@ class SettlementViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
             settlement=settlement,
             status=settlement.status,
             title='Settlement Calculated',
-            description=f'Settlement calculated with estimated amount: ₹{settlement.estimated_amount:,.2f}',
+            description=f'Settlement calculated with estimated amount: ${settlement.estimated_amount:,.2f}',
             user=self.request.user,
             metadata={'estimated_amount': str(settlement.estimated_amount)}
         )
@@ -103,7 +103,7 @@ class SettlementViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
                     settlement=settlement,
                     status=settlement.status,
                     title='Settlement Approved',
-                    description=f'Settlement approved for amount: ₹{settlement.approved_amount:,.2f}',
+                    description=f'Settlement approved for amount: ${settlement.approved_amount:,.2f}',
                     user=request.user,
                     metadata={'approved_amount': str(settlement.approved_amount)}
                 )
@@ -124,7 +124,7 @@ class SettlementViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
                         claim=claim,
                         status=ClaimStatus.REPAIR_SETTLEMENT,
                         title='Settlement Approved',
-                        description=f'Settlement {settlement.settlement_number} approved for ₹{settlement.approved_amount:,.2f}.',
+                        description=f'Settlement {settlement.settlement_number} approved for ${settlement.approved_amount:,.2f}.',
                         user=request.user,
                         metadata={'settlement_id': settlement.id},
                     )
@@ -202,7 +202,7 @@ class SettlementViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
                 settlement=settlement,
                 status=settlement.status,
                 title='Payment Initiated',
-                description=f'Payment of ₹{payment.amount:,.2f} initiated via {payment.payment_method}',
+                description=f'Payment of ${payment.amount:,.2f} initiated via {payment.payment_method}',
                 user=request.user,
                 metadata={'payment_number': payment_number}
             )
@@ -249,7 +249,7 @@ class SettlementViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
             settlement=settlement,
             status=settlement.status,
             title='Payment Completed',
-            description=f'Payment of ₹{payment.amount:,.2f} completed successfully',
+            description=f'Payment of ${payment.amount:,.2f} completed successfully',
             user=request.user,
             metadata={'payment_number': payment.payment_number}
         )

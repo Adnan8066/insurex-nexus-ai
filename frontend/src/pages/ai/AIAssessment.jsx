@@ -173,7 +173,7 @@ export function AIAssessment() {
     labels: ['Customer Estimate', 'AI Predicted Cost'],
     datasets: [
       {
-        label: 'Amount (INR)',
+        label: 'Amount (USD)',
         data: [claimAmount, predictedRepairCost],
         backgroundColor: [CHART_COLORS.slate, CHART_COLORS.navy],
         borderRadius: 6,
@@ -193,7 +193,7 @@ export function AIAssessment() {
         <div>
           <h1 className="page-title">Claim Assessment</h1>
           <p className="page-subtitle">
-            Estimated repair cost, fraud risk and recommended next step for a claim
+            Estimated repair cost, triage priority and recommended next step for a claim
           </p>
         </div>
 
@@ -271,7 +271,7 @@ export function AIAssessment() {
             <Card className="border-t-4 border-t-amber-500 shadow-sm">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between text-gray-500 mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider">Fraud Risk Score</span>
+                  <span className="text-xs font-bold uppercase tracking-wider" title="Ranks claims for human review. It does not confirm fraud.">Triage Priority Score (Heuristic v1)</span>
                   <AlertTriangle className="w-4 h-4 text-amber-500" />
                 </div>
                 <div className="flex items-baseline gap-2">
@@ -384,7 +384,7 @@ export function AIAssessment() {
             <div>
               <ChartCard
                 title="Predicted Cost Composition"
-                subtitle={hasCostSplit ? 'Parts and garage labour in the estimate' : 'Only a total cost is available for this claim'}
+                subtitle={hasCostSplit ? 'Parts and shop labor in the estimate' : 'Only a total cost is available for this claim'}
               >
                 {hasCostSplit
                   ? <DoughnutChart data={costData} height={280} />

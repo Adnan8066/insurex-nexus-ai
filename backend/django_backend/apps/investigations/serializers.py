@@ -52,20 +52,42 @@ class InvestigationSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='claim.customer.get_full_name', read_only=True)
     investigator_name = serializers.CharField(source='investigator.get_full_name', read_only=True)
     fraud_alert_risk_level = serializers.CharField(source='fraud_alert.risk_level', read_only=True)
+    # Triage semantics: a review-priority signal, not a fraud finding.
+    triage_priority_score = serializers.SerializerMethodField()
+    heuristic_version = serializers.SerializerMethodField()
     evidence = InvestigationEvidenceSerializer(many=True, read_only=True)
     notes = InvestigationNoteSerializer(many=True, read_only=True)
-    
+
+    def get_triage_priority_score(self, obj):
+        if obj.fraud_alert_id:
+            return obj.fraud_alert.risk_score
+        return obj.claim.fraud_risk_score
+
+    def get_heuristic_version(self, obj):
+        from apps.assessments.fraud_rules import TRIAGE_HEURISTIC_VERSION
+        from apps.assessments.models import ClaimAssessment
+        version = (
+            ClaimAssessment.objects.filter(claim=obj.claim).exclude(triage_heuristic_version='')
+            .order_by('-assessed_at').values_list('triage_heuristic_version', flat=True).first()
+        )
+        return version or TRIAGE_HEURISTIC_VERSION
+
     class Meta:
         model = Investigation
         fields = [
             'id', 'claim', 'claim_number', 'customer_name', 'investigator', 'investigator_name',
             'status', 'priority', 'fraud_alert', 'fraud_alert_risk_level', 'case_number',
             'summary', 'findings', 'conclusion', 'recommendation',
+            'investigation_outcome', 'outcome_notes', 'outcome_reviewed_at',
+            'triage_priority_score', 'heuristic_version',
             'opened_at', 'started_at', 'completed_at', 'closed_at',
             'estimated_completion', 'created_at', 'updated_at',
             'evidence', 'notes'
         ]
-        read_only_fields = ['id', 'case_number', 'opened_at', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 'case_number', 'opened_at', 'created_at', 'updated_at',
+            'investigation_outcome', 'outcome_notes', 'outcome_reviewed_at',
+        ]
 
 class InvestigationCreateSerializer(serializers.ModelSerializer):
     class Meta:

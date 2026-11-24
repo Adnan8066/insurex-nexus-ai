@@ -39,10 +39,13 @@ const Settings = lazy(() => import('../pages/settings/Settings').then((module) =
 const LandingPage = lazy(() => import('../pages/LandingPage').then((module) => ({ default: module.LandingPage })))
 
 function ProtectedRoute({ children, roles }) {
-  const { isAuthenticated, hasRole, loading } = useAuth()
+  const { isAuthenticated, hasRole, loading, user } = useAuth()
   if (loading) return <div className="p-8 text-center text-gray-500" role="status">Checking your session…</div>
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (roles && !hasRole(roles)) return <Navigate to="/dashboard" replace />
+  // Investigators are sent to their case list when they open a page meant for other roles.
+  if (roles && !hasRole(roles)) {
+    return <Navigate to={user?.role === 'investigator' ? '/investigators' : '/dashboard'} replace />
+  }
   return children
 }
 
@@ -74,20 +77,20 @@ export default function AppRoutes() {
 
       <Route element={<ProtectedRoute><ErrorBoundary><MainLayout /></ErrorBoundary></ProtectedRoute>}>
         <Route path="dashboard" element={<RoleBasedDashboard />} />
-        <Route path="policies" element={<PolicyList />} />
+        <Route path="policies" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><PolicyList /></ProtectedRoute>} />
         <Route path="policies/new" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
         <Route path="policies/plans" element={<PlanCompare />} />
         <Route path="policies/requests" element={<ProtectedRoute roles={['employee', 'admin']}><PolicyRequests /></ProtectedRoute>} />
         <Route path="policies/:id" element={<PolicyDetails />} />
         <Route path="policies/:id/edit" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
-        <Route path="vehicles" element={<VehicleList />} />
+        <Route path="vehicles" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><VehicleList /></ProtectedRoute>} />
         <Route path="vehicles/new" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><VehicleForm /></ProtectedRoute>} />
         <Route path="vehicles/:id" element={<VehicleDetails />} />
         <Route path="vehicles/:id/insure" element={<ProtectedRoute roles={['customer']}><RequestPolicy /></ProtectedRoute>} />
         <Route path="vehicles/:id/edit" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><VehicleForm /></ProtectedRoute>} />
         <Route path="claims" element={<ClaimList />} />
         <Route path="claims/:id" element={<ClaimDetails />} />
-        <Route path="claims/new" element={<SubmitClaim />} />
+        <Route path="claims/new" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><SubmitClaim /></ProtectedRoute>} />
         <Route path="claims/:id/tracking" element={<ClaimTracking />} />
         <Route path="ai-assessment" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><AIAssessment /></ProtectedRoute>} />
         <Route path="routing-advisory" element={<ProtectedRoute roles={['employee', 'admin', 'investigator']}><RoutingAdvisory /></ProtectedRoute>} />

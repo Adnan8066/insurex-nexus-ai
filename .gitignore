@@ -66,3 +66,7 @@ backend/django_backend/staticfiles/*
 
 # Demo data export with login passwords
 InsureX_Demo_Data.xlsx
+
+# Generated datasets (regenerate with the motorsynth generator in backend/data/us)
+backend/data/us/sample/
+backend/data/us/output/

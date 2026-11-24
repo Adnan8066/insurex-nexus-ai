@@ -1,4 +1,4 @@
-import { AlertTriangle, IndianRupee, TrendingDown } from 'lucide-react'
+import { AlertTriangle, DollarSign, TrendingDown } from 'lucide-react'
 import { Card, CardHeader, CardContent } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 
@@ -41,7 +41,7 @@ export function ScoreExplanation({ explanation, className }) {
     <Card className={className}>
       <CardHeader title="Why these scores" subtitle="What the AI saw in this claim, in plain language" />
       <CardContent className="p-6 space-y-5">
-        <Section icon={AlertTriangle} iconClass="bg-amber-100 text-amber-700" title="Fraud risk" summary={fraud.summary}>
+        <Section icon={AlertTriangle} iconClass="bg-amber-100 text-amber-700" title="Triage priority (Heuristic v1)" summary={fraud.summary}>
           {reasons.length > 0 && (
             <ul className="mt-2 space-y-1.5">
               {reasons.map((reason) => (
@@ -54,7 +54,7 @@ export function ScoreExplanation({ explanation, className }) {
             </ul>
           )}
         </Section>
-        <Section icon={IndianRupee} iconClass="bg-blue-100 text-blue-700" title="Repair cost" summary={cost.summary}>
+        <Section icon={DollarSign} iconClass="bg-blue-100 text-blue-700" title="Repair cost" summary={cost.summary}>
           <Details items={cost.details} />
         </Section>
         <Section icon={TrendingDown} iconClass="bg-purple-100 text-purple-700" title="Write-off chance" summary={loss.summary}>

@@ -400,16 +400,16 @@ def evaluate_regressor(template, X, y, name):
 
 
 class Command(BaseCommand):
-    help = "Train app models on the bundled Indian (rupee) insurance and Fraud Oracle datasets."
+    help = "Train app models on the bundled US-dollar insurance and Fraud Oracle datasets."
 
     def add_arguments(self, parser):
         backend_dir = settings.BASE_DIR.parent
-        # Defaults are the Indian rupee datasets, matching ML_CURRENCY_PER_DATASET_UNIT=1 in
-        # ml_service.py. The original US-dollar files in data/ can still be passed explicitly,
-        # but models trained on them need ML_CURRENCY_PER_DATASET_UNIT=83.
-        india_dir = backend_dir / "data" / "india"
-        parser.add_argument("--insurance-file", type=Path, default=india_dir / "india_insurance_claims.csv")
-        parser.add_argument("--fraud-file", type=Path, default=india_dir / "india_fraud_oracle.csv")
+        # Defaults are the original US-dollar datasets, matching ML_CURRENCY_PER_DATASET_UNIT=1
+        # in ml_service.py. They are an interim source: the US migration (docs/US_MIGRATION_PLAN.md,
+        # Phase 3) replaces them with features built from the Lumora data in data/us/.
+        data_dir = backend_dir / "data"
+        parser.add_argument("--insurance-file", type=Path, default=data_dir / "insurance_claims.csv")
+        parser.add_argument("--fraud-file", type=Path, default=data_dir / "fraud_oracle.csv")
         parser.add_argument("--models-dir", type=Path, default=backend_dir / "ml" / "models")
 
     def handle(self, *args, **options):

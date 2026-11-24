@@ -93,3 +93,21 @@ class UserProfile(models.Model):
     
     def __str__(self):
         return f"Profile: {self.user.email}"
+
+
+class CustomerLoginCode(models.Model):
+    """A one-time sign-in code emailed to a customer. Only a hash of the code is stored."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='login_codes')
+    code_hash = models.CharField(_('code hash'), max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(_('expires at'))
+    attempts = models.PositiveSmallIntegerField(_('failed attempts'), default=0)
+    used_at = models.DateTimeField(_('used at'), blank=True, null=True)
+
+    class Meta:
+        db_table = 'customer_login_codes'
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', 'created_at'])]
+
+    def __str__(self):
+        return f"Login code for {self.user.email} ({self.created_at:%Y-%m-%d %H:%M})"

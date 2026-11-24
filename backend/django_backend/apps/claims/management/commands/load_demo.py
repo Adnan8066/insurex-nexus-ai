@@ -1,11 +1,12 @@
-"""Load a small, realistic Indian motor-insurance demo in one command.
+"""Load a small, realistic US personal-auto demo in one command.
 
     python manage.py load_demo            # create or refresh the demo data
     python manage.py load_demo --reset    # delete the demo data, then recreate it
 
 Everything this command creates is marked so it can be found and removed again:
 users have emails on DEMO_DOMAIN, and customer, policy, claim and investigation
-numbers start with "DEMO-". Nothing else in the database is changed.
+numbers start with "DEMO-". Nothing else in the database is changed. People, phone
+numbers (555 exchange) and VINs are fictional.
 
 The staff accounts and the demo customer get a known password, so the command
 refuses to run when DEBUG is False unless --allow-production is passed.
@@ -33,200 +34,236 @@ from common.risk import fraud_risk_band
 DEMO_DOMAIN = 'demo.insurex.test'
 DEMO_PREFIX = 'DEMO-'
 DEFAULT_PASSWORD = 'InsureX@Demo2026'
+STAFF_TIMEZONE = 'America/New_York'
 
 STAFF = [
-    {'key': 'admin', 'email': f'admin@{DEMO_DOMAIN}', 'first_name': 'Ananya', 'last_name': 'Iyer',
-     'role': Role.ADMIN, 'department': 'Claims Operations', 'phone': '+91 90000 00010'},
-    {'key': 'employee', 'email': f'employee@{DEMO_DOMAIN}', 'first_name': 'Vikram', 'last_name': 'Singh',
-     'role': Role.EMPLOYEE, 'department': 'Motor Claims', 'phone': '+91 90000 00011'},
-    {'key': 'investigator', 'email': f'investigator@{DEMO_DOMAIN}', 'first_name': 'Meera', 'last_name': 'Kulkarni',
-     'role': Role.INVESTIGATOR, 'department': 'Special Investigations Unit', 'phone': '+91 90000 00012'},
+    {'key': 'admin', 'email': f'admin@{DEMO_DOMAIN}', 'first_name': 'Rachel', 'last_name': 'Adams',
+     'role': Role.ADMIN, 'department': 'Claims Operations', 'phone': '(614) 555-0110'},
+    {'key': 'employee', 'email': f'employee@{DEMO_DOMAIN}', 'first_name': 'James', 'last_name': 'Carter',
+     'role': Role.EMPLOYEE, 'department': 'Auto Claims', 'phone': '(614) 555-0111'},
+    {'key': 'investigator', 'email': f'investigator@{DEMO_DOMAIN}', 'first_name': 'Maria', 'last_name': 'Gonzalez',
+     'role': Role.INVESTIGATOR, 'department': 'Special Investigations Unit (SIU)', 'phone': '(614) 555-0112'},
 ]
 
-COMPREHENSIVE_PLAN = {
-    'id': 'private-car-package',
-    'name': 'Private Car Package (Comprehensive)',
-    'category': 'Motor - Private Car',
-    'coverage_sections': ['Own damage', 'Third-party liability', 'Personal accident cover for owner-driver'],
-    'mandatory_covers': ['Third-party liability', 'Compulsory PA cover (Rs 15 lakh)'],
-    'addons': ['Zero depreciation', 'Engine protect', 'Roadside assistance'],
-    'estimate_source': 'Demo data; not an insurer quote',
+FULL_COVERAGE_PLAN = {
+    'id': 'personal-auto-full',
+    'name': 'Personal Auto - Full Coverage',
+    'category': 'Personal Auto',
+    'coverage_sections': [
+        'Bodily injury liability', 'Property damage liability', 'Uninsured/underinsured motorist',
+        'Medical payments', 'Collision', 'Comprehensive',
+    ],
+    'mandatory_covers': ['State minimum liability'],
+    'addons': ['Rental reimbursement', 'Roadside assistance', 'Glass coverage'],
+    'estimate_source': 'Demo data; not a filed rate',
 }
 
 # Policy start dates are days before today, so the demo always has active policies.
+# Premiums and deductibles are annual US-dollar figures for illustration only.
 CUSTOMERS = [
     {
-        'key': 'priya', 'login': True, 'email': f'customer@{DEMO_DOMAIN}',
-        'first_name': 'Priya', 'last_name': 'Sharma', 'phone': '+91 90000 00001',
-        'address': '14, 3rd Cross, Koramangala 4th Block, Bengaluru, Karnataka 560034',
-        'dob': (1990, 4, 12), 'license_number': 'KA0120150012345', 'license_state': 'KA',
+        'key': 'sarah', 'login': True, 'email': f'customer@{DEMO_DOMAIN}',
+        'first_name': 'Sarah', 'last_name': 'Mitchell', 'phone': '(614) 555-0101',
+        'address': '1420 Neil Avenue, Columbus, OH 43201', 'timezone': 'America/New_York',
+        'dob': (1990, 4, 12), 'license_number': 'OH-SM482915', 'license_state': 'OH',
         'credit_score': 782, 'risk_rating': 'low', 'number': 'DEMO-CUST-0001',
         'vehicles': [
-            {'plate': 'KA 01 MJ 4521', 'state': 'KA', 'vin': 'MA3DEM00000000001', 'make': 'Maruti Suzuki',
-             'model': 'Swift ZXi', 'year': 2022, 'color': 'Pearl Arctic White', 'purchase': (2022, 3, 15),
-             'price': 745000, 'fuel': 'gasoline', 'transmission': 'manual', 'engine': '1.2', 'body': 'Hatchback',
-             'mileage': 28400, 'policy': 'DEMO-POL-0001', 'start_days_ago': 300, 'premium': 14850, 'deductible': 1000},
-            {'plate': 'KA 03 NB 7780', 'state': 'KA', 'vin': 'MALDEM00000000002', 'make': 'Hyundai',
-             'model': 'Creta SX(O)', 'year': 2023, 'color': 'Titan Grey', 'purchase': (2023, 8, 20),
-             'price': 1740000, 'fuel': 'diesel', 'transmission': 'automatic', 'engine': '1.5', 'body': 'SUV',
-             'mileage': 15200, 'policy': 'DEMO-POL-0002', 'start_days_ago': 120, 'premium': 32600, 'deductible': 2000},
+            {'plate': 'JKL 4521', 'state': 'OH', 'vin': '2HGDEM00000000001', 'make': 'Honda',
+             'model': 'Civic EX', 'year': 2022, 'color': 'Platinum White Pearl', 'purchase': (2022, 3, 15),
+             'price': 26800, 'fuel': 'gasoline', 'transmission': 'cvt', 'engine': '2.0', 'body': 'Sedan',
+             'mileage': 28400, 'policy': 'DEMO-POL-0001', 'start_days_ago': 300, 'premium': 1380,
+             'deductible': 500, 'pip': 0},
+            {'plate': 'HXR 7780', 'state': 'OH', 'vin': '2T3DEM00000000002', 'make': 'Toyota',
+             'model': 'RAV4 XLE', 'year': 2023, 'color': 'Magnetic Gray', 'purchase': (2023, 8, 20),
+             'price': 33400, 'fuel': 'hybrid', 'transmission': 'cvt', 'engine': '2.5', 'body': 'SUV',
+             'mileage': 15200, 'policy': 'DEMO-POL-0002', 'start_days_ago': 120, 'premium': 1620,
+             'deductible': 1000, 'pip': 0},
         ],
     },
     {
-        'key': 'rahul', 'login': False, 'email': f'rahul.verma@{DEMO_DOMAIN}',
-        'first_name': 'Rahul', 'last_name': 'Verma', 'phone': '+91 90000 00002',
-        'address': 'House 221, Sector 56, Gurugram, Haryana 122011',
-        'dob': (1986, 11, 2), 'license_number': 'HR2620090045678', 'license_state': 'HR',
+        'key': 'marcus', 'login': False, 'email': f'marcus.johnson@{DEMO_DOMAIN}',
+        'first_name': 'Marcus', 'last_name': 'Johnson', 'phone': '(404) 555-0102',
+        'address': '880 Glenwood Avenue SE, Apt 214, Atlanta, GA 30316', 'timezone': 'America/New_York',
+        'dob': (1986, 11, 2), 'license_number': 'GA-055718342', 'license_state': 'GA',
         'credit_score': 655, 'risk_rating': 'medium', 'number': 'DEMO-CUST-0002',
         'vehicles': [
-            {'plate': 'HR 26 DK 3390', 'state': 'HR', 'vin': 'MATDEM00000000003', 'make': 'Tata',
-             'model': 'Nexon XZ+', 'year': 2022, 'color': 'Flame Red', 'purchase': (2022, 6, 4),
-             'price': 1120000, 'fuel': 'gasoline', 'transmission': 'manual', 'engine': '1.2', 'body': 'Compact SUV',
-             'mileage': 41800, 'policy': 'DEMO-POL-0003', 'start_days_ago': 200, 'premium': 21400, 'deductible': 1000},
-            # Bought in 2024; insured with us only 55 days ago after switching insurer.
-            {'plate': 'DL 8C AF 6612', 'state': 'DL', 'vin': 'MA1DEM00000000004', 'make': 'Mahindra',
-             'model': 'Scorpio-N Z8', 'year': 2024, 'color': 'Napoli Black', 'purchase': (2024, 2, 10),
-             'price': 2150000, 'fuel': 'diesel', 'transmission': 'automatic', 'engine': '2.2', 'body': 'SUV',
-             'mileage': 33600, 'policy': 'DEMO-POL-0004', 'start_days_ago': 55, 'premium': 38900, 'deductible': 2000},
+            {'plate': 'CTR 3390', 'state': 'GA', 'vin': '1FTDEM00000000003', 'make': 'Ford',
+             'model': 'F-150 XLT', 'year': 2022, 'color': 'Rapid Red', 'purchase': (2022, 6, 4),
+             'price': 48500, 'fuel': 'gasoline', 'transmission': 'automatic', 'engine': '3.5', 'body': 'Pickup',
+             'mileage': 41800, 'policy': 'DEMO-POL-0003', 'start_days_ago': 200, 'premium': 1940,
+             'deductible': 500, 'pip': 0},
+            # Bought in 2024; insured with us only 55 days ago after switching carriers.
+            {'plate': 'RKT 6612', 'state': 'GA', 'vin': '1GNDEM00000000004', 'make': 'Chevrolet',
+             'model': 'Tahoe LT', 'year': 2024, 'color': 'Black', 'purchase': (2024, 2, 10),
+             'price': 64200, 'fuel': 'gasoline', 'transmission': 'automatic', 'engine': '5.3', 'body': 'SUV',
+             'mileage': 33600, 'policy': 'DEMO-POL-0004', 'start_days_ago': 55, 'premium': 2860,
+             'deductible': 500, 'pip': 0},
         ],
     },
     {
-        'key': 'arjun', 'login': False, 'email': f'arjun.reddy@{DEMO_DOMAIN}',
-        'first_name': 'Arjun', 'last_name': 'Reddy', 'phone': '+91 90000 00003',
-        'address': '7, Lake View Road, Velachery, Chennai, Tamil Nadu 600042',
-        'dob': (1978, 6, 21), 'license_number': 'TN0919990067890', 'license_state': 'TN',
+        'key': 'elena', 'login': False, 'email': f'elena.rodriguez@{DEMO_DOMAIN}',
+        'first_name': 'Elena', 'last_name': 'Rodriguez', 'phone': '(713) 555-0103',
+        'address': '5214 Braesvalley Drive, Houston, TX 77096', 'timezone': 'America/Chicago',
+        'dob': (1978, 6, 21), 'license_number': 'TX-31847562', 'license_state': 'TX',
         'credit_score': 741, 'risk_rating': 'low', 'number': 'DEMO-CUST-0003',
         'vehicles': [
-            {'plate': 'TN 09 BX 2187', 'state': 'TN', 'vin': 'MA3DEM00000000005', 'make': 'Maruti Suzuki',
-             'model': 'Wagon R LXi', 'year': 2011, 'color': 'Silky Silver', 'purchase': (2011, 5, 10),
-             'price': 385000, 'fuel': 'gasoline', 'transmission': 'manual', 'engine': '1.0', 'body': 'Hatchback',
-             'mileage': 118000, 'policy': 'DEMO-POL-0005', 'start_days_ago': 330, 'premium': 6200, 'deductible': 1000},
-            {'plate': 'TN 22 DE 5504', 'state': 'TN', 'vin': 'MZBDEM00000000006', 'make': 'Kia',
-             'model': 'Seltos HTX', 'year': 2024, 'color': 'Intense Red', 'purchase': (2024, 1, 18),
-             'price': 1590000, 'fuel': 'gasoline', 'transmission': 'cvt', 'engine': '1.5', 'body': 'SUV',
-             'mileage': 21900, 'policy': 'DEMO-POL-0006', 'start_days_ago': 250, 'premium': 29700, 'deductible': 2000},
+            {'plate': 'BX2 1187', 'state': 'TX', 'vin': '4T1DEM00000000005', 'make': 'Toyota',
+             'model': 'Camry LE', 'year': 2011, 'color': 'Classic Silver', 'purchase': (2011, 5, 10),
+             'price': 22100, 'fuel': 'gasoline', 'transmission': 'automatic', 'engine': '2.5', 'body': 'Sedan',
+             'mileage': 168000, 'policy': 'DEMO-POL-0005', 'start_days_ago': 330, 'premium': 1120,
+             'deductible': 500, 'pip': 2500},
+            {'plate': 'DPK 5504', 'state': 'TX', 'vin': '5XYDEM00000000006', 'make': 'Kia',
+             'model': 'Telluride EX', 'year': 2024, 'color': 'Dark Moss', 'purchase': (2024, 1, 18),
+             'price': 44900, 'fuel': 'gasoline', 'transmission': 'automatic', 'engine': '3.8', 'body': 'SUV',
+             'mileage': 21900, 'policy': 'DEMO-POL-0006', 'start_days_ago': 250, 'premium': 2180,
+             'deductible': 1000, 'pip': 2500},
         ],
     },
 ]
+
+
+def actual_cash_value(price, model_year, today):
+    """Rough ACV for the demo: about 12% a year off the purchase price, never below 20%."""
+    age = max(0, today.year - model_year)
+    return int(round(price * max(0.20, 1 - 0.12 * age), -2))
+
 
 # Each status step is (status, days ago, hour, actor key, reason). The first step is the
 # submission, so its date is when the claim was reported. Actor keys are staff keys or 'customer'.
 CLAIMS = [
     {
-        'number': 'DEMO-CLM-0001', 'plate': 'KA 01 MJ 4521',
-        'story': 'Honest minor collision: rear-ended at a signal, small bill, settled and closed',
-        'incident_days_ago': 62, 'incident_time': (18, 40), 'type': IncidentType.COLLISION,
+        'number': 'DEMO-CLM-0001', 'plate': 'JKL 4521',
+        'story': 'Honest minor collision: rear-ended at a red light, small bill, paid and closed',
+        'incident_days_ago': 62, 'incident_time': (17, 40), 'type': IncidentType.COLLISION,
         'severity': IncidentSeverity.MODERATE, 'vehicles_involved': 2,
-        'location': '80 Feet Road signal, Koramangala, Bengaluru, Karnataka', 'lat': '12.935200', 'lon': '77.624500',
-        'witnesses': True, 'witness_details': 'Traffic warden at the junction saw the auto-rickshaw hit the car.',
-        'police_report': False, 'claim_amount': 14200, 'estimate': 13800, 'priority': ClaimPriority.LOW,
-        'description': 'An auto-rickshaw rear-ended my car while I was stopped at the red light. '
-                       'The rear bumper is cracked and the left tail lamp is broken. Repaired cashless at the '
-                       'authorised Maruti workshop.',
+        'location': 'N High St & E 5th Ave, Columbus, OH', 'lat': '39.988100', 'lon': '-83.005200',
+        'witnesses': True,
+        'witness_details': 'A pedestrian at the crosswalk saw the pickup hit the car; the other driver admitted fault.',
+        'police_report': True, 'police_report_number': 'Columbus PD crash report 26-118734',
+        'claim_amount': 2450, 'estimate': 2380, 'priority': ClaimPriority.LOW,
+        'description': 'A pickup truck rear-ended my car while I was stopped at the red light. The rear bumper '
+                       'cover is cracked and the left tail light is broken. Repaired at a direct-repair shop.',
         'adjuster': 'employee',
         'steps': [
             (ClaimStatus.SUBMITTED, 61, 9, 'customer', 'Claim submitted'),
-            (ClaimStatus.UNDER_REVIEW, 59, 11, 'employee', 'Surveyor photos match the description; estimate within range.'),
-            (ClaimStatus.APPROVED, 55, 15, 'employee', 'Approved for cashless repair at the authorised workshop.'),
-            (ClaimStatus.CLOSED, 48, 17, 'employee', 'Repair completed; Rs 13,200 paid to the workshop after the Rs 1,000 deductible.'),
+            (ClaimStatus.UNDER_REVIEW, 59, 11, 'employee', 'Photos match the description; estimate within range.'),
+            (ClaimStatus.APPROVED, 55, 15, 'employee', 'Approved for repair at the direct-repair shop.'),
+            (ClaimStatus.CLOSED, 48, 17, 'employee',
+             "Repair completed; $1,880 paid to the shop after the $500 deductible. "
+             "Subrogation opened against the other driver's carrier."),
         ],
-        'notes': [('employee', 'Rear bumper and tail lamp only; no structural damage. Low-risk, fast-track.', True)],
+        'notes': [('employee', 'Rear bumper cover and tail light only; no structural damage. Low risk, fast-track. '
+                               'Other driver at fault: pursue subrogation to recover the payment and the deductible.',
+                   True)],
     },
     {
-        'number': 'DEMO-CLM-0002', 'plate': 'HR 26 DK 3390',
-        'story': 'Inflated repair bill: workshop invoice is about 13 times the surveyor estimate',
+        'number': 'DEMO-CLM-0002', 'plate': 'CTR 3390',
+        'story': 'Inflated repair bill: shop invoice is about 13 times the appraiser estimate',
         'incident_days_ago': 20, 'incident_time': (13, 15), 'type': IncidentType.COLLISION,
         'severity': IncidentSeverity.MODERATE, 'vehicles_involved': 1,
-        'location': 'DLF Cyber Hub basement parking, Gurugram, Haryana', 'lat': '28.495500', 'lon': '77.088900',
-        'police_report': False, 'claim_amount': 285000, 'estimate': 21500, 'priority': ClaimPriority.HIGH,
-        'description': 'Scraped a pillar while parking. The workshop invoice lists a new bonnet, radiator, both '
-                       'headlamps and front airbags, but the surveyor found only the front bumper and the left '
-                       'headlamp damaged.',
+        'location': 'Parking garage, Ponce City Market, Atlanta, GA', 'lat': '33.772600', 'lon': '-84.365500',
+        'police_report': False, 'claim_amount': 18900, 'estimate': 1450, 'priority': ClaimPriority.HIGH,
+        'description': 'Scraped a concrete pillar while parking. The shop invoice lists a new hood, radiator, both '
+                       'headlamps and front airbags, but the field appraiser found only the front bumper cover and '
+                       'the left headlamp damaged.',
         'adjuster': 'employee',
         'steps': [
             (ClaimStatus.SUBMITTED, 18, 10, 'customer', 'Claim submitted'),
-            (ClaimStatus.UNDER_REVIEW, 16, 12, 'employee', 'Workshop invoice (Rs 2,85,000) is far above the surveyor estimate (Rs 21,500). Itemised bill requested.'),
+            (ClaimStatus.UNDER_REVIEW, 16, 12, 'employee',
+             'Shop invoice ($18,900) is far above the appraiser estimate ($1,450). Itemized estimate requested.'),
         ],
-        'notes': [('employee', 'Airbags were not deployed in the surveyor photos. Asked the workshop for the old parts.', True)],
+        'notes': [('employee', 'Airbags were not deployed in the appraiser photos. Asked the shop to hold the '
+                               'replaced parts for inspection.', True)],
     },
     {
-        'number': 'DEMO-CLM-0003', 'plate': 'DL 8C AF 6612',
+        'number': 'DEMO-CLM-0003', 'plate': 'RKT 6612',
         'story': 'Claim 8 days after the policy started, reported 41 days late; damage looks old',
         'incident_days_ago': 47, 'incident_time': (21, 30), 'type': IncidentType.COLLISION,
         'severity': IncidentSeverity.MAJOR, 'vehicles_involved': 1,
-        'location': 'NH-48 near Manesar toll plaza, Gurugram, Haryana', 'lat': '28.359400', 'lon': '76.937800',
-        'police_report': False, 'claim_amount': 340000, 'estimate': 325000, 'priority': ClaimPriority.HIGH,
-        'description': 'Hit the road divider at night on NH-48. Front bumper, grille, bonnet and radiator damaged. '
-                       'I was travelling, so I could not report the claim earlier.',
+        'location': 'I-285 near the Moreland Ave exit, Atlanta, GA', 'lat': '33.661800', 'lon': '-84.349400',
+        'police_report': False, 'claim_amount': 14800, 'estimate': 14200, 'priority': ClaimPriority.HIGH,
+        'description': 'Hit the median barrier at night on I-285. Front bumper, grille, hood and radiator damaged. '
+                       'I was traveling for work, so I could not report the claim earlier.',
         'adjuster': None,
         'steps': [
             (ClaimStatus.SUBMITTED, 6, 19, 'customer', 'Claim submitted'),
         ],
-        'notes': [('employee', 'Surveyor reports surface rust on the dented panels, which suggests the damage is older than 6 weeks.', True)],
+        'notes': [('employee', 'Appraiser reports surface rust on the dented panels, which suggests the damage is '
+                               'older than 6 weeks.', True)],
     },
     {
-        'number': 'DEMO-CLM-0004', 'plate': 'DL 8C AF 6612',
+        'number': 'DEMO-CLM-0004', 'plate': 'RKT 6612',
         'story': 'Night-time theft with no police report, on the same new-policy SUV a month after its damage claim',
         'incident_days_ago': 9, 'incident_time': (2, 40), 'type': IncidentType.THEFT,
         'severity': IncidentSeverity.TOTAL_LOSS, 'vehicles_involved': 1,
-        'location': 'Outside House 221, Sector 56, Gurugram, Haryana', 'lat': '28.424700', 'lon': '77.104600',
-        'police_report': False, 'claim_amount': 1950000, 'estimate': 1950000, 'priority': ClaimPriority.CRITICAL,
-        'description': 'Car was parked outside my house at night and was missing at 6 am. Both keys are with me. '
-                       'I have not filed an FIR yet because the police station asked me to wait.',
+        'location': 'Apartment parking lot, 880 Glenwood Avenue SE, Atlanta, GA', 'lat': '33.740600',
+        'lon': '-84.358900',
+        'police_report': False, 'claim_amount': 58500, 'estimate': 58500, 'priority': ClaimPriority.CRITICAL,
+        'description': 'The SUV was parked in my apartment lot overnight and was gone at 6 am. I have both key fobs. '
+                       'I have not filed a police report yet because I was told to wait a day in case it was towed.',
         'adjuster': 'employee',
         'steps': [
             (ClaimStatus.SUBMITTED, 8, 8, 'customer', 'Claim submitted'),
-            (ClaimStatus.UNDER_REVIEW, 7, 11, 'employee', 'Theft claim without an FIR. Second claim on this vehicle within a month.'),
-            (ClaimStatus.INVESTIGATION, 6, 10, 'employee', 'Investigator assigned'),
+            (ClaimStatus.UNDER_REVIEW, 7, 11, 'employee',
+             'Theft claim without a police report. Second claim on this vehicle within a month.'),
+            (ClaimStatus.INVESTIGATION, 6, 10, 'employee', 'Referred to SIU; investigator assigned'),
         ],
-        'notes': [('employee', 'Customer asked to file an FIR and submit both keys. Referred to SIU.', True)],
+        'notes': [('employee', 'Customer asked to file a police report and send both key fobs. Referred to SIU.', True)],
         'investigation': {
             'number': 'DEMO-INV-0001',
-            'summary': 'Theft of a Mahindra Scorpio-N insured 46 days earlier, with no FIR, a month after a '
-                       'late-reported damage claim on the same vehicle.',
-            'findings': 'FASTag shows the vehicle crossing the Kherki Daula toll at 03:12, 30 minutes after the '
-                        'reported theft time. Resident welfare association CCTV requested.',
+            'summary': 'Theft of a 2024 Chevrolet Tahoe insured 46 days earlier, with no police report, a month '
+                       'after a late-reported damage claim on the same vehicle.',
+            'findings': 'Peach Pass toll records show the vehicle entering the I-75 Express Lanes at 03:12, '
+                        '30 minutes after the reported theft time. Apartment complex CCTV requested.',
             'evidence': [
-                ('financial', 'FASTag toll crossings', 'NHAI FASTag statement: Kherki Daula toll, 03:12 on the night of the theft.', True),
-                ('surveillance', 'RWA gate CCTV request', 'Request sent to the Sector 56 RWA for gate camera footage, 01:00-06:00.', False),
-                ('statement', 'Customer statement', 'Customer says both keys are at home and no one else drives the car.', False),
+                ('financial', 'Peach Pass toll records',
+                 'State Road and Tollway Authority statement: I-75 Express Lanes entry at 03:12 on the night of '
+                 'the theft.', True),
+                ('surveillance', 'Apartment complex CCTV request',
+                 'Request sent to the property manager for parking lot camera footage, 01:00-06:00.', False),
+                ('statement', 'Insured recorded statement',
+                 'Insured says both key fobs are at home and no one else drives the vehicle.', False),
             ],
             'notes': [
-                'Called the customer: he says he went to the police station but no FIR was registered. Asked for the station name and the officer he spoke to.',
+                'Called the insured: he says he called the police non-emergency line but was not given a report '
+                'number. Asked for the date and time of the call.',
             ],
         },
     },
     {
-        'number': 'DEMO-CLM-0005', 'plate': 'TN 09 BX 2187',
-        'story': 'Flood total loss on a 15-year-old car: the model flags it, the adjuster checks and approves at IDV',
+        'number': 'DEMO-CLM-0005', 'plate': 'BX2 1187',
+        'story': 'Flood total loss on a 15-year-old car: the model flags it, the adjuster checks and pays actual cash value',
         'incident_days_ago': 21, 'incident_time': (23, 0), 'type': IncidentType.WATER_DAMAGE,
         'severity': IncidentSeverity.TOTAL_LOSS, 'vehicles_involved': 1,
-        'location': 'Lake View Road, Velachery, Chennai, Tamil Nadu', 'lat': '12.979100', 'lon': '80.218000',
+        'location': 'Braesvalley Drive, Meyerland, Houston, TX', 'lat': '29.685000', 'lon': '-95.465000',
         'property_damage': True, 'property_damage_details': 'Ground floor of the house also flooded.',
-        'witnesses': True, 'witness_details': 'Neighbours on Lake View Road; the whole street was under water.',
-        'police_report': False, 'claim_amount': 77000, 'estimate': 77000, 'priority': ClaimPriority.MEDIUM,
-        'description': 'Northeast monsoon flooding. The car was parked in the street and was submerged in waist-deep '
-                       'water overnight. The engine was hydrolocked and the interior and wiring are ruined.',
+        'witnesses': True, 'witness_details': 'Neighbors on Braesvalley Drive; the whole street was under water.',
+        'police_report': False, 'claim_amount': 5600, 'estimate': 5600, 'priority': ClaimPriority.MEDIUM,
+        'description': 'Flash flooding after heavy storms. The car was parked on the street and was under '
+                       'waist-deep water overnight. The engine was hydrolocked and the interior and wiring are ruined.',
         'adjuster': 'employee',
         'vehicle_status': VehicleStatus.TOTAL_LOSS,
         'steps': [
             (ClaimStatus.SUBMITTED, 20, 9, 'customer', 'Claim submitted'),
-            (ClaimStatus.UNDER_REVIEW, 18, 14, 'employee', 'Surveyor inspection done; IMD red alert for Chennai on the incident date.'),
-            (ClaimStatus.APPROVED, 12, 16, 'employee', 'Constructive total loss. Settle at the IDV of Rs 77,000; salvage to be collected.'),
+            (ClaimStatus.UNDER_REVIEW, 18, 14, 'employee',
+             'Appraiser inspection done; National Weather Service flash flood warning for Harris County on the '
+             'incident date.'),
+            (ClaimStatus.APPROVED, 12, 16, 'employee',
+             'Total loss. Pay the actual cash value of $5,600 less the $500 deductible; vehicle to salvage auction.'),
         ],
-        'notes': [('employee', 'Repair would cost more than 75% of the IDV, so this is a total loss.', True)],
+        'notes': [('employee', "Repair cost is more than the car's actual cash value, so it is a total loss.", True)],
         # The model scores old-car total losses as risky; the adjuster reviewed and dismissed the alert.
-        'alert_review': ('dismissed', 'Flooding confirmed by the IMD red alert and the surveyor visit; '
-                                      'many cars on the street were submerged. Genuine claim.'),
+        'alert_review': ('dismissed', 'Flooding confirmed by the NWS flash flood warning and the appraiser visit; '
+                                      'many cars on the street were submerged. Genuine catastrophe claim.'),
     },
     {
-        'number': 'DEMO-CLM-0006', 'plate': 'KA 03 NB 7780',
-        'story': 'Windshield cracked by a stone on the highway; small glass claim, just submitted',
+        'number': 'DEMO-CLM-0006', 'plate': 'HXR 7780',
+        'story': 'Windshield cracked by a rock on the interstate; small glass claim, just submitted',
         'incident_days_ago': 3, 'incident_time': (10, 20), 'type': IncidentType.GLASS,
         'severity': IncidentSeverity.MINOR, 'vehicles_involved': 1,
-        'location': 'NH-48, Bengaluru-Tumakuru highway near Nelamangala, Karnataka', 'lat': '13.097600', 'lon': '77.393500',
-        'police_report': False, 'claim_amount': 14800, 'estimate': 14500, 'priority': ClaimPriority.LOW,
-        'description': 'A stone thrown up by a truck cracked the front windshield. No other damage.',
+        'location': 'I-71 North near Delaware, OH', 'lat': '40.260000', 'lon': '-82.940000',
+        'police_report': False, 'claim_amount': 480, 'estimate': 450, 'priority': ClaimPriority.LOW,
+        'description': 'A rock thrown up by a truck cracked the windshield. No other damage.',
         'adjuster': None,
         'steps': [
             (ClaimStatus.SUBMITTED, 2, 18, 'customer', 'Claim submitted'),
@@ -234,25 +271,28 @@ CLAIMS = [
         'notes': [],
     },
     {
-        'number': 'DEMO-CLM-0007', 'plate': 'TN 22 DE 5504',
-        'story': 'Three-vehicle accident with injuries, FIR and witnesses; under review',
+        'number': 'DEMO-CLM-0007', 'plate': 'DPK 5504',
+        'story': 'Three-vehicle accident with injuries, police report and witnesses; under review',
         'incident_days_ago': 10, 'incident_time': (8, 45), 'type': IncidentType.COLLISION,
         'severity': IncidentSeverity.MAJOR, 'vehicles_involved': 3,
-        'location': 'GST Road near Tambaram, Chennai, Tamil Nadu', 'lat': '12.924900', 'lon': '80.127900',
+        'location': 'I-45 North Freeway near Crosstimbers St, Houston, TX', 'lat': '29.830000', 'lon': '-95.398000',
         'injuries': True,
-        'injury_details': 'Driver of the other car: fractured wrist. Policyholder: minor bruises, treated and discharged at a Tambaram hospital.',
-        'property_damage': True, 'property_damage_details': 'Median railing damaged.',
-        'witnesses': True, 'witness_details': 'Traffic constable on duty and a passenger on the MTC bus behind.',
-        'police_report': True, 'police_report_number': 'FIR 412/2026, Tambaram Traffic Investigation Wing',
-        'claim_amount': 84500, 'estimate': 82000, 'priority': ClaimPriority.HIGH,
-        'description': 'A lorry braked suddenly in morning traffic; the car in front of me stopped and I hit it, '
-                       'then the bus behind hit my car. Front and rear damage.',
+        'injury_details': 'Driver of the other car: fractured wrist. Insured: minor bruises, treated and released '
+                          'at an urgent care clinic.',
+        'property_damage': True, 'property_damage_details': 'Highway guardrail damaged.',
+        'witnesses': True, 'witness_details': 'A Houston police officer on patrol and a passenger on the METRO bus behind.',
+        'police_report': True, 'police_report_number': 'Houston PD crash report 2026-0118402',
+        'claim_amount': 9800, 'estimate': 9400, 'priority': ClaimPriority.HIGH,
+        'description': 'A box truck braked suddenly in morning traffic; the car in front of me stopped and I hit it, '
+                       'then the bus behind hit my SUV. Front and rear damage.',
         'adjuster': 'employee',
         'steps': [
             (ClaimStatus.SUBMITTED, 9, 12, 'customer', 'Claim submitted'),
-            (ClaimStatus.UNDER_REVIEW, 7, 10, 'employee', 'FIR and medical records received. Third-party injury claim to be handled separately.'),
+            (ClaimStatus.UNDER_REVIEW, 7, 10, 'employee',
+             'Police report and medical records received. Third-party bodily injury claim to be handled separately.'),
         ],
-        'notes': [('employee', 'Front and rear damage is consistent with a three-vehicle pile-up.', True)],
+        'notes': [('employee', 'Front and rear damage is consistent with a three-vehicle chain-reaction crash. '
+                               'Rear damage: subrogate against the bus operator.', True)],
     },
 ]
 
@@ -263,7 +303,7 @@ def _demo_email(email):
 
 class Command(BaseCommand):
     help = (
-        'Load a small Indian motor-insurance demo: 4 logins (admin, employee, investigator, customer) on '
+        'Load a small US personal-auto demo: 4 logins (admin, employee, investigator, customer) on '
         f'@{DEMO_DOMAIN}, 3 customers with cars and active policies, and 7 claims scored by the AI. '
         'Safe to run again; --reset deletes only the demo data and recreates it. '
         'Because it creates accounts with a known password, it refuses to run when DEBUG is False '
@@ -343,7 +383,8 @@ class Command(BaseCommand):
 
     # ----- users and customers -----
 
-    def upsert_user(self, *, email, first_name, last_name, role, phone, address='', department='', password=None):
+    def upsert_user(self, *, email, first_name, last_name, role, phone, address='', department='', password=None,
+                    tz=STAFF_TIMEZONE):
         user = User.objects.filter(email__iexact=email).first()
         if user is None:
             username = email.split('@')[0].replace('.', '-')
@@ -361,7 +402,7 @@ class Command(BaseCommand):
             user.set_unusable_password()
         user.save()
         UserProfile.objects.update_or_create(
-            user=user, defaults={'timezone': 'Asia/Kolkata', 'preferred_language': 'en'},
+            user=user, defaults={'timezone': tz, 'preferred_language': 'en'},
         )
         return user
 
@@ -382,7 +423,7 @@ class Command(BaseCommand):
         user = self.upsert_user(
             email=spec['email'], first_name=spec['first_name'], last_name=spec['last_name'],
             role=Role.CUSTOMER, phone=spec['phone'], address=spec['address'],
-            password=password if spec['login'] else None,
+            password=password if spec['login'] else None, tz=spec['timezone'],
         )
         existing = Customer.objects.filter(customer_number=spec['number']).exclude(user=user).first()
         if existing:
@@ -396,7 +437,7 @@ class Command(BaseCommand):
         })
         if spec['login']:
             self.users['customer'] = user
-            self.customer_login = {'email': user.email, 'plate': spec['vehicles'][0]['plate'], 'mobile': spec['phone']}
+            self.customer_login = {'email': user.email}
 
         for v in spec['vehicles']:
             vehicle = Vehicle.objects.filter(vin=v['vin']).select_related('customer').first()
@@ -413,19 +454,21 @@ class Command(BaseCommand):
             policy = Policy.objects.filter(policy_number=v['policy']).select_related('customer').first()
             self._check_owned(policy, f"Policy {v['policy']}", policy.customer if policy else None)
             start = self.today - timedelta(days=v['start_days_ago'])
-            idv = round(v['price'] * 0.7, -3)
+            acv = actual_cash_value(v['price'], v['year'], self.today)
             policy, _ = Policy.objects.update_or_create(policy_number=v['policy'], defaults={
                 'customer': user, 'agent': self.users['employee'], 'type': PolicyType.AUTO_COMPREHENSIVE,
                 'status': PolicyStatus.ACTIVE, 'start_date': start, 'end_date': start + timedelta(days=364),
                 'premium': Decimal(v['premium']), 'deductible': Decimal(v['deductible']),
                 'payment_frequency': PaymentFrequency.ANNUAL, 'auto_renew': True, 'vehicle': vehicle,
-                'coverage': {'policy_plan': {**COMPREHENSIVE_PLAN, 'base_premium_estimate_inr': v['premium']},
-                             'idv_inr': idv, 'demo': True},
+                'coverage': {'policy_plan': FULL_COVERAGE_PLAN,
+                             'limits': {'bodily_injury': '100/300', 'property_damage': 100000},
+                             'actual_cash_value': acv, 'demo': True},
             })
             PolicyCoverage.objects.update_or_create(policy=policy, defaults={
-                'liability': Decimal('750000'), 'collision': Decimal(idv), 'comprehensive': Decimal(idv),
-                'medical_payments': Decimal('1500000'), 'personal_injury_protection': Decimal('1500000'),
-                'roadside_assistance': True, 'glass_coverage': True,
+                'liability': Decimal('300000'), 'collision': Decimal(acv), 'comprehensive': Decimal(acv),
+                'uninsured_motorist': Decimal('100000'), 'medical_payments': Decimal('5000'),
+                'personal_injury_protection': Decimal(v['pip']),
+                'roadside_assistance': True, 'rental_reimbursement': True, 'glass_coverage': True,
             })
             vehicle.policy = policy
             vehicle.save(update_fields=['policy', 'updated_at'])
@@ -607,7 +650,7 @@ class Command(BaseCommand):
             elif result is None:
                 ai = 'not assessed'
             else:
-                cost = f"Rs {float(result.predicted_repair_cost or 0):,.0f}"
+                cost = f"${float(result.predicted_repair_cost or 0):,.0f}"
                 ai = (f'fraud {float(claim.fraud_risk_score):.1f} ({result.risk_level}), '
                       f'total loss {float(claim.total_loss_probability):.1f}%, AI repair estimate {cost}')
             alert = ' [fraud alert]' if FraudAlert.objects.filter(claim=claim).exists() else ''
@@ -620,7 +663,8 @@ class Command(BaseCommand):
         for spec in STAFF:
             self.stdout.write(f"    {spec['key']:<13} {spec['email']}")
         login = self.customer_login
-        self.stdout.write('  Customer (Customer sign-in page uses email + vehicle number + mobile):')
-        self.stdout.write(f"    customer      {login['email']}  vehicle {login['plate']}  mobile {login['mobile']}")
+        self.stdout.write('  Customer (Customer sign-in page emails a one-time code; with the console email backend '
+                          'it appears in the runserver terminal):')
+        self.stdout.write(f"    customer      {login['email']}")
         self.stdout.write(f'                  (password for the API login: {password})')
         self.stdout.write(self.style.SUCCESS('Demo data is ready.'))

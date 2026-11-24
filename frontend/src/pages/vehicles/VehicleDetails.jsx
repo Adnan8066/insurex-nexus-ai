@@ -28,7 +28,7 @@ const VEHICLE_DOCUMENT_TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
-const formatKm = (value) => (value != null && value !== '' ? `${Number(value).toLocaleString('en-IN')} km` : '—')
+const formatMiles = (value) => (value != null && value !== '' ? `${Number(value).toLocaleString('en-US')} mi` : '—')
 const describeClaim = (claim) => [labelFor(INCIDENT_TYPES, claim.incidentType, ''), labelFor(INCIDENT_SEVERITIES, claim.incidentSeverity, '')].filter(Boolean).join(' • ')
 import { Card, CardHeader, CardContent } from '../../components/ui/Card'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
@@ -280,7 +280,7 @@ export function VehicleDetails() {
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Odometer</dt>
-                      <dd className="mt-1 text-gray-900">{formatKm(vehicle.currentMileage)}</dd>
+                      <dd className="mt-1 text-gray-900">{formatMiles(vehicle.currentMileage)}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Registration Expiry</dt>
@@ -448,7 +448,7 @@ export function VehicleDetails() {
                         </div>
                         <div className="text-right text-sm text-gray-500">
                           <p>{formatDate(event.date)}</p>
-                          {event.mileage != null && <p>{formatKm(event.mileage)}</p>}
+                          {event.mileage != null && <p>{formatMiles(event.mileage)}</p>}
                           {event.cost != null && <p>{formatCurrency(event.cost)}</p>}
                         </div>
                       </li>
@@ -560,7 +560,7 @@ export function VehicleDetails() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Odometer</span>
-                  <span className="font-semibold text-gray-900">{formatKm(vehicle.currentMileage)}</span>
+                  <span className="font-semibold text-gray-900">{formatMiles(vehicle.currentMileage)}</span>
                 </div>
               </div>
             </CardContent>

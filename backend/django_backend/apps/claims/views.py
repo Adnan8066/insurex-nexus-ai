@@ -147,11 +147,11 @@ class ClaimViewSet(AuditActorViewSetMixin, viewsets.ModelViewSet):
             f'Claim {claim.claim_number} was submitted successfully.',
             link=f'/claims/{claim.id}', related_object_type='claim', related_object_id=claim.id,
         )
-        # Score every new claim so staff see fraud and total-loss risk without
-        # running the assessment by hand. A model outage must not block FNOL.
+        # Score every new claim in the background so staff see triage and total-loss
+        # risk without running the assessment by hand. A model or queue outage must not block FNOL.
         try:
-            from apps.assessments.ai_views import run_claim_assessment
-            run_claim_assessment(claim)
+            from apps.assessments.tasks import enqueue_claim_scoring
+            enqueue_claim_scoring(claim.pk)
         except Exception:
             logger.exception('Automatic AI assessment failed for claim %s', claim.claim_number)
         try:

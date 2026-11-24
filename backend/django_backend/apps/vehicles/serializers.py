@@ -67,7 +67,8 @@ class VehicleSerializer(serializers.ModelSerializer):
             'id', 'customer', 'customer_email', 'customer_name', 'policy', 'policy_number',
             'make', 'model', 'year', 'vin', 'color', 'license_plate', 'license_state',
             'registration_expiry', 'purchase_date', 'purchase_price', 'current_mileage',
-            'fuel_type', 'transmission', 'status', 'engine_size', 'body_style', 'features',
+            'fuel_type', 'transmission', 'status', 'engine_size', 'engine_cc', 'ex_showroom_price',
+            'registration_city', 'body_style', 'features',
             'image_url', 'created_at', 'updated_at', 'documents', 'history'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -85,7 +86,8 @@ class VehicleCreateSerializer(VehicleValueValidationMixin, serializers.ModelSeri
             'customer', 'policy', 'make', 'model', 'year', 'vin', 'color',
             'license_plate', 'license_state', 'registration_expiry',
             'purchase_date', 'purchase_price', 'current_mileage', 'fuel_type',
-            'transmission', 'status', 'engine_size', 'body_style', 'features'
+            'transmission', 'status', 'engine_size', 'engine_cc', 'ex_showroom_price',
+            'registration_city', 'body_style', 'features'
         ]
 
     def validate_vin(self, value):
@@ -115,7 +117,8 @@ class VehicleUpdateSerializer(VehicleValueValidationMixin, serializers.ModelSeri
             'policy', 'make', 'model', 'year', 'color', 'license_plate',
             'license_state', 'registration_expiry', 'purchase_date', 'purchase_price',
             'current_mileage', 'fuel_type', 'transmission', 'status',
-            'engine_size', 'body_style', 'features', 'image'
+            'engine_size', 'engine_cc', 'ex_showroom_price', 'registration_city',
+            'body_style', 'features', 'image'
         ]
 
     def validate_image(self, value):

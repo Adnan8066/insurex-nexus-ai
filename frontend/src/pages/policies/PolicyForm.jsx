@@ -43,7 +43,7 @@ export function PolicyForm() {
     deductible: '500',
     assetValue: '',
     coverageLimit: '',
-    riskScore: '25',
+    ncbYears: '0',
     paymentFrequency: 'annual',
     autoRenew: true,
     propertyAddress: '',
@@ -205,13 +205,15 @@ export function PolicyForm() {
             vehicle_description: selectedVehicle?.label || '',
             declared_value: Number(formData.assetValue),
           },
-          risk_factors: { source: 'staff-entered demonstration score' },
+          risk_factors: { source: 'premium from vehicle record and NCB' },
           asset_value: Number(formData.assetValue),
+          // The server recalculates the insured value (IDV), deductible and premium from the vehicle record.
           coverage_limit: Number(formData.coverageLimit),
           deductible: Number(formData.deductible),
-          risk_score: Number(formData.riskScore),
+          risk_score: 0,
           policy_terms: {
             agent: formData.agent ? Number(formData.agent) : null,
+            ncb_years: Number(formData.ncbYears) || 0,
             start_date: formData.startDate,
             end_date: formData.endDate,
             payment_frequency: formData.paymentFrequency,
@@ -325,8 +327,7 @@ export function PolicyForm() {
             <Input label={selectedTier ? 'Compulsory deductible (INR estimate)' : 'Deductible'} name="deductible" type="number" min="0" step="0.01" value={formData.deductible} onChange={handleChange} required />
             {!isEdit && <>
               <Input label="Declared asset value (INR)" name="assetValue" type="number" min="0.01" step="0.01" value={formData.assetValue} onChange={handleChange} required />
-              <Input label="Coverage limit (INR)" name="coverageLimit" type="number" min="0.01" step="0.01" value={formData.coverageLimit} onChange={handleChange} required />
-              <Input label="Underwriting risk score (0–100)" name="riskScore" type="number" min="0" max="100" step="0.01" value={formData.riskScore} onChange={handleChange} required />
+              <Input label="No-claim years (0–5)" name="ncbYears" type="number" min="0" max="5" step="1" value={formData.ncbYears} onChange={handleChange} required />
             </>}
             <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange} options={[
               { value: 'annual', label: 'Annual' }, { value: 'semi_annual', label: 'Semi-Annual' },
@@ -339,9 +340,21 @@ export function PolicyForm() {
         </section>
 
         {!isEdit && quote && <section className="card border border-blue-200 bg-blue-50 p-5">
-          <h2 className="card-title">Quote ready for review</h2>
+          <h2 className="card-title">Quote ready for review
+            {quote.rating_breakdown?.tariff_source === 'INDICATIVE_DEMO_TARIFF' && (
+              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Indicative / Demo Tariff</span>
+            )}
+          </h2>
           <p className="mt-2 text-sm text-gray-700">Annual estimate: {formatCurrency(quote.quoted_premium, 'INR', 'en-IN')}</p>
-          <p className="mt-1 text-sm text-gray-700">Base {formatCurrency(quote.rating_breakdown.base_premium, 'INR', 'en-IN')} + risk {formatCurrency(quote.rating_breakdown.risk_loading, 'INR', 'en-IN')} − deductible credit {formatCurrency(quote.rating_breakdown.deductible_credit, 'INR', 'en-IN')}.</p>
+          <dl className="mt-3 divide-y divide-blue-100 text-sm">
+            {(quote.rating_breakdown?.lines || []).map((line) => (
+              <div key={line.label} className="flex justify-between gap-4 py-1.5">
+                <dt className="text-gray-700">{line.label}</dt>
+                <dd className="font-medium text-gray-900">{formatCurrency(Number(line.amount), 'INR', 'en-IN')}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-2 text-sm text-gray-700">Insured value (IDV): {formatCurrency(Number(quote.coverage_limit), 'INR', 'en-IN')}</p>
           <p className="mt-2 text-xs text-amber-800">This estimate uses demonstration rating factors, not approved insurer pricing. Review it before issuing.</p>
         </section>}
 

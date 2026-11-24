@@ -102,6 +102,39 @@ class InvestigationApiTests(APITestCase):
         closed = self.client.post(base, {'checks': [{'check_code': 'vin_matches', 'result': 'pass'}]}, format='json')
         self.assertEqual(closed.status_code, 400)
 
+    def test_completion_records_outcome_and_updates_claim_fraud_outcome(self):
+        self.client.force_authenticate(self.investigator)
+        base = f'/api/v1/investigations/{self.investigation.pk}'
+        self.client.post(f'{base}/start/')
+        bad = self.client.post(f'{base}/complete/', {'findings': 'x', 'investigation_outcome': 'maybe'}, format='json')
+        self.assertEqual(bad.status_code, 400)
+        self.investigation.refresh_from_db()
+        self.assertEqual(self.investigation.status, 'in_progress')  # rejected outcome saves nothing
+
+        done = self.client.post(f'{base}/complete/', {
+            'findings': 'Damage does not match the incident', 'investigation_outcome': 'confirmed_fraud',
+            'outcome_notes': 'Rear damage predates the claim',
+        }, format='json')
+        self.assertEqual(done.status_code, 200, done.content)
+        body = done.json()
+        self.assertEqual(body['investigation_outcome'], 'confirmed_fraud')
+        self.assertIsNotNone(body['outcome_reviewed_at'])
+        self.assertIn('triage_priority_score', body)
+        self.assertTrue(body['heuristic_version'])
+        self.assigned_claim.refresh_from_db()
+        self.assertEqual(self.assigned_claim.fraud_outcome, 'fraud')
+        self.assertEqual(self.assigned_claim.fraud_outcome_note, 'Rear damage predates the claim')
+
+    def test_completion_without_outcome_leaves_it_pending(self):
+        self.client.force_authenticate(self.investigator)
+        base = f'/api/v1/investigations/{self.investigation.pk}'
+        self.client.post(f'{base}/start/')
+        done = self.client.post(f'{base}/complete/', {'findings': 'Checked'}, format='json')
+        self.assertEqual(done.status_code, 200, done.content)
+        self.assertEqual(done.json()['investigation_outcome'], 'pending')
+        self.assigned_claim.refresh_from_db()
+        self.assertEqual(self.assigned_claim.fraud_outcome, '')
+
     def test_assessment_review_and_investigator_scope(self):
         self.client.force_authenticate(self.employee)
         review = self.client.post(f'/api/v1/assessments/assessments/{self.other_assessment.pk}/review/')

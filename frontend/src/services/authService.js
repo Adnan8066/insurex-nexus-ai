@@ -13,6 +13,17 @@ export const authService = {
     return responseData(response)
   },
 
+  // Customer sign-in by emailed one-time code: request a code, then verify it.
+  async requestCustomerCode(email) {
+    const response = await api.post('/auth/customer-login/request-code/', { email })
+    return responseData(response)
+  },
+
+  async verifyCustomerCode({ email, code }) {
+    const response = await api.post('/auth/customer-login/verify-code/', { email, code })
+    return responseData(response)
+  },
+
   async register(userData) {
     // Public signup is customer-only; the backend enforces this independently.
     const registrationData = { ...userData }

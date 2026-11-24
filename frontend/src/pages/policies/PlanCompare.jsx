@@ -50,7 +50,7 @@ export function PlanCompare() {
   const selected = plans.filter((plan) => selectedIds.includes(plan.id))
 
   const comparisonRows = [
-    ['Estimated annual premium', (plan) => formatCurrency(plan.base_premium_estimate_inr, 'INR', 'en-IN')],
+    ['Sample base tariff (not a quote)', (plan) => formatCurrency(plan.base_premium_estimate_inr, 'INR', 'en-IN')],
     ['Deductible', (plan) => (plan.deductible_inr ? formatCurrency(plan.deductible_inr, 'INR', 'en-IN') : 'Nil')],
     ['Maximum claim amount', (plan) => formatCurrency(plan.max_claim_inr, 'INR', 'en-IN')],
     ['Own damage cover', (plan) => yesNo(plan.own_damage_cover)],
@@ -87,7 +87,10 @@ export function PlanCompare() {
                   <CardContent className="space-y-3">
                     <p className="text-2xl font-bold text-gray-900">
                       {formatCurrency(plan.base_premium_estimate_inr, 'INR', 'en-IN')}
-                      <span className="text-sm font-normal text-gray-500"> / year (estimate)</span>
+                      <span className="text-sm font-normal text-gray-500"> / year (sample base tariff)</span>
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Sample figure only. Your premium is calculated for your own vehicle when you request a quote.
                     </p>
                     <ul className="list-disc space-y-1 pl-5 text-sm text-gray-700">
                       {plan.coverage_sections.map((section) => <li key={section}>{section}</li>)}

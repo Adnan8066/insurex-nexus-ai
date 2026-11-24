@@ -37,7 +37,6 @@ const createPdfBlob = (reportLines) => {
   let y = 750
   reportLines.forEach(({ text, style = 'body' }) => {
     const normalized = String(text ?? '—')
-      .replace(/₹/g, 'INR ')
       .normalize('NFKD')
       .replace(/[^\x20-\x7E]/g, '')
     const maxLength = style === 'title' ? 58 : 92

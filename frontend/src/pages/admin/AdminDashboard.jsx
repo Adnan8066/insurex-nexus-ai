@@ -31,7 +31,7 @@ function formatPeriod(period) {
   const start = parseISO(period.start)
   const end = parseISO(period.end)
   const sameYear = start.getFullYear() === end.getFullYear()
-  return `${format(start, sameYear ? 'd MMM' : 'd MMM yyyy')} – ${format(end, 'd MMM yyyy')}`
+  return `${format(start, sameYear ? 'MMM d' : 'MMM d, yyyy')} – ${format(end, 'MMM d, yyyy')}`
 }
 
 function StatTile({ label, value, caption, valueClassName = 'text-gray-900', captionClassName = 'text-gray-500' }) {
@@ -103,7 +103,7 @@ export function AdminDashboard() {
   const averageClaimCost = totalClaims > 0 ? Math.round(totalClaimAmount / totalClaims) : 0
 
   // Claims over time: bars for intake (left axis), line for amount (right axis)
-  const trendLabels = trend.map((d) => format(parseISO(String(d.date)), granularity === 'month' ? 'MMM yyyy' : 'd MMM'))
+  const trendLabels = trend.map((d) => format(parseISO(String(d.date)), granularity === 'month' ? 'MMM yyyy' : 'MMM d'))
   const hasTrendData = trend.some((d) => d.count > 0)
   const claimsOverTimeData = {
     labels: trendLabels,
@@ -120,7 +120,7 @@ export function AdminDashboard() {
       },
       {
         type: 'line',
-        label: 'Claim Amount (INR)',
+        label: 'Claim Amount (USD)',
         data: trend.map((d) => Math.round(Number(d.total_amount) || 0)),
         borderColor: CHART_COLORS.green,
         backgroundColor: CHART_COLORS.green,
@@ -139,7 +139,7 @@ export function AdminDashboard() {
         beginAtZero: true,
         position: 'right',
         grid: { drawOnChartArea: false },
-        title: { display: true, text: 'Amount (INR)', color: CHART_COLORS.axisTitle },
+        title: { display: true, text: 'Amount (USD)', color: CHART_COLORS.axisTitle },
         ticks: { color: CHART_COLORS.slate, callback: (value) => formatCurrencyCompact(value) },
       },
     },
@@ -168,8 +168,8 @@ export function AdminDashboard() {
       ['Total Loss Cases', totalLossCases],
       ['Total Claim Amount', totalClaimAmount],
       ['Average Claim Cost', averageClaimCost],
-      ['High Fraud Risk Claims', fraud.high_risk_claims || 0],
-      ['High Fraud Risk Rate (%)', fraud.flag_rate || 0],
+      ['High Triage Priority Claims', fraud.high_risk_claims || 0],
+      ['High Triage Priority Rate (%)', fraud.flag_rate || 0],
       ['SIU Referrals', fraud.siu_referrals || 0],
     ]
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -227,7 +227,7 @@ export function AdminDashboard() {
         <StatTile label="Total Claims" value={totalClaims} caption={`Submitted · ${rangeLabel}`} captionClassName="text-blue-600 font-semibold" />
         <StatTile label="Pending Claims" value={pendingClaims} caption="Awaiting decision" valueClassName="text-amber-600" captionClassName="text-amber-600" />
         <StatTile
-          label="High Fraud Risk"
+          label="High Triage Priority"
           value={fraud.high_risk_claims || 0}
           caption={`${fraud.flag_rate || 0}% of claims · ${fraud.siu_referrals || 0} SIU referral${fraud.siu_referrals === 1 ? '' : 's'}`}
           valueClassName="text-red-600"

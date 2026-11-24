@@ -214,6 +214,15 @@ def _period_payload(period):
 @permission_classes([IsAuthenticated])
 def dashboard_summary(request):
     """Dashboard totals. Pass ?timeframe=week|month|quarter|ytd|year to limit claims to that period."""
+    return _build_dashboard_summary(request)
+
+
+def _build_dashboard_summary(request):
+    """Plain helper shared by the dashboard and overview endpoints.
+
+    It takes the DRF request directly. Calling one @api_view from another passes a
+    DRF Request where Django expects an HttpRequest, which raised a 500.
+    """
     from apps.policies.models import PolicyStatus
     from apps.customers.models import Customer
     from apps.vehicles.models import Vehicle, VehicleStatus
@@ -329,7 +338,7 @@ def fraud_risk(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def overview(request):
-    return dashboard_summary(request)
+    return _build_dashboard_summary(request)
 
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)

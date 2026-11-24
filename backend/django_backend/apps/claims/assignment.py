@@ -139,6 +139,12 @@ def auto_assign_claim(claim_id):
         return claim
     ppo_qualified, version = _ppo_gate()
     use_ppo = config.prefer_qualified_ppo and ppo_qualified
+    if not use_ppo:
+        # Rule fallback: the least-workload rule decides, and the reason is logged for review.
+        logger.warning(
+            'routing_mode=rule_fallback claim_id=%s reason=%s', claim.pk,
+            'PPO model not qualified' if not ppo_qualified else 'PPO disabled by configuration',
+        )
     strategy = 'expertise_least_workload'
     ppo_selected = None
     if use_ppo:

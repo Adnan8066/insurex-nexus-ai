@@ -6,18 +6,24 @@ class ClaimAssessmentSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='claim.customer.get_full_name', read_only=True)
     reviewed_by_name = serializers.CharField(source='reviewed_by.get_full_name', read_only=True)
     
+    # Triage semantics: the same value as fraud_risk_score, under the name that matches what it means.
+    triage_priority_score = serializers.SerializerMethodField()
+
+    def get_triage_priority_score(self, obj):
+        return obj.fraud_risk_score
+
     class Meta:
         model = ClaimAssessment
         fields = [
-            'id', 'claim', 'claim_number', 'customer_name', 'assessment_type',
+            'id', 'claim', 'claim_number', 'customer_name', 'assessment_type', 'triage_priority_score',
             'status', 'model_version', 'predicted_repair_cost', 'cost_breakdown',
             'repair_time_estimate_days', 'comparable_claims_count', 'fraud_risk_score',
-            'risk_level', 'risk_factors', 'behavioral_indicators', 'network_analysis',
+            'triage_heuristic_version', 'risk_level', 'risk_factors', 'behavioral_indicators', 'network_analysis',
             'total_loss_probability', 'claim_priority', 'ai_recommendation',
             'confidence', 'contributing_factors', 'explanation', 'assessed_at', 'created_at',
             'updated_at', 'reviewed_by', 'reviewed_by_name', 'reviewed_at'
         ]
-        read_only_fields = ['id', 'explanation', 'created_at', 'updated_at', 'assessed_at', 'reviewed_by', 'reviewed_at']
+        read_only_fields = ['id', 'explanation', 'created_at', 'updated_at', 'assessed_at', 'reviewed_by', 'reviewed_at', 'triage_heuristic_version']
 
 class ClaimAssessmentCreateSerializer(serializers.ModelSerializer):
     class Meta:

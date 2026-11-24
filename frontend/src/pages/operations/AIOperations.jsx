@@ -116,7 +116,7 @@ export function AIOperations() {
       claimNumber: f.claim_number,
       matchScore: Math.round(Number(f.risk_score) || 0),
       recommendedInvestigator: f.assigned_investigator_name,
-      reason: f.ai_recommendation || 'Matched on fraud risk and investigator specialty.',
+      reason: f.ai_recommendation || 'Matched on triage priority and investigator specialty.',
     }))
 
   // Module 3: Processing Time Estimates (assessments with repair_time_estimate_days)

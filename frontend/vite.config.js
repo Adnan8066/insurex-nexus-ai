@@ -12,5 +12,11 @@ export default defineConfig({
     alias: {
       '@': resolve('src')
     }
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    css: false,
+    include: ['src/**/*.test.{js,jsx}'],
   }
 })

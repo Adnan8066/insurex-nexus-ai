@@ -68,26 +68,21 @@ pipeline {
             }
         }
 
-        stage('Check Training Datasets') {
+        stage('Generate US Sample Data') {
             steps {
-                dir('backend') {
-                    bat '''
-                        if not exist "data\\india\\india_insurance_claims.csv" (
-                            echo Missing training dataset: backend\\data\\india\\india_insurance_claims.csv
-                            exit /b 1
-                        )
-                        if not exist "data\\india\\india_fraud_oracle.csv" (
-                            echo Missing training dataset: backend\\data\\india\\india_fraud_oracle.csv
-                            exit /b 1
-                        )
-                        if not exist "data\\india\\india_vehicle_fraud.csv" (
-                            echo Missing training dataset: backend\\data\\india\\india_vehicle_fraud.csv
-                            exit /b 1
-                        )
-                        dir "data\\india\\india_insurance_claims.csv"
-                        dir "data\\india\\india_fraud_oracle.csv"
-                        dir "data\\india\\india_vehicle_fraud.csv"
-                    '''
+                dir('backend\\data\\us') {
+                    // Lumora synthetic US book (50K policy terms), regenerated from the fixed seed in
+                    // config.yaml so every build gets identical data. Generated files are not committed.
+                    bat 'py -3.12 -m venv .venv'
+                    bat '.venv\\Scripts\\python.exe -m pip install --upgrade pip'
+                    bat '.venv\\Scripts\\python.exe -m pip install -r requirements.txt'
+                    bat '.venv\\Scripts\\python.exe -m motorsynth.generate config.yaml --terms 50000 --out sample'
+                    bat '.venv\\Scripts\\python.exe checks.py sample'
+                }
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'backend/data/us/sample/VALIDATION.md,backend/data/us/sample/STORY.md', fingerprint: true
                 }
             }
         }
@@ -95,13 +90,14 @@ pipeline {
         stage('Train ML Models') {
             steps {
                 dir('backend\\django_backend') {
+                    // Interim: trains on the original US-dollar files in backend/data/ until the
+                    // models move to Lumora features (docs/US_MIGRATION_PLAN.md, Phase 3).
                     bat '.venv\\Scripts\\python.exe manage.py train_project_models'
-                    bat '.venv\\Scripts\\python.exe manage.py train_vehicle_fraud_model --dataset ..\\data\\india\\india_vehicle_fraud.csv'
                 }
             }
             post {
                 success {
-                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/training_report.json,backend/ml/models/vehicle_fraud_report.json,backend/ml/models/fraud_oracle_evaluation.png', fingerprint: true
+                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/training_report.json,backend/ml/models/fraud_oracle_evaluation.png', fingerprint: true
                 }
             }
         }

@@ -52,9 +52,11 @@ class ClaimAssessment(models.Model):
         null=True,
     )
     
-    # Fraud Risk Assessment
+    # Which versioned rule set (triage_heuristic_v1.json) produced the triage score.
+    triage_heuristic_version = models.CharField(_('triage heuristic version'), max_length=20, blank=True, default='')
+    # Triage priority: rule-based review priority, not a calibrated fraud probability.
     fraud_risk_score = models.DecimalField(
-        _('fraud risk score'),
+        _('triage priority score'),
         max_digits=5,
         decimal_places=2,
         blank=True,

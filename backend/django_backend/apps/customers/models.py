@@ -64,7 +64,7 @@ class CustomerDocument(models.Model):
 class CallbackRequest(models.Model):
     VEHICLE_TYPES = [
         ('car', _('Car')),
-        ('two_wheeler', _('Two-wheeler')),
+        ('two_wheeler', _('Motorcycle')),
         ('commercial', _('Commercial vehicle')),
         ('other', _('Other')),
     ]

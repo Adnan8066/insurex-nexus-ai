@@ -145,7 +145,7 @@ export function FraudDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">High Fraud Risk Claims</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">High Triage Priority Claims</p>
             <p className="text-2xl font-black text-red-600 mt-1">{highRisk}</p>
             <span className="text-xs text-gray-400">Investigation Recommended</span>
           </div>
@@ -156,7 +156,7 @@ export function FraudDashboard() {
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Moderate Fraud Risk</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Moderate Triage Priority</p>
             <p className="text-2xl font-black text-amber-600 mt-1">{mediumRisk}</p>
             <span className="text-xs text-gray-400">Enhanced Review</span>
           </div>
@@ -178,7 +178,7 @@ export function FraudDashboard() {
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Average Fraud Risk Score</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Average Triage Priority Score</p>
             <p className="text-2xl font-black text-gray-900 mt-1">{avgRiskScore}%</p>
             <span className="text-xs text-gray-500">Across {alerts.length} alerts</span>
           </div>
@@ -205,9 +205,9 @@ export function FraudDashboard() {
             <Select
               options={[
                 { value: '', label: 'All Risk Levels' },
-                { value: 'high', label: `High Fraud Risk (>${FRAUD_HIGH_THRESHOLD}%)` },
-                { value: 'medium', label: `Medium Fraud Risk (${FRAUD_MODERATE_THRESHOLD}-${FRAUD_HIGH_THRESHOLD}%)` },
-                { value: 'low', label: `Low Fraud Risk (<${FRAUD_MODERATE_THRESHOLD}%)` },
+                { value: 'high', label: `High triage priority (>${FRAUD_HIGH_THRESHOLD})` },
+                { value: 'medium', label: `Medium triage priority (${FRAUD_MODERATE_THRESHOLD}-${FRAUD_HIGH_THRESHOLD})` },
+                { value: 'low', label: `Low triage priority (<${FRAUD_MODERATE_THRESHOLD})` },
               ]}
               value={riskFilter}
               onChange={(e) => setRiskFilter(e.target.value)}
@@ -234,7 +234,7 @@ export function FraudDashboard() {
                 <TableRow>
                   <TableHead>Claim ID</TableHead>
                   <TableHead>Customer</TableHead>
-                  <TableHead>Fraud Risk Score</TableHead>
+                  <TableHead>Triage Priority Score</TableHead>
                   <TableHead>Primary Risk Factors</TableHead>
                   <TableHead>Investigation Status</TableHead>
                   <TableHead>Investigator</TableHead>
@@ -372,7 +372,7 @@ export function FraudDashboard() {
         <Modal
           isOpen={!!selectedAlert}
           onClose={() => setSelectedAlert(null)}
-          title={`Fraud Risk Assessment: ${selectedAlert.claim_number}`}
+          title={`Triage Priority Review: ${selectedAlert.claim_number}`}
           size="lg"
         >
           <div className="space-y-6">
@@ -385,7 +385,7 @@ export function FraudDashboard() {
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-xs font-semibold text-gray-500 uppercase block">Fraud Risk Score</span>
+                <span className="text-xs font-semibold text-gray-500 uppercase block" title="Ranks claims for human review. It does not confirm fraud.">Triage Priority Score (Heuristic v1)</span>
                 <span className="text-3xl font-black text-red-600">
                   {Math.round(Number(selectedAlert.risk_score) || 0)}%
                 </span>

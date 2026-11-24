@@ -20,12 +20,25 @@ const FREQUENCY_OPTIONS = [
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'monthly', label: 'Monthly' },
 ]
+// Add-ons that have a price in the premium rules (settings.POLICY_RATING_TABLES.addons).
+const ADDON_OPTIONS = [
+  { code: 'zero_depreciation', label: 'Zero depreciation' },
+  { code: 'engine_protect', label: 'Engine protection' },
+  { code: 'roadside_assistance', label: 'Roadside assistance' },
+  { code: 'consumables', label: 'Consumables' },
+  { code: 'key_protect', label: 'Key protect' },
+]
+const NCB_OPTIONS = [0, 1, 2, 3, 4, 5].map((years) => ({
+  value: String(years),
+  label: years === 0 ? 'No claim-free years' : `${years} claim-free year${years > 1 ? 's' : ''}`,
+}))
 const tierOptions = policyTiers.map((tier) => ({ value: tier.id, label: `${tier.name} (${tier.category})` }))
 const today = () => format(new Date(), 'yyyy-MM-dd')
 const oneYearFrom = (start) => format(subDays(addYears(parseISO(start), 1), 1), 'yyyy-MM-dd')
 
-// Customer-facing request: the quote is saved for staff review and only becomes a
-// policy when an employee or admin issues it from the Policy requests page.
+// Customer-facing request: the premium is calculated on the server from the vehicle
+// record and the choices below. The quote is saved for staff review and only becomes
+// a policy when an employee or admin issues it.
 export function RequestPolicy() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -33,7 +46,8 @@ export function RequestPolicy() {
   const [pendingRequest, setPendingRequest] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [form, setForm] = useState({ tierId: policyTiers[0].id, declaredValue: '', startDate: today(), paymentFrequency: 'annual' })
+  const [form, setForm] = useState({ tierId: policyTiers[0].id, ncbYears: '0', startDate: today(), paymentFrequency: 'annual' })
+  const [addOns, setAddOns] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState(null)
@@ -50,7 +64,6 @@ export function RequestPolicy() {
         const applications = Array.isArray(applicationsRes) ? applicationsRes : applicationsRes.results || []
         setVehicle(vehicleRes)
         setPendingRequest(applications.find((item) => String(item.policy_terms?.vehicle) === String(vehicleRes.id)) || null)
-        setForm((current) => ({ ...current, declaredValue: vehicleRes.purchase_price ? String(Math.round(Number(vehicleRes.purchase_price))) : '' }))
       } catch (err) {
         if (!cancelled) setLoadError(formatApiError(err, 'Could not load this vehicle.'))
       } finally {
@@ -62,8 +75,15 @@ export function RequestPolicy() {
   }, [id])
 
   const tier = policyTiers.find((item) => item.id === form.tierId) || policyTiers[0]
-  const declaredValue = Number(form.declaredValue)
+  const includesOwnDamage = tier.type !== 'auto_liability'
   const vehicleName = vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : ''
+  const missingVehicleDetails = vehicle
+    ? [
+        !vehicle.ex_showroom_price && 'ex-showroom price',
+        !vehicle.engine_cc && 'engine capacity (cc)',
+        !vehicle.registration_city && 'registration city',
+      ].filter(Boolean)
+    : []
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -71,35 +91,40 @@ export function RequestPolicy() {
     setError('')
   }
 
+  const toggleAddOn = (code) => {
+    setAddOns((current) => (current.includes(code) ? current.filter((item) => item !== code) : [...current, code]))
+    setError('')
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
-    if (!(declaredValue > 0)) {
-      setError('Enter the current value of your vehicle.')
-      return
-    }
-    if (tier.deductible >= declaredValue) {
-      setError('The vehicle value must be higher than the plan deductible.')
+    if (missingVehicleDetails.length) {
+      setError(`Add the ${missingVehicleDetails.join(', ')} to this vehicle before requesting a policy.`)
       return
     }
     setSubmitting(true)
     setError('')
     try {
+      const exShowroom = Number(vehicle.ex_showroom_price)
       const result = await policyService.createPolicyQuote({
         customer: Number(user.id),
         policy_type: tier.type,
         applicant_details: { name: user.name || '', email: user.email || '' },
-        asset_details: { vehicle_id: vehicle.id, vehicle_description: `${vehicleName} (${vehicle.license_plate})`, declared_value: declaredValue },
+        asset_details: { vehicle_id: vehicle.id, vehicle_description: `${vehicleName} (${vehicle.license_plate})` },
         risk_factors: {},
-        asset_value: declaredValue,
-        coverage_limit: declaredValue,
+        // The server recalculates the insured value (IDV) and deductible from the plan and vehicle.
+        asset_value: exShowroom,
+        coverage_limit: exShowroom,
         deductible: tier.deductible,
-        risk_score: 0, // replaced server-side with the default score for customer requests
+        risk_score: 0,
         policy_terms: {
           start_date: form.startDate,
           end_date: oneYearFrom(form.startDate),
           payment_frequency: form.paymentFrequency,
           auto_renew: true,
           vehicle: vehicle.id,
+          ncb_years: Number(form.ncbYears),
+          add_ons: includesOwnDamage ? addOns : [],
           coverage: {
             policy_plan: {
               id: tier.id,
@@ -108,8 +133,7 @@ export function RequestPolicy() {
               coverage_sections: tier.coverageSections,
               mandatory_covers: tier.mandatoryCovers,
               addons: tier.addons,
-              base_premium_estimate_inr: tier.basePremium,
-              estimate_source: 'User-provided draft; not an insurer quote',
+              estimate_source: 'Estimate from the premium rules; not an insurer quote',
             },
           },
         },
@@ -151,6 +175,7 @@ export function RequestPolicy() {
   const request = submitted || pendingRequest
   if (request) {
     const breakdown = request.rating_breakdown || {}
+    const lines = breakdown.lines || []
     return (
       <div className="page mx-auto max-w-3xl space-y-6">
         {backLink}
@@ -166,21 +191,36 @@ export function RequestPolicy() {
               </div>
             </div>
             <div className="rounded-xl bg-gray-50 p-4">
-              <p className="text-sm text-gray-500">Quoted annual premium</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm text-gray-500">Quoted annual premium (incl. GST)</p>
+                {breakdown.tariff_source === 'INDICATIVE_DEMO_TARIFF' && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Indicative / Demo Tariff</span>
+                )}
+              </div>
               <p className="text-3xl font-bold text-gray-900">{formatCurrency(Number(request.quoted_premium))}</p>
-              <dl className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
-                <div><dt className="text-gray-500">Base premium</dt><dd className="font-medium">{formatCurrency(Number(breakdown.base_premium || 0))}</dd></div>
-                <div><dt className="text-gray-500">Risk loading</dt><dd className="font-medium">{formatCurrency(Number(breakdown.risk_loading || 0))}</dd></div>
-                <div><dt className="text-gray-500">Deductible credit</dt><dd className="font-medium">− {formatCurrency(Number(breakdown.deductible_credit || 0))}</dd></div>
+              <dl className="mt-4 divide-y divide-gray-200 text-sm">
+                {lines.map((line) => (
+                  <div key={line.label} className="flex justify-between gap-4 py-2">
+                    <dt className="text-gray-600">{line.label}</dt>
+                    <dd className="font-medium text-gray-900">{formatCurrency(Number(line.amount))}</dd>
+                  </div>
+                ))}
               </dl>
             </div>
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div><dt className="text-gray-500">Plan</dt><dd className="font-medium">{request.policy_terms?.coverage?.policy_plan?.name || request.policy_type}</dd></div>
-              <div><dt className="text-gray-500">Vehicle value covered</dt><dd className="font-medium">{formatCurrency(Number(request.coverage_limit))}</dd></div>
+              <div><dt className="text-gray-500">Insured value (IDV)</dt><dd className="font-medium">{formatCurrency(Number(request.coverage_limit))}</dd></div>
+              {breakdown.depreciation_percent && (
+                <div><dt className="text-gray-500">Depreciation for age</dt><dd className="font-medium">{Number(breakdown.depreciation_percent).toFixed(0)}% ({breakdown.vehicle_age_years} yr)</dd></div>
+              )}
+              {breakdown.zone && (
+                <div><dt className="text-gray-500">Zone</dt><dd className="font-medium">{breakdown.zone === 'A' ? 'Zone A (metro)' : 'Zone B'}</dd></div>
+              )}
+              <div><dt className="text-gray-500">Deductible</dt><dd className="font-medium">{formatCurrency(Number(request.deductible))}</dd></div>
               <div><dt className="text-gray-500">Cover period</dt><dd className="font-medium">{formatDate(request.policy_terms?.start_date)} – {formatDate(request.policy_terms?.end_date)}</dd></div>
               <div><dt className="text-gray-500">Requested</dt><dd className="font-medium">{formatDate(request.created_at)}</dd></div>
             </dl>
-            <p className="text-xs text-gray-500">This is an estimate from demonstration rating factors. The final premium is confirmed when the policy is issued.</p>
+            <p className="text-xs text-gray-500">This is an estimate from the premium rules. The final premium is confirmed when the policy is issued.</p>
             <div className="flex flex-wrap gap-3">
               <Button asChild variant="primary"><Link to={`/vehicles/${vehicle.id}`}>Back to vehicle</Link></Button>
               <Button asChild variant="outline"><Link to="/dashboard">Go to dashboard</Link></Button>
@@ -199,6 +239,12 @@ export function RequestPolicy() {
         <p className="page-subtitle">Choose a plan for your {vehicleName} ({vehicle.license_plate}). Our team reviews every request before the policy is issued.</p>
       </div>
 
+      {missingVehicleDetails.length > 0 && (
+        <Alert>
+          This vehicle is missing {missingVehicleDetails.join(', ')}. Add it on the vehicle record before requesting a policy.
+        </Alert>
+      )}
+
       <form onSubmit={handleSubmit} noValidate>
         <Card>
           <CardHeader title="Plan and cover" />
@@ -209,20 +255,34 @@ export function RequestPolicy() {
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {[...tier.coverageSections, ...tier.mandatoryCovers].map((item) => <li key={item}>{item}</li>)}
               </ul>
-              {tier.addons.length > 0 && <p className="mt-2 text-blue-800">Add-ons: {tier.addons.join(', ')}</p>}
               <p className="mt-2">Deductible: {formatCurrency(tier.deductible)}</p>
             </div>
+
+            {includesOwnDamage && (
+              <fieldset className="space-y-2">
+                <legend className="input-label">Add-ons (optional)</legend>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {ADDON_OPTIONS.map((option) => (
+                    <label key={option.code} className="flex items-center gap-2 text-sm text-gray-700">
+                      <input type="checkbox" checked={addOns.includes(option.code)} onChange={() => toggleAddOn(option.code)} />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
-                label="Current vehicle value (₹)"
-                name="declaredValue"
-                type="number"
-                min="1"
-                value={form.declaredValue}
-                onChange={handleChange}
-                hint="The amount your vehicle is insured for."
-                required
-              />
+              {includesOwnDamage && (
+                <Select
+                  label="No-claim bonus (claim-free years)"
+                  name="ncbYears"
+                  value={form.ncbYears}
+                  onChange={handleChange}
+                  options={NCB_OPTIONS}
+                  hint="Years in a row with no claim on your previous policy. It discounts the own-damage part only."
+                />
+              )}
               <Input label="Cover starts on" name="startDate" type="date" min={today()} value={form.startDate} onChange={handleChange} required />
               <Select label="Pay premium" name="paymentFrequency" value={form.paymentFrequency} onChange={handleChange} options={FREQUENCY_OPTIONS} />
               <div className="input-group">
@@ -232,7 +292,9 @@ export function RequestPolicy() {
             </div>
             {error && <Alert>{error}</Alert>}
             <div className="flex justify-end">
-              <Button type="submit" variant="primary" loading={submitting}>Get quote and send request</Button>
+              <Button type="submit" variant="primary" loading={submitting} disabled={missingVehicleDetails.length > 0}>
+                Get quote and send request
+              </Button>
             </div>
           </CardContent>
         </Card>

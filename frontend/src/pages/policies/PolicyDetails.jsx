@@ -394,7 +394,7 @@ export function PolicyDetails() {
                       <div><dt className="text-sm font-medium text-gray-500">Coverage sections</dt><dd className="mt-1 text-gray-900">{(policy.policyPlan.coverage_sections || []).join('; ') || 'None listed'}</dd></div>
                       <div><dt className="text-sm font-medium text-gray-500">Mandatory covers</dt><dd className="mt-1 text-gray-900">{(policy.policyPlan.mandatory_covers || []).join('; ') || 'None listed'}</dd></div>
                       <div><dt className="text-sm font-medium text-gray-500">Available add-ons</dt><dd className="mt-1 text-gray-900">{(policy.policyPlan.addons || []).join(', ') || 'None listed'}</dd></div>
-                      <div><dt className="text-sm font-medium text-gray-500">Base premium estimate</dt><dd className="mt-1 text-gray-900">{formatCurrency(policy.policyPlan.base_premium_estimate_inr, 'INR', 'en-IN')} per year</dd></div>
+                      <div><dt className="text-sm font-medium text-gray-500">Sample base tariff (not a quote)</dt><dd className="mt-1 text-gray-900">{formatCurrency(policy.policyPlan.base_premium_estimate_inr, 'INR', 'en-IN')} per year, sample only</dd></div>
                     </dl>
                   </CardContent>
                 </Card>
