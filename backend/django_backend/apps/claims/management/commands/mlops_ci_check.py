@@ -107,7 +107,10 @@ class Command(BaseCommand):
         if not model_path.is_file():
             raise CommandError(f'Missing model for explainability report: {model_path.name}')
         import joblib
-        model = joblib.load(model_path)
+        artifact = joblib.load(model_path)
+        model = artifact.get('model') if isinstance(artifact, dict) else artifact
+        if model is None:
+            raise CommandError('Vehicle fraud model bundle is missing its model pipeline.')
         estimator = model.named_steps.get('estimator')
         preprocessing = model.named_steps.get('preprocessing')
         importances = getattr(estimator, 'feature_importances_', None)
