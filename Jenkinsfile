@@ -75,7 +75,11 @@ pipeline {
             }
             post {
                 always {
-                    junit testResults: 'backend/django_backend/TEST-*.xml', allowEmptyResults: true
+                    script {
+                        if (fileExists('backend/django_backend/TEST-django.xml')) {
+                            junit testResults: 'backend/django_backend/TEST-django.xml'
+                        }
+                    }
                     archiveArtifacts artifacts: 'backend/django_backend/coverage.xml', allowEmptyArchive: true
                 }
             }

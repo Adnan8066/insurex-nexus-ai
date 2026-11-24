@@ -5,7 +5,6 @@ import math
 import platform
 import subprocess
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pandas as pd
 import numpy as np

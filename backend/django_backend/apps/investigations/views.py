@@ -9,13 +9,13 @@ from apps.accounts.models import Role
 
 from .models import (
     Investigation, FraudAlert, InvestigationStatus, InvestigationVehicleCheck,
-    VehicleCheckCode, VehicleCheckResult,
+    VehicleCheckCode,
 )
 from .serializers import (
     InvestigationSerializer, InvestigationCreateSerializer, InvestigationUpdateSerializer,
     InvestigationEvidenceSerializer, InvestigationNoteSerializer,
     FraudAlertSerializer, FraudAlertUpdateSerializer,
-    InvestigationVehicleCheckSerializer, VehicleCheckItemSerializer,
+    VehicleCheckItemSerializer,
 )
 from common.permissions import IsStaffMember
 from apps.auditlog.context import AuditActorViewSetMixin

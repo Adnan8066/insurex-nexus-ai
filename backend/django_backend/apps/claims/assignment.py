@@ -5,7 +5,6 @@ from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count
 from django.utils import timezone
 
 from apps.assessments.models import EmployeeSkill, RoutingAgentProfile
