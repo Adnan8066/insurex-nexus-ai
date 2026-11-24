@@ -321,7 +321,7 @@ export function CustomerDashboard() {
                                 {claim.vehicle ? ` · ${claim.vehicle.make} ${claim.vehicle.model}` : ''}
                                 {' · '}{formatDate(claim.incidentDate)}
                               </p>
-                              <p className="mt-1 text-xs font-medium text-primary">Track progress →</p>
+                              <p className="mt-1 text-xs font-semibold text-primary">Track claim status →</p>
                             </div>
                             <div className="shrink-0 text-right">
                               <p className="font-semibold text-gray-900">{formatCurrency(claim.claimAmount)}</p>

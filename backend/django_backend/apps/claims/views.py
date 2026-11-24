@@ -11,7 +11,7 @@ from django.utils import timezone
 from apps.accounts.models import Role
 
 from django.shortcuts import get_object_or_404
-from .models import Claim, ClaimDocument, ClaimStatusHistory, ClaimTimeline, ClaimNote, ClaimStatus, ClaimAssignmentConfig, ClaimAssignmentEvent
+from .models import Claim, ClaimStatusHistory, ClaimTimeline, ClaimStatus, ClaimAssignmentConfig, ClaimAssignmentEvent
 from .serializers import (
     ClaimSerializer, ClaimCreateSerializer, ClaimUpdateSerializer,
     ClaimStatusUpdateSerializer, ClaimDocumentSerializer,

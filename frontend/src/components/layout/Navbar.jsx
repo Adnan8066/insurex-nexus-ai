@@ -19,7 +19,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
-import { notificationService } from '../../services'
+import { notificationService, policyService } from '../../services'
 import { formatRelativeTime } from '../../utils/helpers'
 
 const ALL_ROLES = ['customer', 'employee', 'investigator', 'admin']
@@ -40,6 +40,7 @@ const navItems = [
     children: [
       { label: 'Policies', to: '/policies', hint: 'Cover, premiums and endorsements', roles: POLICY_ROLES },
       { label: 'Vehicles', to: '/vehicles', hint: 'Insured vehicles and their documents', roles: POLICY_ROLES },
+      { label: 'My policy requests', to: '/my-policy-requests', hint: 'Track your quote requests', roles: ['customer'], requiresPendingPolicyRequest: true },
       { label: 'Policy requests', to: '/policies/requests', hint: 'Customer requests waiting to be issued', roles: ['employee', 'admin'] },
     ],
   },
@@ -69,10 +70,12 @@ const accountItems = [
   { label: 'User management', to: '/admin/users', Icon: Users, roles: ['admin'] },
 ]
 
-function visibleNavItems(role) {
+function visibleNavItems(role, hasPendingPolicyRequest) {
   return navItems
     .map((item) => (item.children
-      ? { ...item, children: item.children.filter((child) => child.roles.includes(role)) }
+      ? { ...item, children: item.children.filter((child) => (
+        child.roles.includes(role) && (!child.requiresPendingPolicyRequest || hasPendingPolicyRequest)
+      )) }
       : item))
     .filter((item) => (item.children ? item.children.length > 0 : item.roles.includes(role)))
     .map((item) => (item.children?.length === 1 ? { ...item.children[0], Icon: item.Icon } : item))
@@ -89,6 +92,7 @@ export function Navbar() {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState([])
+  const [hasPendingPolicyRequest, setHasPendingPolicyRequest] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notificationError, setNotificationError] = useState('')
   const [darkMode, setDarkMode] = useState(() => {
@@ -100,7 +104,7 @@ export function Navbar() {
   const moduleLinkRefs = useRef([])
   const userMenuRef = useRef(null)
   const notificationsRef = useRef(null)
-  const visibleModules = visibleNavItems(user?.role)
+  const visibleModules = visibleNavItems(user?.role, hasPendingPolicyRequest)
   const visibleAccountItems = accountItems.filter((item) => item.roles.includes(user?.role))
   const showModuleNavigation = Boolean(user)
   const isDashboardPage = location.pathname === '/dashboard'
@@ -184,6 +188,29 @@ export function Navbar() {
       window.clearInterval(interval)
     }
   }, [user?.id])
+
+  useEffect(() => {
+    if (user?.role !== 'customer') {
+      setHasPendingPolicyRequest(false)
+      return undefined
+    }
+    let cancelled = false
+    const loadPendingPolicyRequests = async () => {
+      try {
+        const result = await policyService.getPolicyApplications({ status: 'quoted' })
+        const requests = Array.isArray(result) ? result : (result.results || [])
+        if (!cancelled) setHasPendingPolicyRequest(requests.length > 0)
+      } catch {
+        if (!cancelled) setHasPendingPolicyRequest(false)
+      }
+    }
+    loadPendingPolicyRequests()
+    const interval = window.setInterval(loadPendingPolicyRequests, 30000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [user?.id, user?.role, location.pathname])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)

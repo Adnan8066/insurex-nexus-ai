@@ -389,8 +389,8 @@ export function ClaimList() {
                               <Eye className="w-3.5 h-3.5 mr-1" />
                               Details
                             </Link>
-                            <Link to={`/claims/${claim.id}/tracking`} className="btn btn-outline btn-sm" title="Track Workflow">
-                              Track
+                            <Link to={`/claims/${claim.id}/tracking`} className="btn btn-primary btn-sm" title="Track claim status" aria-label={`Track claim ${claim.claimNumber}`}>
+                              Track claim
                             </Link>
                             {canDeleteClaim(user?.role, claim.status) && (
                               <button

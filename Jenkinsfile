@@ -1,10 +1,19 @@
 pipeline {
     agent any
- 
+
+    environment {
+        PYTHONHASHSEED = '42'
+        OMP_NUM_THREADS = '1'
+        MKL_NUM_THREADS = '1'
+        OPENBLAS_NUM_THREADS = '1'
+    }
 
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 120, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
  
 
@@ -41,6 +50,7 @@ pipeline {
                     }
                     bat 'npm run lint'
                     bat 'npm run build'
+                    bat 'npm audit --audit-level=high'
                 }
             }
         }
@@ -52,9 +62,27 @@ pipeline {
                     bat 'py -3.12 -m venv .venv'
                     bat '.venv\\Scripts\\python.exe -m pip install --upgrade pip'
                     bat '.venv\\Scripts\\python.exe -m pip install -r requirements.txt'
+                    bat '.venv\\Scripts\\python.exe -m pip install pip-audit'
+                    bat '.venv\\Scripts\\python.exe -m pip freeze > ..\\ml\\models\\python_environment.txt'
+                    bat '.venv\\Scripts\\python.exe -m ruff check apps common config'
+                    bat '.venv\\Scripts\\pip-audit.exe -r requirements.txt'
                     bat '.venv\\Scripts\\python.exe manage.py check'
                     bat '.venv\\Scripts\\python.exe manage.py spectacular --validate --file "%TEMP%\\insurex-openapi-schema.yml"'
-                    bat '.venv\\Scripts\\python.exe manage.py test'
+                    withEnv(['DJANGO_SETTINGS_MODULE=config.settings']) {
+                        bat '.venv\\Scripts\\coverage.exe run --source=apps -m pytest --junitxml=TEST-django.xml'
+                    }
+                    bat '.venv\\Scripts\\coverage.exe report -m --fail-under=0'
+                    bat '.venv\\Scripts\\coverage.exe xml -o coverage.xml'
+                }
+            }
+            post {
+                always {
+                    script {
+                        if (fileExists('backend/django_backend/TEST-django.xml')) {
+                            junit testResults: 'backend/django_backend/TEST-django.xml'
+                        }
+                    }
+                    archiveArtifacts artifacts: 'backend/django_backend/coverage.xml', allowEmptyArchive: true
                 }
             }
         }
@@ -97,7 +125,7 @@ pipeline {
             }
             post {
                 success {
-                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/training_report.json,backend/ml/models/fraud_oracle_evaluation.png', fingerprint: true
+                    archiveArtifacts artifacts: 'backend/ml/models/*.joblib,backend/ml/models/*.json,backend/ml/models/*.txt,backend/ml/models/fraud_oracle_evaluation.png', allowEmptyArchive: true, fingerprint: true
                 }
             }
         }

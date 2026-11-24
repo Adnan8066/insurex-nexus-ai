@@ -4,6 +4,7 @@ from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils.dateparse import parse_date
 from apps.accounts.models import Role
 from common.uploads import validate_upload
@@ -230,6 +231,9 @@ class PolicyQuoteSerializer(serializers.ModelSerializer):
 class PolicyApplicationSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     customer_email = serializers.EmailField(source='customer.email', read_only=True)
+    customer_phone = serializers.CharField(source='customer.phone', read_only=True)
+    customer_address = serializers.CharField(source='customer.address', read_only=True)
+    customer_date_of_birth = serializers.SerializerMethodField()
     vehicle_label = serializers.SerializerMethodField()
     requested_by_customer = serializers.SerializerMethodField()
     bound_policy_number = serializers.CharField(source='bound_policy.policy_number', read_only=True, default=None)
@@ -239,7 +243,8 @@ class PolicyApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = PolicyApplication
         fields = [
-            'id', 'customer', 'customer_name', 'customer_email', 'policy_type', 'applicant_details',
+            'id', 'customer', 'customer_name', 'customer_email', 'customer_phone', 'customer_address',
+            'customer_date_of_birth', 'policy_type', 'applicant_details',
             'asset_details', 'risk_factors', 'asset_value', 'coverage_limit', 'deductible', 'risk_score',
             'quoted_premium', 'rating_breakdown', 'policy_terms', 'vehicle_label', 'status',
             'requested_by_customer', 'assigned_to', 'assigned_to_name', 'bound_policy', 'bound_policy_number', 'reviewed_by_name',
@@ -250,6 +255,13 @@ class PolicyApplicationSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.STR)
     def get_customer_name(self, obj):
         return obj.customer.get_full_name() or obj.customer.email
+
+    @extend_schema_field(OpenApiTypes.DATE)
+    def get_customer_date_of_birth(self, obj):
+        try:
+            return obj.customer.profile.date_of_birth
+        except ObjectDoesNotExist:
+            return None
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_vehicle_label(self, obj):

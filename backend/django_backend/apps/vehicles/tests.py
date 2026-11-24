@@ -44,7 +44,9 @@ class VehicleApiTests(APITestCase):
         self.client.force_authenticate(self.admin)
         base = {'customer': self.customer.pk, 'make': 'M', 'model': 'X', 'year': 2021, 'color': 'red',
                 'license_plate': 'KA01', 'license_state': 'KA'}
-        post = lambda **extra: self.client.post('/api/v1/vehicles/', {**base, **extra}, format='json')
+        def post(**extra):
+            return self.client.post('/api/v1/vehicles/', {**base, **extra}, format='json')
+
         self.assertEqual(post(vin='SHORT').status_code, 400)
         self.assertEqual(post(vin='IOQ45678901234567').status_code, 400)
         self.assertEqual(post(vin='VABCD1234567890XY', purchase_price='-1').status_code, 400)

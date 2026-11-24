@@ -39,6 +39,7 @@ export function PolicyRequests() {
   const [declineNote, setDeclineNote] = useState('')
   const [actionError, setActionError] = useState('')
   const [working, setWorking] = useState(false)
+  const [customerDetails, setCustomerDetails] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -160,6 +161,13 @@ export function PolicyRequests() {
                       <TableCell>
                         <div className="font-medium text-gray-900">{item.customer_name}</div>
                         <div className="text-xs text-gray-500">{item.customer_email}</div>
+                        <button
+                          type="button"
+                          onClick={() => setCustomerDetails(item)}
+                          className="mt-1 text-xs font-medium text-blue-700 hover:underline"
+                        >
+                          View customer details
+                        </button>
                       </TableCell>
                       <TableCell className="text-sm">{item.assigned_to_name || <span className="text-gray-400">Unassigned</span>}</TableCell>
                       <TableCell className="text-sm">{item.vehicle_label || '—'}</TableCell>
@@ -194,6 +202,31 @@ export function PolicyRequests() {
           )}
         </CardContent>
       </Card>
+
+      <Modal
+        isOpen={Boolean(customerDetails)}
+        onClose={() => setCustomerDetails(null)}
+        title="Customer details"
+        description={customerDetails?.customer_name || ''}
+        size="sm"
+      >
+        {customerDetails && (
+          <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-3 text-sm">
+            <dt className="text-gray-500">Full name</dt>
+            <dd className="font-medium text-gray-900">{customerDetails.customer_name || '—'}</dd>
+            <dt className="text-gray-500">Email</dt>
+            <dd className="break-all text-gray-900">{customerDetails.customer_email || '—'}</dd>
+            <dt className="text-gray-500">Phone</dt>
+            <dd className="text-gray-900">{customerDetails.customer_phone || '—'}</dd>
+            <dt className="text-gray-500">Address</dt>
+            <dd className="whitespace-pre-wrap text-gray-900">{customerDetails.customer_address || '—'}</dd>
+            <dt className="text-gray-500">Date of birth</dt>
+            <dd className="text-gray-900">{customerDetails.customer_date_of_birth ? formatDate(customerDetails.customer_date_of_birth) : '—'}</dd>
+            <dt className="text-gray-500">Vehicle</dt>
+            <dd className="text-gray-900">{customerDetails.vehicle_label || '—'}</dd>
+          </dl>
+        )}
+      </Modal>
 
       <ConfirmDialog
         isOpen={Boolean(issuing)}

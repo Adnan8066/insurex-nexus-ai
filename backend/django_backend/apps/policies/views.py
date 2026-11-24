@@ -591,7 +591,7 @@ class PolicyApplicationViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        queryset = PolicyApplication.objects.select_related('customer', 'assigned_to', 'reviewed_by', 'bound_policy')
+        queryset = PolicyApplication.objects.select_related('customer', 'customer__profile', 'assigned_to', 'reviewed_by', 'bound_policy')
         user = self.request.user
         if user.role == Role.ADMIN:
             return queryset

@@ -15,6 +15,7 @@ const PolicyDetails = lazy(() => import('../pages/policies/PolicyDetails').then(
 const PlanCompare = lazy(() => import('../pages/policies/PlanCompare').then((module) => ({ default: module.PlanCompare })))
 const PolicyForm = lazy(() => import('../pages/policies/PolicyForm').then((module) => ({ default: module.PolicyForm })))
 const PolicyRequests = lazy(() => import('../pages/policies/PolicyRequests').then((module) => ({ default: module.PolicyRequests })))
+const MyPolicyRequests = lazy(() => import('../pages/policies/MyPolicyRequests').then((module) => ({ default: module.MyPolicyRequests })))
 const RequestPolicy = lazy(() => import('../pages/policies/RequestPolicy').then((module) => ({ default: module.RequestPolicy })))
 const VehicleList = lazy(() => import('../pages/vehicles/VehicleList').then((module) => ({ default: module.VehicleList })))
 const VehicleDetails = lazy(() => import('../pages/vehicles/VehicleDetails').then((module) => ({ default: module.VehicleDetails })))
@@ -81,6 +82,7 @@ export default function AppRoutes() {
         <Route path="policies/new" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
         <Route path="policies/plans" element={<PlanCompare />} />
         <Route path="policies/requests" element={<ProtectedRoute roles={['employee', 'admin']}><PolicyRequests /></ProtectedRoute>} />
+        <Route path="my-policy-requests" element={<ProtectedRoute roles={['customer']}><MyPolicyRequests /></ProtectedRoute>} />
         <Route path="policies/:id" element={<PolicyDetails />} />
         <Route path="policies/:id/edit" element={<ProtectedRoute roles={['admin']}><PolicyForm /></ProtectedRoute>} />
         <Route path="vehicles" element={<ProtectedRoute roles={['customer', 'employee', 'admin']}><VehicleList /></ProtectedRoute>} />
