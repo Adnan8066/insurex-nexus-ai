@@ -82,7 +82,9 @@ def models_dir():
 def _difference_hash(image):
     """64-bit perceptual hash: stays the same when a photo is re-saved, resized or recompressed."""
     small = image.convert('L').resize((9, 8), Image.Resampling.LANCZOS)
-    pixels = list(small.getdata())
+    # Pillow 13 deprecates getdata(); get_flattened_data() is its replacement.
+    flatten = getattr(small, 'get_flattened_data', None) or small.getdata
+    pixels = list(flatten())
     bits = 0
     for row in range(8):
         for column in range(8):
