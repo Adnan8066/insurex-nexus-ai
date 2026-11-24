@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        DJANGO_SETTINGS_MODULE = 'config.settings'
         PYTHONHASHSEED = '42'
         OMP_NUM_THREADS = '1'
         MKL_NUM_THREADS = '1'
@@ -69,7 +68,9 @@ pipeline {
                     bat '.venv\\Scripts\\pip-audit.exe -r requirements.txt'
                     bat '.venv\\Scripts\\python.exe manage.py check'
                     bat '.venv\\Scripts\\python.exe manage.py spectacular --validate --file "%TEMP%\\insurex-openapi-schema.yml"'
-                    bat '.venv\\Scripts\\coverage.exe run --source=apps -m pytest --junitxml=TEST-django.xml'
+                    withEnv(['DJANGO_SETTINGS_MODULE=config.settings']) {
+                        bat '.venv\\Scripts\\coverage.exe run --source=apps -m pytest --junitxml=TEST-django.xml'
+                    }
                     bat '.venv\\Scripts\\coverage.exe report -m --fail-under=0'
                     bat '.venv\\Scripts\\coverage.exe xml -o coverage.xml'
                 }
